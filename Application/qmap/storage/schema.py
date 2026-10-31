@@ -1,0 +1,136 @@
+"""SQLite schema, as numbered migrations. Never edit an applied migration; add a new one."""
+
+from __future__ import annotations
+
+MIGRATION_1 = """
+CREATE TABLE instruments (
+  instrument_id INTEGER PRIMARY KEY,
+  exchange TEXT NOT NULL, symbol TEXT NOT NULL,
+  name TEXT, sector TEXT, active INTEGER NOT NULL DEFAULT 1, valid_from TEXT, valid_to TEXT,
+  UNIQUE (exchange, symbol),
+  CHECK (length(exchange) > 0 AND exchange = upper(trim(exchange))),
+  CHECK (length(symbol)   > 0 AND symbol   = upper(trim(symbol))));
+
+CREATE TABLE modules (module_code TEXT PRIMARY KEY, name TEXT NOT NULL, version TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'active');
+
+CREATE TABLE runs (
+  run_id TEXT PRIMARY KEY, module_code TEXT NOT NULL REFERENCES modules(module_code),
+  status TEXT NOT NULL CHECK (status IN ('created','running','completed','failed','cancelled')),
+  started_at TEXT, finished_at TEXT, params_json TEXT, code_version TEXT, output_path TEXT,
+  parent_run_id TEXT REFERENCES runs(run_id), error_message TEXT);
+
+CREATE TABLE run_outputs (
+  run_id TEXT NOT NULL REFERENCES runs(run_id), relative_path TEXT NOT NULL,
+  kind TEXT, sha256 TEXT, size_bytes INTEGER, PRIMARY KEY (run_id, relative_path));
+
+CREATE TABLE source_profiles (
+  profile_id TEXT NOT NULL, profile_version INTEGER NOT NULL, content_sha256 TEXT NOT NULL,
+  content_text TEXT NOT NULL, first_used_at TEXT NOT NULL, PRIMARY KEY (profile_id, profile_version));
+
+CREATE TABLE ingest_events (
+  event_id INTEGER PRIMARY KEY,
+  run_id TEXT NOT NULL REFERENCES runs(run_id),
+  received_at TEXT NOT NULL,
+  original_path TEXT NOT NULL, original_filename TEXT NOT NULL, original_extension TEXT,
+  file_size INTEGER, file_mtime TEXT, source_label TEXT, note TEXT,
+  sha256 TEXT, detected_format TEXT, intended_relative_path TEXT,
+  status TEXT NOT NULL CHECK (status IN ('started','registered_new','reused_existing','unsupported','failed')),
+  raw_dataset_id INTEGER REFERENCES datasets(dataset_id),
+  detail TEXT,
+  CHECK (status NOT IN ('registered_new','reused_existing') OR raw_dataset_id IS NOT NULL));
+
+CREATE TABLE datasets (
+  dataset_id INTEGER PRIMARY KEY,
+  layer TEXT NOT NULL CHECK (layer IN ('raw','cleaned','timeframe')),
+  instrument_id INTEGER REFERENCES instruments(instrument_id),
+  timeframe TEXT,
+  file_format TEXT CHECK (file_format IN ('parquet','xlsx','xls','delimited_text')),
+  relative_path TEXT NOT NULL UNIQUE,
+  sha256 TEXT NOT NULL,
+  row_count INTEGER, date_from TEXT, date_to TEXT,
+  parent_dataset_id INTEGER REFERENCES datasets(dataset_id),
+  processing_version TEXT,
+  canonical_schema_version INTEGER,
+  volume_status TEXT CHECK (volume_status IN ('absent','mapped','derived_sum')),
+  requirement_set TEXT,
+  created_by_attempt_id INTEGER REFERENCES ingest_attempts(attempt_id),
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','superseded')),
+  superseded_by_dataset_id INTEGER REFERENCES datasets(dataset_id),
+  created_at TEXT NOT NULL,
+  CHECK (layer <> 'raw' OR (file_format IS NOT NULL AND parent_dataset_id IS NULL
+        AND processing_version IS NULL AND created_by_attempt_id IS NULL)),
+  CHECK (layer = 'raw' OR (parent_dataset_id IS NOT NULL AND instrument_id IS NOT NULL
+        AND timeframe IS NOT NULL AND created_by_attempt_id IS NOT NULL
+        AND volume_status IS NOT NULL AND requirement_set IS NOT NULL
+        AND processing_version IS NOT NULL AND length(trim(processing_version)) > 0)),
+  CHECK (layer <> 'cleaned' OR processing_version GLOB '?*@?*+?*'));
+
+CREATE UNIQUE INDEX ux_datasets_raw_sha256 ON datasets(sha256) WHERE layer = 'raw';
+CREATE UNIQUE INDEX ux_datasets_derivation ON datasets(layer, parent_dataset_id, processing_version, instrument_id, timeframe) WHERE layer <> 'raw';
+CREATE UNIQUE INDEX ux_datasets_one_active ON datasets(layer, parent_dataset_id, instrument_id, timeframe) WHERE layer <> 'raw' AND status = 'active';
+CREATE INDEX ix_datasets_sha256 ON datasets(sha256);
+
+CREATE TABLE ingest_attempts (
+  attempt_id INTEGER PRIMARY KEY,
+  event_id INTEGER NOT NULL REFERENCES ingest_events(event_id),
+  run_id TEXT NOT NULL REFERENCES runs(run_id),
+  raw_dataset_id INTEGER NOT NULL REFERENCES datasets(dataset_id),
+  outcome TEXT NOT NULL CHECK (outcome IN ('accepted','rejected','reused')),
+  profile_id TEXT NOT NULL, profile_version INTEGER NOT NULL,
+  processing_version TEXT NOT NULL CHECK (length(trim(processing_version)) > 0),
+  detected_format TEXT NOT NULL, extension_matches INTEGER NOT NULL, reader TEXT NOT NULL, reader_version TEXT,
+  source_columns_json TEXT, column_mapping_json TEXT, datetime_rules_json TEXT, volume_rule_json TEXT,
+  transformations_json TEXT, field_provenance_json TEXT,
+  rows_read INTEGER, rows_accepted INTEGER, rows_flagged INTEGER, issues_report_path TEXT,
+  revalidation_of_attempt_id INTEGER REFERENCES ingest_attempts(attempt_id),
+  reused_of_attempt_id INTEGER REFERENCES ingest_attempts(attempt_id),
+  force_reason TEXT,
+  ingest_request_json TEXT,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (profile_id, profile_version) REFERENCES source_profiles(profile_id, profile_version),
+  CHECK (outcome <> 'reused' OR reused_of_attempt_id IS NOT NULL),
+  CHECK (force_reason IS NULL OR length(trim(force_reason)) > 0));
+
+CREATE TABLE quality_checks (
+  check_id INTEGER PRIMARY KEY, run_id TEXT NOT NULL REFERENCES runs(run_id),
+  attempt_id INTEGER REFERENCES ingest_attempts(attempt_id), dataset_id INTEGER REFERENCES datasets(dataset_id),
+  check_name TEXT NOT NULL, severity TEXT NOT NULL CHECK (severity IN ('error','warning','info')),
+  passed INTEGER NOT NULL, rows_failed INTEGER, detail TEXT, checked_at TEXT NOT NULL,
+  CHECK (attempt_id IS NOT NULL OR dataset_id IS NOT NULL));
+
+CREATE TABLE run_inputs (
+  run_id TEXT NOT NULL REFERENCES runs(run_id), dataset_id INTEGER NOT NULL REFERENCES datasets(dataset_id),
+  PRIMARY KEY (run_id, dataset_id));
+
+CREATE TABLE research_records (
+  research_id INTEGER PRIMARY KEY, run_id TEXT REFERENCES runs(run_id),
+  module_code TEXT NOT NULL REFERENCES modules(module_code), title TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('Hypothesis','Research complete','OOS validated','Strategy validated','Superseded')),
+  superseded_by INTEGER REFERENCES research_records(research_id), created_at TEXT NOT NULL);
+
+CREATE TRIGGER trg_attempts_no_update BEFORE UPDATE ON ingest_attempts BEGIN SELECT RAISE(ABORT,'ingest_attempts is append-only'); END;
+CREATE TRIGGER trg_attempts_no_delete BEFORE DELETE ON ingest_attempts BEGIN SELECT RAISE(ABORT,'ingest_attempts is append-only'); END;
+CREATE TRIGGER trg_checks_no_update   BEFORE UPDATE ON quality_checks  BEGIN SELECT RAISE(ABORT,'quality_checks is append-only'); END;
+CREATE TRIGGER trg_checks_no_delete   BEFORE DELETE ON quality_checks  BEGIN SELECT RAISE(ABORT,'quality_checks is append-only'); END;
+CREATE TRIGGER trg_events_no_delete   BEFORE DELETE ON ingest_events   BEGIN SELECT RAISE(ABORT,'ingest_events is never deleted'); END;
+CREATE TRIGGER trg_events_identity BEFORE UPDATE ON ingest_events
+WHEN NEW.run_id IS NOT OLD.run_id OR NEW.received_at IS NOT OLD.received_at OR NEW.original_path IS NOT OLD.original_path
+  OR NEW.original_filename IS NOT OLD.original_filename OR NEW.sha256 IS NOT OLD.sha256
+BEGIN SELECT RAISE(ABORT,'ingest_events identity columns are immutable'); END;
+CREATE TRIGGER trg_datasets_no_delete BEFORE DELETE ON datasets BEGIN SELECT RAISE(ABORT,'datasets are never deleted'); END;
+CREATE TRIGGER trg_datasets_identity BEFORE UPDATE ON datasets
+WHEN NEW.layer IS NOT OLD.layer OR NEW.sha256 IS NOT OLD.sha256 OR NEW.relative_path IS NOT OLD.relative_path
+  OR NEW.parent_dataset_id IS NOT OLD.parent_dataset_id OR NEW.processing_version IS NOT OLD.processing_version
+  OR NEW.instrument_id IS NOT OLD.instrument_id OR NEW.timeframe IS NOT OLD.timeframe
+  OR NEW.created_by_attempt_id IS NOT OLD.created_by_attempt_id
+  OR (OLD.superseded_by_dataset_id IS NOT NULL AND NEW.superseded_by_dataset_id IS NOT OLD.superseded_by_dataset_id)
+  OR (OLD.status = 'superseded' AND NEW.status <> 'superseded')
+BEGIN SELECT RAISE(ABORT,'dataset identity columns are immutable'); END;
+"""
+
+# (version, description, sql)
+MIGRATIONS = [
+    (1, "Stage 2 foundation: instruments, runs, registry, ingest provenance, quality checks", MIGRATION_1),
+]
+
+LATEST_VERSION = MIGRATIONS[-1][0]
