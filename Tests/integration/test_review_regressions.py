@@ -205,22 +205,14 @@ def test_r06_profile_snapshots_are_immutable(run, db, good):
         conn.execute("DELETE FROM runs")
 
 
-# ---- R-07 validation settings that influence the result are recorded and compared on reuse ----------------
-def test_r07_validation_settings_are_recorded_and_a_changed_setting_is_reported_on_reuse(settings, db, good):
+# ---- R-07 validation settings are recorded (their effect on reuse: Tests/integration/test_config_fingerprint.py) --
+def test_r07_validation_settings_are_recorded_with_every_attempt(run, db, good):
     import json
 
-    r1 = start_run(settings, db, "FOUND", area="Ingestion")
-    first = do_ingest(r1, good)
-    finish_run(r1)
+    first = do_ingest(run, good)
     att = db.one("SELECT validation_settings_json FROM ingest_attempts WHERE attempt_id=?", (first.attempt_id,))
     recorded = json.loads(att["validation_settings_json"])
     assert recorded["min_rows"] == 1 and recorded["max_daily_move_pct"] == 25.0 and "today" in recorded
-    stricter = dataclasses.replace(settings, min_rows=50)  # would now reject an 8-row file
-    r2 = start_run(stricter, db, "FOUND", area="Ingestion")
-    second = do_ingest(r2, good)
-    finish_run(r2)
-    assert second.outcome == "reused"
-    assert "different validation settings" in second.message and "min_rows" in second.message
 
 
 # ---- R-08 a failed migration leaves no open transaction and nothing half-applied -------------------------

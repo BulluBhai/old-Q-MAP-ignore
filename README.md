@@ -95,7 +95,7 @@ Ingest one or more files:
 "<ENV_FOLDER>\Scripts\python.exe" -m qmap --config "<CONFIG_FILE>" ingest --profile example_csv_unix_seconds --timeframe 1D "<FILE>"
 ```
 
-The result is `ACCEPTED`, `REUSED` (already processed the same way), `REJECTED` (see the issues report named in
+The result is `ACCEPTED`, `REUSED` (already processed the same way, with the same validation settings), `REJECTED` (see the issues report named in
 the output; nothing is repaired or dropped), `BLOCKED` (retrying an unchanged rejected file needs a written
 `--force-reason`) or `UNSUPPORTED` (the reason is shown). Each run's folder in Q-MAP_OUTPUT holds its log,
 `run_manifest.json` and any report.
@@ -180,10 +180,13 @@ restore, run `recover`, then ingest the original again.
 - Only a command line exists; there is no graphical front end (the front end is an open Blueprint decision).
 - Selecting the "current" dataset across several raw files for one instrument is not defined yet.
 - Re-receiving registered content re-reads the stored copy to verify it, so very large files take correspondingly longer.
-- The validation settings in the configuration file (date range, `min_rows`, move and gap thresholds, requirement
-  sets) and the run date are **recorded** with every attempt and in every cleaned file, but they are not part of the
-  processing version. If they change, a repeat ingest still reuses the earlier result and says that the settings
-  differ (open decision, see the decision log).
+- A result is reused only when the raw content, processing version, ingest request **and validation settings** match.
+  Changing `plausible_min_date`, `plausible_max_days_ahead`, `max_daily_move_pct`, `min_rows` or a requirement set's
+  `require_volume` reprocesses the file into a new dataset (the previous one is superseded, never deleted); its
+  `config_fingerprint` identifies the settings used. `max_gap_days` only affects a warning, and the run date only moves
+  the "not in the future" limit, so neither prevents reuse; both are recorded, and a different `max_gap_days` is
+  mentioned when a result is reused. Results recorded before the fingerprint existed are reused only if their recorded
+  settings match; results with no recorded settings are reprocessed.
 - Reusing a processing version that has since been superseded returns that version's (superseded) datasets and says so.
 - Run liveness relies on operating-system file locks. Keep Q-MAP_DATA on a local disk; locks on network shares are
   not reliable, and the `stale_minutes` age rule is then the only safeguard.

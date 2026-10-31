@@ -32,7 +32,7 @@ Status of every entry: implemented on branch `claude/keen-carson-x872ge`; **awai
 
 ## Independent review of PR #1 (31-Oct-26)
 
-Every change below has a regression test in `Tests/integration/test_review_regressions.py` or
+Every change below has a regression test in `Tests/integration/test_review_regressions.py`, `Tests/integration/test_config_fingerprint.py` or
 `Tests/unit/test_placement_and_migration.py` that failed on the code as first submitted. Status: implemented on
 branch `claude/keen-carson-x872ge`; **awaiting Project Owner review**.
 
@@ -43,15 +43,15 @@ branch `claude/keen-carson-x872ge`; **awaiting Project Owner review**.
 | D2-24 | Recovery re-checks each temp/cleaned file against the database at the moment of deletion; cleaned temp names carry the Run ID; unreadable or vanishing files are reported, not fatal | One snapshot query, then deletes | Reproduced: a receipt started during recovery lost its temp file; a cleaned file registered during the scan could be deleted | storage/recovery, ingest |
 | D2-25 | A receipt's final status cannot change (code guard and trigger); profile snapshots, runs and instruments cannot be deleted or rewritten (schema migration 2; migration 1 unchanged) | Application convention only | Historical explanation must not be rewritable | schema, registry |
 | D2-26 | Only ingest-request values the profile actually takes from the request form the request identity (D2-09); ignored values are logged | All supplied values | Reproduced: `--timeframe 1D` with a fixed-1D profile crashed with a uniqueness error | ingest |
-| D2-27 | Validation settings and the run date are recorded per attempt (`validation_settings_json`) and in each cleaned file; reuse and blocked messages state any difference. They are NOT added to the processing version | Not recorded | Provenance gap: `min_rows`, date range, requirement sets and the large-move threshold change outcomes or `quality_flags` | ingest, schema |
+| D2-27 | Validation settings and the run date are recorded per attempt (`validation_settings_json`) and in each cleaned file; reuse and blocked messages state any difference (superseded in part by D2-32: they now also take part in the reuse identity) | Not recorded | Provenance gap: `min_rows`, date range, requirement sets and the large-move threshold change outcomes or `quality_flags` | ingest, schema |
 | D2-28 | A failing migration is rolled back whatever the error type; a database newer than the code is refused | Only OperationalError rolled back | Reproduced: an IntegrityError left the connection in an open transaction | storage/db |
 | D2-29 | Relative paths in the configuration file resolve against the file's folder; root environment variables must be absolute; numeric settings are type- and range-checked; registry paths cannot leave Q-MAP_DATA | Resolved against the working folder; `int()` tracebacks | Behaviour must not depend on where IDLE or a shortcut starts | core/config |
 | D2-30 | Recovery done at the start of a run is written to that run's `recovery_report.json` and log; copy/placement errors mark the receipt `failed` and remove the temp file | Console only; receipt left `started` | Observability; no half-finished receipts in a long-lived session | core/runs, registry, cli |
+| D2-32 | **Project Owner decision (31-Oct-26):** validation settings that can change acceptance, dataset content or `quality_flags` are part of the processing identity. A configuration fingerprint `vs1:<16 hex>` (SHA-256 of `plausible_min_date`, `plausible_max_days_ahead`, `max_daily_move_pct`, `min_rows`, `requirement_set`, `require_volume`) is stored on each attempt and cleaned dataset and is part of the derivation uniqueness key (schema migration 3). Reuse, and blocking of an unchanged rejected retry, require the same raw content, processing version, relevant request AND fingerprint. A different fingerprint is reprocessed into a new dataset that supersedes the active one. The `processing_version` text is unchanged. Excluded and recorded only: `max_gap_days` (warning-only; a difference is reported on reuse) and the run date. Earlier attempts without a stored fingerprint use one computed from their recorded settings; attempts with no recorded settings are never reused | D2-27: recorded and reported only | Reproduced: changing `max_daily_move_pct` or `min_rows` still reused the earlier result | ingest, schema |
 | D2-31 | Windows CI (`.github/workflows/tests.yml`, Python 3.11, windows-latest and ubuntu-latest) | No Windows run | Windows is the primary environment | CI |
 
-**Decision needed (Project Owner):** should the validation settings be part of the processing version (so a changed
-setting forces reprocessing into a new dataset), or stay recorded-only as now (D2-27)? Including them makes reuse
-strictly reproducible but creates a new cleaned dataset whenever a threshold is tuned.
+D2-27's open question (should validation settings be part of the processing identity?) was decided by the Project
+Owner and implemented as D2-32.
 
 ## Open decisions carried forward (not needed for Stage 2)
 

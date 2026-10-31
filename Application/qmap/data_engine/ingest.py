@@ -110,6 +110,36 @@ def _validation_settings(settings, profile: SourceProfile, today: date) -> dict:
     }
 
 
+# Settings that can change whether a file is accepted, or the content/quality_flags of a cleaned dataset.
+# They form the configuration fingerprint, which is part of the processing identity. Deliberately excluded:
+#   max_gap_days - only produces a warning in the quality-check report (no flag, no effect on acceptance);
+#   today        - the run date moves the "not in the future" bound every day; including it would prevent all reuse.
+# Both are still recorded in validation_settings_json, and a difference in max_gap_days is reported on reuse.
+FINGERPRINT_KEYS = ("plausible_min_date", "plausible_max_days_ahead", "max_daily_move_pct", "min_rows",
+                    "requirement_set", "require_volume")
+FINGERPRINT_SCHEME = "vs1"  # change if FINGERPRINT_KEYS change, so old and new fingerprints never collide
+
+
+def config_fingerprint(vsettings: dict) -> str:
+    """Short, stable identifier of the identity-relevant validation settings, e.g. 'vs1:3f9a0c21d4e5b6a7'."""
+    subset = {k: vsettings[k] for k in FINGERPRINT_KEYS}
+    digest = hashlib.sha256(json.dumps(subset, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+    return f"{FINGERPRINT_SCHEME}:{digest[:16]}"
+
+
+def _attempt_fingerprint(attempt) -> str | None:
+    """Fingerprint of an earlier attempt. Attempts recorded before migration 3 have the settings JSON only;
+    attempts recorded before migration 2 have neither and are treated as incompatible (settings unknown)."""
+    if attempt["config_fingerprint"]:
+        return attempt["config_fingerprint"]
+    if attempt["validation_settings_json"]:
+        try:
+            return config_fingerprint(json.loads(attempt["validation_settings_json"]))
+        except (KeyError, ValueError, TypeError):
+            return None
+    return None
+
+
 def _settings_difference(recorded_json: str | None, current: dict) -> str:
     """Plain description of how the current validation settings differ from those recorded (ignoring the date)."""
     if not recorded_json:
@@ -164,22 +194,27 @@ def _process_registered(run: Run, receipt: Receipt, src: Path, profile: SourcePr
     raw = db.one("SELECT * FROM datasets WHERE dataset_id = ?", (receipt.raw_dataset_id,))
     today = today or datetime.now(timezone.utc).date()  # fixed once, used AND recorded
     vsettings = _validation_settings(settings, profile, today)
+    fingerprint = config_fingerprint(vsettings)
 
+    # Processing identity = raw content + processing version + relevant request + configuration fingerprint.
+    # Only an earlier attempt with the SAME identity may be reused (or block an unchanged retry).
     request_json = _request_json(overrides)
     prior = [a for a in db.query(
         "SELECT * FROM ingest_attempts WHERE raw_dataset_id = ? AND processing_version = ? ORDER BY attempt_id",
-        (raw["dataset_id"], pv)) if (a["ingest_request_json"] or "{}") == request_json]
+        (raw["dataset_id"], pv))
+        if (a["ingest_request_json"] or "{}") == request_json and _attempt_fingerprint(a) == fingerprint]
     accepted_prior = next((a for a in prior if a["outcome"] == "accepted"), None)
     if accepted_prior is not None:
         return _record_reuse(run, receipt, accepted_prior, pv, vsettings)
     rejected_same = [a for a in prior if a["outcome"] == "rejected"]
     if rejected_same and not (force_reason and force_reason.strip()):
-        msg = (f"This file was already processed under {pv} and rejected (attempt {rejected_same[-1]['attempt_id']}). "
+        msg = (f"This file was already processed under {pv} with the same validation settings ({fingerprint}) and "
+               f"rejected (attempt {rejected_same[-1]['attempt_id']}). "
                "Reprocessing it unchanged is blocked. Fix the profile (new profile_version) or the processing, or "
                "retry deliberately with a written force_reason.")
         diff = _settings_difference(rejected_same[-1]["validation_settings_json"], vsettings)
         if diff:
-            msg += f" Note: the validation settings are now different ({diff}); a forced retry may give another result."
+            msg += f" Note: report-only settings differ ({diff}); they cannot change the outcome."
         with db.transaction() as conn:
             conn.execute("UPDATE ingest_events SET detail = ? WHERE event_id = ?", (msg, receipt.event_id))
         log.warning(msg)
@@ -225,7 +260,7 @@ def _process_registered(run: Run, receipt: Receipt, src: Path, profile: SourcePr
                         "volume_status": g.volume_status, "requirement_set": profile.requirement_set,
                         "qmap_version": __version__, "cleaning_code_version": CLEANING_CODE_VERSION,
                         "field_provenance": result.field_provenance, "row_count": g.row_count,
-                        "validation_settings": vsettings}
+                        "validation_settings": vsettings, "config_fingerprint": fingerprint}
                 write_canonical_parquet(tmp, g, meta)
                 maybe_fail("after_cleaned_temp")
                 final.parent.mkdir(parents=True, exist_ok=True)
@@ -255,7 +290,8 @@ def _process_registered(run: Run, receipt: Receipt, src: Path, profile: SourcePr
                 issues_report_path=f"{run.relative_dir}/{report.name}" if report else None,
                 revalidation_of_attempt_id=last_rejected["attempt_id"] if last_rejected else None,
                 force_reason=force_reason.strip() if force_reason and force_reason.strip() else None,
-                ingest_request_json=request_json, validation_settings_json=_j(vsettings), created_at=utc_now_iso())
+                ingest_request_json=request_json, validation_settings_json=_j(vsettings),
+                config_fingerprint=fingerprint, created_at=utc_now_iso())
             extra_checks: list[CheckResult] = []
             if accepted:
                 for g, rel, final, sha in written:
@@ -273,10 +309,11 @@ def _process_registered(run: Run, receipt: Receipt, src: Path, profile: SourcePr
                     cur = conn.execute(
                         "INSERT INTO datasets(layer, instrument_id, timeframe, relative_path, sha256, row_count, date_from, "
                         "date_to, parent_dataset_id, processing_version, canonical_schema_version, volume_status, "
-                        "requirement_set, created_by_attempt_id, created_at) "
-                        "VALUES ('cleaned', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        "requirement_set, created_by_attempt_id, config_fingerprint, created_at) "
+                        "VALUES ('cleaned', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                         (instrument_id, g.timeframe, rel, sha, g.row_count, g.date_from, g.date_to, raw["dataset_id"], pv,
-                         C.CANONICAL_SCHEMA_VERSION, g.volume_status, profile.requirement_set, attempt_id, utc_now_iso()))
+                         C.CANONICAL_SCHEMA_VERSION, g.volume_status, profile.requirement_set, attempt_id, fingerprint,
+                         utc_now_iso()))
                     new_id = int(cur.lastrowid)
                     if old:
                         conn.execute("UPDATE datasets SET superseded_by_dataset_id = ? WHERE dataset_id = ?",
@@ -323,19 +360,21 @@ def _record_reuse(run: Run, receipt: Receipt, original, pv: str, vsettings: dict
             rows_accepted=original["rows_accepted"], rows_flagged=original["rows_flagged"],
             issues_report_path=original["issues_report_path"], reused_of_attempt_id=original["attempt_id"],
             ingest_request_json=original["ingest_request_json"],
-            validation_settings_json=original["validation_settings_json"], created_at=utc_now_iso())
+            validation_settings_json=original["validation_settings_json"],
+            config_fingerprint=_attempt_fingerprint(original), created_at=utc_now_iso())
         rows = conn.execute(
             "SELECT dataset_id, status, superseded_by_dataset_id FROM datasets WHERE created_by_attempt_id = ? "
             "ORDER BY dataset_id", (original["attempt_id"],)).fetchall()
     ids = [r["dataset_id"] for r in rows]
-    msg = f"Already processed under {pv}; existing dataset(s) {ids} reused."
+    msg = (f"Already processed under {pv} with the same validation settings ({_attempt_fingerprint(original)}); "
+           f"existing dataset(s) {ids} reused.")
     superseded = [f"{r['dataset_id']} (by {r['superseded_by_dataset_id']})" for r in rows if r["status"] == "superseded"]
     if superseded:
         msg += (f" Note: dataset(s) {', '.join(superseded)} have since been SUPERSEDED by a later processing version; "
                 "they are this version's result but not the active dataset(s).")
     diff = _settings_difference(original["validation_settings_json"], vsettings)
     if diff:
-        msg += f" Note: they were produced with different validation settings ({diff})."
+        msg += f" Note: report-only settings differ ({diff}); the dataset and its flags are unaffected."
     (log.warning if superseded or diff else log.info)(
         "Reused: raw dataset %s already processed under %s (attempt %s); no new dataset. %s",
         original["raw_dataset_id"], pv, original["attempt_id"], msg)

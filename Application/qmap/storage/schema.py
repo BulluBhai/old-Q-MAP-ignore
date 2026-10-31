@@ -144,11 +144,35 @@ WHEN NEW.exchange IS NOT OLD.exchange OR NEW.symbol IS NOT OLD.symbol
 BEGIN SELECT RAISE(ABORT,'instrument identity (exchange, symbol) is immutable'); END;
 """
 
+# Validation settings become part of the processing identity (Project Owner decision, 31-Oct-26).
+# The processing_version text is unchanged; the fingerprint is a separate identity component.
+MIGRATION_3 = """
+ALTER TABLE ingest_attempts ADD COLUMN config_fingerprint TEXT;
+ALTER TABLE datasets ADD COLUMN config_fingerprint TEXT;
+
+DROP INDEX ux_datasets_derivation;
+CREATE UNIQUE INDEX ux_datasets_derivation
+  ON datasets(layer, parent_dataset_id, processing_version, instrument_id, timeframe, config_fingerprint) WHERE layer <> 'raw';
+
+DROP TRIGGER trg_datasets_identity;
+CREATE TRIGGER trg_datasets_identity BEFORE UPDATE ON datasets
+WHEN NEW.layer IS NOT OLD.layer OR NEW.sha256 IS NOT OLD.sha256 OR NEW.relative_path IS NOT OLD.relative_path
+  OR NEW.parent_dataset_id IS NOT OLD.parent_dataset_id OR NEW.processing_version IS NOT OLD.processing_version
+  OR NEW.instrument_id IS NOT OLD.instrument_id OR NEW.timeframe IS NOT OLD.timeframe
+  OR NEW.created_by_attempt_id IS NOT OLD.created_by_attempt_id
+  OR NEW.config_fingerprint IS NOT OLD.config_fingerprint
+  OR (OLD.superseded_by_dataset_id IS NOT NULL AND NEW.superseded_by_dataset_id IS NOT OLD.superseded_by_dataset_id)
+  OR (OLD.status = 'superseded' AND NEW.status <> 'superseded')
+BEGIN SELECT RAISE(ABORT,'dataset identity columns are immutable'); END;
+"""
+
 # (version, description, sql)
 MIGRATIONS = [
     (1, "Stage 2 foundation: instruments, runs, registry, ingest provenance, quality checks", MIGRATION_1),
     (2, "Review fixes: validation settings provenance; final receipts, profile snapshots, runs and instruments protected",
      MIGRATION_2),
+    (3, "Validation-settings fingerprint is part of the processing identity (reuse and derivation uniqueness)",
+     MIGRATION_3),
 ]
 
 LATEST_VERSION = MIGRATIONS[-1][0]
