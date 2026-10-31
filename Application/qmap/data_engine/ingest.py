@@ -13,7 +13,7 @@ import json
 import os
 import sqlite3
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 from .. import CLEANING_CODE_VERSION, __version__
@@ -21,7 +21,7 @@ from ..core.errors import IngestError
 from ..core.runs import Run
 from ..storage.db import utc_now_iso
 from ..storage.faults import maybe_fail
-from ..storage.files import safe_remove, sha256_file, unique_tmp_name
+from ..storage.files import place_without_overwrite, safe_remove, sha256_file, unique_tmp_name
 from ..storage.parquet_io import write_canonical_parquet
 from ..storage.registry import Receipt, receive_file
 from . import canonical as C
@@ -67,6 +67,26 @@ def _insert_attempt(conn, **values) -> int:
     return int(cur.lastrowid)
 
 
+def _used_overrides(profile: SourceProfile, overrides: dict) -> tuple[dict, list]:
+    """Split the ingest-request values into those this profile actually uses and those it ignores.
+
+    Only a value the profile takes "from the ingest request" can influence the result, so only those are part
+    of the request identity used to recognise a repeat (an ignored value must not make a repeat look new).
+    """
+    takes = {"exchange": profile.instrument.exchange_from == "ingest",
+             "symbol": profile.instrument.symbol_from == "ingest",
+             "timeframe": profile.instrument.timeframe == "ingest"}
+    used, ignored = {}, []
+    for k, v in overrides.items():
+        if v is None or not str(v).strip():
+            continue
+        if takes.get(k):
+            used[k] = v
+        else:
+            ignored.append(k)
+    return used, ignored
+
+
 def _request_json(overrides: dict) -> str:
     """The ingest-request values (exchange/symbol/timeframe) that influence the result but are not in the profile."""
     clean = {}
@@ -76,10 +96,37 @@ def _request_json(overrides: dict) -> str:
     return _j(clean)
 
 
+def _validation_settings(settings, profile: SourceProfile, today: date) -> dict:
+    """Configuration values that can change the outcome or the content of a cleaned dataset (recorded with it)."""
+    return {
+        "plausible_min_date": settings.plausible_min_date.isoformat(),
+        "plausible_max_days_ahead": settings.plausible_max_days_ahead,
+        "max_daily_move_pct": settings.max_daily_move_pct,
+        "max_gap_days": settings.max_gap_days,
+        "min_rows": settings.min_rows,
+        "requirement_set": profile.requirement_set,
+        "require_volume": bool(settings.requirement_sets[profile.requirement_set].get("require_volume")),
+        "today": today.isoformat(),
+    }
+
+
+def _settings_difference(recorded_json: str | None, current: dict) -> str:
+    """Plain description of how the current validation settings differ from those recorded (ignoring the date)."""
+    if not recorded_json:
+        return "the earlier result did not record its validation settings"
+    old = json.loads(recorded_json)
+    diffs = [f"{k}: {old.get(k)!r} -> {v!r}" for k, v in sorted(current.items()) if k != "today" and old.get(k) != v]
+    return "; ".join(diffs)
+
+
 def _write_issue_report(run: Run, event_id: int, issues: list) -> Path | None:
     if not issues:
         return None
     path = run.output_path(f"issues_event{event_id}.csv")
+    n = 2
+    while path.exists():  # a retry within the same run: keep the earlier report, never overwrite it
+        path = run.output_path(f"issues_event{event_id}_{n}.csv")
+        n += 1
     with open(path, "x", newline="", encoding="utf-8") as fh:  # exclusive: never overwrite
         w = csv.writer(fh)
         w.writerow(REPORT_COLUMNS)
@@ -102,7 +149,10 @@ def ingest_file(run: Run, path: str | os.PathLike, profile: SourceProfile, *, so
     with run.db.transaction() as conn:
         conn.execute("INSERT OR IGNORE INTO run_inputs(run_id, dataset_id) VALUES (?, ?)",
                      (run.run_id, receipt.raw_dataset_id))
-    overrides = {"exchange": exchange, "symbol": symbol, "timeframe": timeframe}
+    overrides, ignored = _used_overrides(profile, {"exchange": exchange, "symbol": symbol, "timeframe": timeframe})
+    if ignored:
+        run.logger.warning("Ingest request value(s) %s ignored: profile %s does not take them from the request",
+                           ignored, profile.profile_id)
     return _process_registered(run, receipt, path, profile, force_reason, overrides, today, retry=True)
 
 
@@ -112,6 +162,8 @@ def _process_registered(run: Run, receipt: Receipt, src: Path, profile: SourcePr
     register_profile_snapshot(db, profile)
     pv = processing_version(profile, CLEANING_CODE_VERSION)
     raw = db.one("SELECT * FROM datasets WHERE dataset_id = ?", (receipt.raw_dataset_id,))
+    today = today or datetime.now(timezone.utc).date()  # fixed once, used AND recorded
+    vsettings = _validation_settings(settings, profile, today)
 
     request_json = _request_json(overrides)
     prior = [a for a in db.query(
@@ -119,12 +171,15 @@ def _process_registered(run: Run, receipt: Receipt, src: Path, profile: SourcePr
         (raw["dataset_id"], pv)) if (a["ingest_request_json"] or "{}") == request_json]
     accepted_prior = next((a for a in prior if a["outcome"] == "accepted"), None)
     if accepted_prior is not None:
-        return _record_reuse(run, receipt, accepted_prior, pv)
+        return _record_reuse(run, receipt, accepted_prior, pv, vsettings)
     rejected_same = [a for a in prior if a["outcome"] == "rejected"]
     if rejected_same and not (force_reason and force_reason.strip()):
         msg = (f"This file was already processed under {pv} and rejected (attempt {rejected_same[-1]['attempt_id']}). "
                "Reprocessing it unchanged is blocked. Fix the profile (new profile_version) or the processing, or "
                "retry deliberately with a written force_reason.")
+        diff = _settings_difference(rejected_same[-1]["validation_settings_json"], vsettings)
+        if diff:
+            msg += f" Note: the validation settings are now different ({diff}); a forced retry may give another result."
         with db.transaction() as conn:
             conn.execute("UPDATE ingest_events SET detail = ? WHERE event_id = ?", (msg, receipt.event_id))
         log.warning(msg)
@@ -163,17 +218,23 @@ def _process_registered(run: Run, receipt: Receipt, src: Path, profile: SourcePr
                 rel = (f"Cleaned_Data/{g.exchange}/{g.symbol}/{g.timeframe}/"
                        f"{raw['sha256'][:12]}_{pv_hash}_{run.run_id}.parquet")
                 final = settings.data_path(rel)
-                tmp = settings.cleaned_incoming_dir / unique_tmp_name()
+                tmp = settings.cleaned_incoming_dir / f"{run.run_id}.{unique_tmp_name()}"  # owner visible to recovery
                 meta = {"run_id": run.run_id, "processing_version": pv, "profile_id": profile.profile_id,
                         "profile_version": profile.profile_version, "source_raw_sha256": raw["sha256"],
                         "exchange": g.exchange, "symbol": g.symbol, "timeframe": g.timeframe,
                         "volume_status": g.volume_status, "requirement_set": profile.requirement_set,
                         "qmap_version": __version__, "cleaning_code_version": CLEANING_CODE_VERSION,
-                        "field_provenance": result.field_provenance, "row_count": g.row_count}
+                        "field_provenance": result.field_provenance, "row_count": g.row_count,
+                        "validation_settings": vsettings}
                 write_canonical_parquet(tmp, g, meta)
                 maybe_fail("after_cleaned_temp")
                 final.parent.mkdir(parents=True, exist_ok=True)
-                os.replace(tmp, final)
+                try:
+                    place_without_overwrite(tmp, final)  # never replaces an existing (possibly registered) file
+                except FileExistsError:
+                    safe_remove(tmp)
+                    raise IngestError(f"A file already exists at {rel}; it was not overwritten.", code="E_CLEANED_EXISTS",
+                                      check="registry", action="Run verify and investigate.") from None
                 maybe_fail("after_cleaned_rename")
                 written.append((g, rel, final, sha256_file(final)))
 
@@ -194,7 +255,7 @@ def _process_registered(run: Run, receipt: Receipt, src: Path, profile: SourcePr
                 issues_report_path=f"{run.relative_dir}/{report.name}" if report else None,
                 revalidation_of_attempt_id=last_rejected["attempt_id"] if last_rejected else None,
                 force_reason=force_reason.strip() if force_reason and force_reason.strip() else None,
-                ingest_request_json=request_json, created_at=utc_now_iso())
+                ingest_request_json=request_json, validation_settings_json=_j(vsettings), created_at=utc_now_iso())
             extra_checks: list[CheckResult] = []
             if accepted:
                 for g, rel, final, sha in written:
@@ -247,7 +308,7 @@ def _process_registered(run: Run, receipt: Receipt, src: Path, profile: SourcePr
                         attempt_id, [], checks, report, receipt.status)
 
 
-def _record_reuse(run: Run, receipt: Receipt, original, pv: str) -> IngestResult:
+def _record_reuse(run: Run, receipt: Receipt, original, pv: str, vsettings: dict) -> IngestResult:
     db, log = run.db, run.logger
     with db.transaction() as conn:
         attempt_id = _insert_attempt(
@@ -261,11 +322,22 @@ def _record_reuse(run: Run, receipt: Receipt, original, pv: str) -> IngestResult
             field_provenance_json=original["field_provenance_json"], rows_read=original["rows_read"],
             rows_accepted=original["rows_accepted"], rows_flagged=original["rows_flagged"],
             issues_report_path=original["issues_report_path"], reused_of_attempt_id=original["attempt_id"],
-            ingest_request_json=original["ingest_request_json"], created_at=utc_now_iso())
-        ids = [r["dataset_id"] for r in conn.execute(
-            "SELECT dataset_id FROM datasets WHERE created_by_attempt_id = ? ORDER BY dataset_id",
-            (original["attempt_id"],))]
-    log.info("Reused: raw dataset %s already processed under %s (attempt %s); no new dataset",
-             original["raw_dataset_id"], pv, original["attempt_id"])
-    return IngestResult("reused", f"Already processed under {pv}; existing dataset(s) {ids} reused.", receipt.event_id,
-                        original["raw_dataset_id"], attempt_id, ids, [], None, receipt.status)
+            ingest_request_json=original["ingest_request_json"],
+            validation_settings_json=original["validation_settings_json"], created_at=utc_now_iso())
+        rows = conn.execute(
+            "SELECT dataset_id, status, superseded_by_dataset_id FROM datasets WHERE created_by_attempt_id = ? "
+            "ORDER BY dataset_id", (original["attempt_id"],)).fetchall()
+    ids = [r["dataset_id"] for r in rows]
+    msg = f"Already processed under {pv}; existing dataset(s) {ids} reused."
+    superseded = [f"{r['dataset_id']} (by {r['superseded_by_dataset_id']})" for r in rows if r["status"] == "superseded"]
+    if superseded:
+        msg += (f" Note: dataset(s) {', '.join(superseded)} have since been SUPERSEDED by a later processing version; "
+                "they are this version's result but not the active dataset(s).")
+    diff = _settings_difference(original["validation_settings_json"], vsettings)
+    if diff:
+        msg += f" Note: they were produced with different validation settings ({diff})."
+    (log.warning if superseded or diff else log.info)(
+        "Reused: raw dataset %s already processed under %s (attempt %s); no new dataset. %s",
+        original["raw_dataset_id"], pv, original["attempt_id"], msg)
+    return IngestResult("reused", msg, receipt.event_id, original["raw_dataset_id"], attempt_id, ids, [], None,
+                        receipt.status)

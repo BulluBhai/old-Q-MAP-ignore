@@ -128,9 +128,27 @@ WHEN NEW.layer IS NOT OLD.layer OR NEW.sha256 IS NOT OLD.sha256 OR NEW.relative_
 BEGIN SELECT RAISE(ABORT,'dataset identity columns are immutable'); END;
 """
 
+# Added by the independent PR #1 review (31-Oct-26). Migration 1 is left exactly as it was.
+MIGRATION_2 = """
+ALTER TABLE ingest_attempts ADD COLUMN validation_settings_json TEXT;
+
+CREATE TRIGGER trg_events_final BEFORE UPDATE ON ingest_events
+WHEN OLD.status <> 'started' AND (NEW.status IS NOT OLD.status OR NEW.raw_dataset_id IS NOT OLD.raw_dataset_id)
+BEGIN SELECT RAISE(ABORT,'a finished ingest_events receipt cannot change its outcome'); END;
+CREATE TRIGGER trg_profiles_no_update BEFORE UPDATE ON source_profiles BEGIN SELECT RAISE(ABORT,'source_profiles snapshots are immutable'); END;
+CREATE TRIGGER trg_profiles_no_delete BEFORE DELETE ON source_profiles BEGIN SELECT RAISE(ABORT,'source_profiles snapshots are immutable'); END;
+CREATE TRIGGER trg_runs_no_delete BEFORE DELETE ON runs BEGIN SELECT RAISE(ABORT,'runs are never deleted'); END;
+CREATE TRIGGER trg_instruments_no_delete BEFORE DELETE ON instruments BEGIN SELECT RAISE(ABORT,'instruments are never deleted'); END;
+CREATE TRIGGER trg_instruments_identity BEFORE UPDATE ON instruments
+WHEN NEW.exchange IS NOT OLD.exchange OR NEW.symbol IS NOT OLD.symbol
+BEGIN SELECT RAISE(ABORT,'instrument identity (exchange, symbol) is immutable'); END;
+"""
+
 # (version, description, sql)
 MIGRATIONS = [
     (1, "Stage 2 foundation: instruments, runs, registry, ingest provenance, quality checks", MIGRATION_1),
+    (2, "Review fixes: validation settings provenance; final receipts, profile snapshots, runs and instruments protected",
+     MIGRATION_2),
 ]
 
 LATEST_VERSION = MIGRATIONS[-1][0]

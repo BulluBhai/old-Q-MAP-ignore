@@ -4,6 +4,12 @@ Run ID format: <MODULE>_<YYYYMMDD>_<HHMMSS> in UTC. Two runs started in the same
 get a numeric suffix (_02, _03 ...). Reservation is safe against simultaneous runs:
 the run folder is created with an atomic mkdir, and the Run ID is then claimed through
 the primary key of the `runs` table.
+
+Liveness: while a run is open its process holds an operating-system lock on
+Q-MAP_DATA/Metadata/run_locks/<Run ID>.lock. The operating system releases that lock the moment
+the process ends, however it ends (crash, power loss, closed window). Recovery therefore never
+treats a run as interrupted while its lock is held, however long the run has been going; an age
+threshold alone cannot prove that a writer has stopped.
 """
 
 from __future__ import annotations
@@ -11,6 +17,7 @@ from __future__ import annotations
 import contextlib
 import json
 import logging
+import os
 import sqlite3
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -43,7 +50,14 @@ class Run:
     params: dict = field(default_factory=dict)
     logger: logging.Logger = field(default_factory=get_logger)
     _log_handler: logging.Handler | None = None
+    _lock_fd: int | None = None
     finished: bool = False
+
+    def _release_lock(self) -> None:
+        """Release the liveness lock (done by finish_run; the OS does it automatically if the process dies)."""
+        if self._lock_fd is not None:
+            _unlock(self._lock_fd)
+            self._lock_fd = None
 
     @property
     def relative_dir(self) -> str:
@@ -52,6 +66,77 @@ class Run:
     def output_path(self, name: str) -> Path:
         """Path for a new output file inside this run's folder."""
         return self.dir / name
+
+
+# ---- liveness locks ----------------------------------------------------------------------------------------
+def _lock_path(settings: Settings, run_id: str) -> Path:
+    return settings.data_root / "Metadata" / "run_locks" / f"{run_id}.lock"
+
+
+def _try_lock_fd(fd: int) -> bool:
+    try:
+        if os.name == "nt":
+            import msvcrt
+
+            os.lseek(fd, 0, os.SEEK_SET)
+            msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        return False
+    return True
+
+
+def _unlock(fd: int) -> None:
+    with contextlib.suppress(OSError):
+        if os.name == "nt":
+            import msvcrt
+
+            os.lseek(fd, 0, os.SEEK_SET)
+            msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(fd, fcntl.LOCK_UN)
+    with contextlib.suppress(OSError):
+        os.close(fd)
+
+
+def _acquire_run_lock(settings: Settings, run_id: str) -> int | None:
+    """Take the liveness lock for a new run. None if another live process already holds it."""
+    path = _lock_path(settings, run_id)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o644)  # not inherited by child processes
+    if _try_lock_fd(fd):
+        return fd
+    os.close(fd)
+    return None
+
+
+def run_is_alive(settings: Settings, run_id: str) -> bool | None:
+    """True: the run's process is alive. False: it is not. None: cannot tell (no lock file)."""
+    path = _lock_path(settings, run_id)
+    try:
+        fd = os.open(path, os.O_RDWR)  # never create: a missing file means "unknown"
+    except FileNotFoundError:
+        return None
+    except OSError:
+        return True  # cannot even open it (for example locked or access denied): assume alive, be safe
+    try:
+        if _try_lock_fd(fd):
+            _unlock(fd)
+            return False
+        return True
+    finally:
+        with contextlib.suppress(OSError):
+            os.close(fd)
+
+
+def _remove_lock_file(settings: Settings, run_id: str) -> None:
+    with contextlib.suppress(OSError):
+        _lock_path(settings, run_id).unlink()
 
 
 def ensure_module(db: Database, code: str, name: str, version: str = __version__) -> None:
@@ -63,7 +148,7 @@ def ensure_module(db: Database, code: str, name: str, version: str = __version__
 
 
 def _reserve_run(settings: Settings, db: Database, module_code: str, area: str, now: datetime,
-                 params: dict) -> tuple[str, Path]:
+                 params: dict) -> tuple[str, Path, int]:
     base = f"{module_code}_{now:%Y%m%d_%H%M%S}"
     area_dir = settings.output_root / area
     area_dir.mkdir(parents=True, exist_ok=True)
@@ -73,6 +158,11 @@ def _reserve_run(settings: Settings, db: Database, module_code: str, area: str, 
         try:
             run_dir.mkdir()  # atomic: only one process can create a given folder
         except FileExistsError:
+            continue
+        lock_fd = _acquire_run_lock(settings, run_id)
+        if lock_fd is None:  # the same Run ID is live in another output area
+            with contextlib.suppress(OSError):
+                run_dir.rmdir()
             continue
         try:
             with db.transaction() as conn:
@@ -84,6 +174,7 @@ def _reserve_run(settings: Settings, db: Database, module_code: str, area: str, 
                      run_dir.resolve().relative_to(settings.output_root).as_posix()),
                 )
         except sqlite3.IntegrityError as exc:
+            _unlock(lock_fd)
             if "runs.run_id" not in str(exc):
                 run_dir.rmdir()
                 raise
@@ -91,7 +182,10 @@ def _reserve_run(settings: Settings, db: Database, module_code: str, area: str, 
             with contextlib.suppress(OSError):
                 run_dir.rmdir()
             continue
-        return run_id, run_dir
+        except BaseException:
+            _unlock(lock_fd)
+            raise
+        return run_id, run_dir, lock_fd
     raise RuntimeError(f"Could not reserve a Run ID based on {base} after {MAX_SUFFIX} attempts.")
 
 
@@ -99,16 +193,23 @@ def start_run(settings: Settings, db: Database, module_code: str, *, area: str, 
               params: dict | None = None, now: datetime | None = None, recover: bool = True) -> Run:
     params = params or {}
     ensure_module(db, module_code, module_name or module_code)
+    report = None
     if recover:
         from ..storage.recovery import recover_incomplete  # local import avoids a cycle
 
-        recover_incomplete(settings, db)
+        report = recover_incomplete(settings, db)
     now = now or datetime.now(timezone.utc)
-    run_id, run_dir = _reserve_run(settings, db, module_code, area, now, params)
+    run_id, run_dir, lock_fd = _reserve_run(settings, db, module_code, area, now, params)
     run = Run(run_id=run_id, module_code=module_code, area=area, dir=run_dir, settings=settings, db=db,
-              started_at=utc_now_iso(), params=params)
+              started_at=utc_now_iso(), params=params, _lock_fd=lock_fd)
     run._log_handler = attach_run_log(run_dir, run_id, settings.log_level)
     run.logger.info("Run %s started (module %s, area %s)", run_id, module_code, area)
+    if report is not None and report.has_actions:
+        # Make the recovery done just before this run visible in this run's own folder and log.
+        atomic_write_bytes(run_dir / "recovery_report.json",
+                           json.dumps(report.as_dict(), indent=2, sort_keys=True).encode("utf-8"))
+        log = run.logger.warning if report.needs_attention else run.logger.info
+        log("Recovery before this run: %s (details in recovery_report.json)", report.summary())
     return run
 
 
@@ -122,6 +223,16 @@ def finish_run(run: Run, status: str = "completed", error: str | None = None) ->
         return run.dir / MANIFEST_NAME
     if status not in ("completed", "failed", "cancelled"):
         raise ValueError(f"invalid final run status {status!r}")
+    try:
+        manifest_path = _finish(run, status, error)
+    finally:
+        # Always give up liveness, even if finishing failed: recovery can then deal with the run.
+        run._release_lock()
+    _remove_lock_file(run.settings, run.run_id)
+    return manifest_path
+
+
+def _finish(run: Run, status: str, error: str | None) -> Path:
     run.logger.info("Run %s finished with status %s%s", run.run_id, status, f" ({error})" if error else "")
     if run._log_handler is not None:
         detach_run_log(run._log_handler)
@@ -187,16 +298,26 @@ def run_context(settings: Settings, db: Database, module_code: str, *, area: str
         finish_run(run, "completed")
 
 
-def mark_interrupted_runs(db: Database, stale_minutes: int, now: datetime | None = None) -> list[str]:
-    """Runs left in 'running' for longer than the stale threshold are marked failed (interrupted)."""
+def mark_interrupted_runs(db: Database, stale_minutes: int, now: datetime | None = None, *,
+                          settings: Settings | None = None) -> list[str]:
+    """Mark runs failed ('interrupted') when they are left 'running' beyond the stale threshold.
+
+    With `settings`, a run whose process still holds its liveness lock is never marked, however old it is.
+    """
     now = now or datetime.now(timezone.utc)
     cutoff = (now - timedelta(minutes=stale_minutes)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+    candidates = [r["run_id"] for r in db.query(
+        "SELECT run_id FROM runs WHERE status IN ('created', 'running') AND started_at <= ?", (cutoff,))]
+    if settings is not None:
+        candidates = [r for r in candidates if run_is_alive(settings, r) is not True]
+    ids = []
     with db.transaction() as conn:
-        rows = conn.execute(
-            "SELECT run_id FROM runs WHERE status IN ('created', 'running') AND started_at <= ?", (cutoff,)
-        ).fetchall()
-        ids = [r["run_id"] for r in rows]
+        for run_id in candidates:
+            cur = conn.execute("UPDATE runs SET status = 'failed', finished_at = ?, error_message = 'interrupted' "
+                               "WHERE run_id = ? AND status IN ('created', 'running')", (utc_now_iso(), run_id))
+            if cur.rowcount:
+                ids.append(run_id)
+    if settings is not None:
         for run_id in ids:
-            conn.execute("UPDATE runs SET status = 'failed', finished_at = ?, error_message = 'interrupted' "
-                         "WHERE run_id = ?", (utc_now_iso(), run_id))
+            _remove_lock_file(settings, run_id)
     return ids

@@ -8,9 +8,14 @@ import threading
 from datetime import datetime, timezone
 from pathlib import Path
 
+from ..core.errors import QmapError
 from .schema import LATEST_VERSION, MIGRATIONS
 
 BUSY_TIMEOUT_MS = 30_000
+
+
+class DatabaseError(QmapError):
+    code = "E_DB"
 
 
 def utc_now_iso() -> str:
@@ -75,7 +80,17 @@ class Database:
         return int(row["v"])
 
     def migrate(self) -> int:
-        """Apply any missing migrations. Safe if two processes start at the same time."""
+        """Apply any missing migrations, each in one transaction. Safe if two processes start at the same time.
+
+        A failing migration is rolled back completely (nothing half-applied is recorded as done), and a
+        database written by a NEWER Q-MAP is refused rather than used by code that does not understand it.
+        """
+        latest = MIGRATIONS[-1][0]
+        if self.current_version() > latest:
+            raise DatabaseError(
+                f"The metadata database {self.path} has schema version {self.current_version()}, which is newer than "
+                f"this Q-MAP understands (version {latest}).", code="E_DB_NEWER",
+                action="Use the Q-MAP version that created it (update this copy of the code).")
         for version, description, sql in MIGRATIONS:
             if self.current_version() >= version:
                 continue
@@ -87,9 +102,10 @@ class Database:
             )
             try:
                 conn.executescript(script)
-            except sqlite3.OperationalError:
-                with contextlib.suppress(sqlite3.OperationalError):
-                    conn.execute("ROLLBACK")
+            except sqlite3.Error:
+                if conn.in_transaction:
+                    with contextlib.suppress(sqlite3.Error):
+                        conn.execute("ROLLBACK")
                 # Another process may have applied it while we waited for the lock.
                 if self.current_version() >= version:
                     continue
@@ -104,4 +120,4 @@ def open_database(path: str | Path, *, migrate: bool = True) -> Database:
     return db
 
 
-__all__ = ["Database", "open_database", "utc_now_iso", "LATEST_VERSION"]
+__all__ = ["Database", "DatabaseError", "open_database", "utc_now_iso", "LATEST_VERSION"]

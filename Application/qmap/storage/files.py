@@ -1,12 +1,16 @@
-"""File-handling primitives: hashing, durable copy, atomic replace, read-only flag.
+"""File-handling primitives: hashing, durable copy, atomic placement, read-only flag.
 
-Everything here uses pathlib and os.replace, which behave the same on Windows,
-macOS and Linux. Temporary files are always created on the same volume as their
-destination so the final rename is atomic.
+Temporary files are always created on the same volume as their destination so the final
+rename/link is atomic. Two different placement operations exist on purpose:
+
+* `atomic_write_bytes` (os.replace) may replace an existing file. It is used only for files the
+  caller owns exclusively (for example a run's manifest).
+* `place_without_overwrite` never replaces anything. It is used for every registered data file.
 """
 
 from __future__ import annotations
 
+import errno
 import hashlib
 import os
 import shutil
@@ -66,6 +70,34 @@ def atomic_write_bytes(path: Path, data: bytes, tmp_dir: Path | None = None) -> 
         fh.flush()
         os.fsync(fh.fileno())
     os.replace(tmp, path)
+
+
+def place_without_overwrite(tmp: Path, final: Path) -> None:
+    """Move `tmp` to `final` atomically, failing with FileExistsError if `final` already exists.
+
+    The existence check and the placement are ONE operating-system call, so another process can never slip
+    a file in between (there is no "check, then replace" window):
+    * Windows: os.rename (MoveFileExW without MOVEFILE_REPLACE_EXISTING) refuses an existing target.
+    * macOS/Linux: os.link refuses an existing target; the temporary name is then removed. If the volume
+      does not support hard links, an exclusive create (O_CREAT | O_EXCL) claims the name first and the
+      file is then moved onto that claim, which no other Q-MAP writer can take.
+    A crash between the two steps of the POSIX paths leaves `tmp` behind, which recovery removes.
+    """
+    if os.name == "nt":
+        os.rename(tmp, final)
+        return
+    try:
+        os.link(tmp, final)
+    except FileExistsError:
+        raise
+    except OSError as exc:
+        if exc.errno not in (errno.EPERM, errno.ENOTSUP, errno.EOPNOTSUPP, errno.EXDEV, errno.EMLINK, errno.ENOSYS):
+            raise
+        fd = os.open(final, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)  # raises FileExistsError if taken
+        os.close(fd)
+        os.replace(tmp, final)  # replaces only our own empty claim
+        return
+    os.unlink(tmp)
 
 
 def safe_remove(path: Path) -> bool:

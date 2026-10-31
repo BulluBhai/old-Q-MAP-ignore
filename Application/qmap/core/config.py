@@ -107,11 +107,40 @@ class Settings:
         return self.output_root / "Logs"
 
     def data_path(self, relative_path: str) -> Path:
-        """Absolute path of a registry path (stored relative to the data root, using '/')."""
-        return self.data_root.joinpath(*relative_path.split("/"))
+        """Absolute path of a registry path (stored relative to the data root, using '/').
+
+        Refuses anything that could point outside Q-MAP_DATA (absolute paths, drive letters, '..', empty parts).
+        """
+        parts = relative_path.split("/") if isinstance(relative_path, str) else []
+        if (not parts or any(p in ("", ".", "..") or "\\" in p or ":" in p for p in parts)):
+            raise ValueError(f"not a valid registry path inside Q-MAP_DATA: {relative_path!r}")
+        return self.data_root.joinpath(*parts)
 
     def to_relative(self, absolute: Path) -> str:
         return absolute.resolve().relative_to(self.data_root).as_posix()
+
+
+def _resolve_folder(value, where: str, relative_to: Path | None) -> Path:
+    p = Path(str(value)).expanduser()
+    if not p.is_absolute():
+        if relative_to is None:
+            raise ConfigError(f"{where} must be a full path (for example C:/Q-MAP_DATA), got {value!r}.",
+                              action="Use the complete folder path, including the drive letter on Windows.")
+        p = relative_to / p
+    return p.resolve()
+
+
+def _number(section: dict, key: str, default, kind, *, minimum):
+    value = section.get(key, default)
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or (kind is int and isinstance(value, float)
+                                                                            and not value.is_integer()):
+        raise ConfigError(f"'{key}' must be a {'whole ' if kind is int else ''}number, got {value!r}.",
+                          action="Correct the value in your local configuration file (no quotes around numbers).")
+    value = kind(value)
+    if value < minimum:
+        raise ConfigError(f"'{key}' must be {minimum} or more, got {value!r}.",
+                          action="Correct the value in your local configuration file.")
+    return value
 
 
 def _check_writable(folder: Path, label: str) -> None:
@@ -179,17 +208,21 @@ def load_settings(config_path: str | os.PathLike | None = None, *, env=None,
         except tomllib.TOMLDecodeError as exc:
             raise ConfigError(f"Configuration file is not valid TOML: {exc}.", action="Fix the syntax error.") from exc
 
+    # A relative folder in the configuration file means "relative to that file", never to the folder Q-MAP
+    # happens to be started from (IDLE, a shortcut or a terminal can each start in a different folder).
+    cfg_dir = Path(path).resolve().parent if path else None
     paths = cfg.get("paths", {})
-    data_raw = env.get(ENV_DATA_ROOT) or paths.get("data_root")
-    out_raw = env.get(ENV_OUTPUT_ROOT) or paths.get("output_root")
-    for label, value, key in (("Q-MAP_DATA", data_raw, "data_root"), ("Q-MAP_OUTPUT", out_raw, "output_root")):
+    resolved = {}
+    for label, key, env_name in (("Q-MAP_DATA", "data_root", ENV_DATA_ROOT), ("Q-MAP_OUTPUT", "output_root", ENV_OUTPUT_ROOT)):
+        from_env = env.get(env_name)
+        value = from_env or paths.get(key)
         if not value or str(value).startswith("<"):
             raise ConfigError(f"{label} location is not set.",
-                              action=f"Set [paths] {key} in your local configuration file "
-                                     f"(or the environment variable {ENV_DATA_ROOT if key == 'data_root' else ENV_OUTPUT_ROOT}).")
+                              action=f"Set [paths] {key} in your local configuration file (or the environment variable {env_name}).")
+        resolved[key] = _resolve_folder(value, f"the environment variable {env_name}" if from_env else f"[paths] {key}",
+                                        None if from_env else cfg_dir)
     code = Path(code_root).resolve() if code_root else _default_code_root()
-    data_root = Path(data_raw).expanduser().resolve()
-    output_root = Path(out_raw).expanduser().resolve()
+    data_root, output_root = resolved["data_root"], resolved["output_root"]
     validate_roots(data_root, output_root, code)
 
     val = cfg.get("validation", {})
@@ -197,7 +230,7 @@ def load_settings(config_path: str | os.PathLike | None = None, *, env=None,
     rec = cfg.get("recovery", {})
     profile_dirs = [code / "Configuration" / "source_profiles"]
     if files.get("profiles_dir"):
-        profile_dirs.append(Path(files["profiles_dir"]).expanduser().resolve())
+        profile_dirs.append(_resolve_folder(files["profiles_dir"], "[files] profiles_dir", cfg_dir))
 
     req_sets = {k: dict(v) for k, v in DEFAULT_REQUIREMENT_SETS.items()}
     for name, body in cfg.get("requirement_sets", {}).items():
@@ -209,13 +242,13 @@ def load_settings(config_path: str | os.PathLike | None = None, *, env=None,
         code_root=code,
         profile_dirs=tuple(profile_dirs),
         log_level=str(cfg.get("logging", {}).get("level", "INFO")).upper(),
-        stale_minutes=int(rec.get("stale_minutes", 60)),
-        max_file_size_mb=int(files.get("max_file_size_mb", 1024)),
+        stale_minutes=_number(rec, "stale_minutes", 60, int, minimum=1),
+        max_file_size_mb=_number(files, "max_file_size_mb", 1024, int, minimum=1),
         plausible_min_date=_parse_date(val.get("plausible_min_date", "01-Jan-1990"), "plausible_min_date"),
-        plausible_max_days_ahead=int(val.get("plausible_max_days_ahead", 1)),
-        max_daily_move_pct=float(val.get("max_daily_move_pct", 25.0)),
-        max_gap_days=int(val.get("max_gap_days", 7)),
-        min_rows=int(val.get("min_rows", 1)),
+        plausible_max_days_ahead=_number(val, "plausible_max_days_ahead", 1, int, minimum=0),
+        max_daily_move_pct=_number(val, "max_daily_move_pct", 25.0, float, minimum=0),
+        max_gap_days=_number(val, "max_gap_days", 7, int, minimum=1),
+        min_rows=_number(val, "min_rows", 1, int, minimum=1),
         requirement_sets=req_sets,
     )
     if create_layout:

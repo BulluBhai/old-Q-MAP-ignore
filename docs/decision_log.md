@@ -25,10 +25,33 @@ Status of every entry: implemented on branch `claude/keen-carson-x872ge`; **awai
 | D2-15 | Any failed error-level check rejects the whole file; no row is repaired or dropped; every offending row is listed in `issues_event<N>.csv` | Proposed | Do not silently repair or discard invalid data | validation |
 | D2-16 | Validation depends on availability and intended use via requirement sets (`price_only`, `price_volume`) | Proposed | Missing volume must not invalidate usable OHLC data | validation |
 | D2-17 | Instrument identity is exchange + symbol, normalised to upper case; both must be declared; unknown instruments are created on first sight with an info record | Proposed | Shared symbols across exchanges | instruments |
-| D2-18 | pandas is not a Stage 2 dependency; dependencies are pyarrow, openpyxl, tzdata (xlrd optional, pytest for development) | pandas listed in the design | The foundation needed only pyarrow and the standard library; pandas can be added when a stage needs it | pyproject |
+| D2-18 | pandas is not a Stage 2 dependency; dependencies are numpy, pyarrow, openpyxl, tzdata (xlrd optional, pytest for development) | pandas listed in the design | The foundation needed only pyarrow and the standard library; pandas can be added when a stage needs it | pyproject |
 | D2-19 | Cleaned file paths include the Run ID (`...<raw sha 12>_<version hash>_<Run ID>.parquet`) | Deterministic path proposed | A concurrent identical ingest can never overwrite a registered file | ingest |
 | D2-20 | Documentation lives in the existing `docs/` folder | Design said `Documentation/` | The approved blueprint is already committed in `docs/` | docs |
 | D2-21 | A registered raw file is verified against its registered SHA-256 before it is reused or processed (size is never trusted). On a mismatch the receipt fails with `E_RAW_CORRUPT`, nothing is processed, and the stored file is not used, overwritten or deleted. Recovery is explicit: `restore-raw` requires a written reason, a source that matches the registered checksum and a corrupt stored copy; the corrupt copy is moved to `Raw_Data/_quarantine` (never deleted) and the restore is recorded as its own receipt | Size-only check found in PR #1 review | A same-size corruption could be reused and processed as if it were the registered raw data | storage/registry, storage/recovery, cli |
+
+## Independent review of PR #1 (31-Oct-26)
+
+Every change below has a regression test in `Tests/integration/test_review_regressions.py` or
+`Tests/unit/test_placement_and_migration.py` that failed on the code as first submitted. Status: implemented on
+branch `claude/keen-carson-x872ge`; **awaiting Project Owner review**.
+
+| Ref | Decision | Previously | Why | Affects |
+|---|---|---|---|---|
+| D2-22 | Registered files are placed with one no-overwrite OS call (`os.rename` on Windows; `os.link` + unlink, or an exclusive-create claim, on macOS/Linux). An occupied destination is hashed: identical content is adopted, anything else fails the receipt and is left untouched | `exists()` check followed by `os.replace` | Reproduced: a file appearing between the check and the replace was overwritten; on Windows a concurrent identical ingest failed on the read-only target | storage/files, storage/registry |
+| D2-23 | A run holds an OS lock on `Metadata/run_locks/<Run ID>.lock` while open. Recovery treats work as interrupted only if the run is not live AND (finished OR older than `stale_minutes`) | Age threshold only | Reproduced: a live run older than the limit was marked failed and its temp file deleted by another program's recovery | core/runs, storage/recovery |
+| D2-24 | Recovery re-checks each temp/cleaned file against the database at the moment of deletion; cleaned temp names carry the Run ID; unreadable or vanishing files are reported, not fatal | One snapshot query, then deletes | Reproduced: a receipt started during recovery lost its temp file; a cleaned file registered during the scan could be deleted | storage/recovery, ingest |
+| D2-25 | A receipt's final status cannot change (code guard and trigger); profile snapshots, runs and instruments cannot be deleted or rewritten (schema migration 2; migration 1 unchanged) | Application convention only | Historical explanation must not be rewritable | schema, registry |
+| D2-26 | Only ingest-request values the profile actually takes from the request form the request identity (D2-09); ignored values are logged | All supplied values | Reproduced: `--timeframe 1D` with a fixed-1D profile crashed with a uniqueness error | ingest |
+| D2-27 | Validation settings and the run date are recorded per attempt (`validation_settings_json`) and in each cleaned file; reuse and blocked messages state any difference. They are NOT added to the processing version | Not recorded | Provenance gap: `min_rows`, date range, requirement sets and the large-move threshold change outcomes or `quality_flags` | ingest, schema |
+| D2-28 | A failing migration is rolled back whatever the error type; a database newer than the code is refused | Only OperationalError rolled back | Reproduced: an IntegrityError left the connection in an open transaction | storage/db |
+| D2-29 | Relative paths in the configuration file resolve against the file's folder; root environment variables must be absolute; numeric settings are type- and range-checked; registry paths cannot leave Q-MAP_DATA | Resolved against the working folder; `int()` tracebacks | Behaviour must not depend on where IDLE or a shortcut starts | core/config |
+| D2-30 | Recovery done at the start of a run is written to that run's `recovery_report.json` and log; copy/placement errors mark the receipt `failed` and remove the temp file | Console only; receipt left `started` | Observability; no half-finished receipts in a long-lived session | core/runs, registry, cli |
+| D2-31 | Windows CI (`.github/workflows/tests.yml`, Python 3.11, windows-latest and ubuntu-latest) | No Windows run | Windows is the primary environment | CI |
+
+**Decision needed (Project Owner):** should the validation settings be part of the processing version (so a changed
+setting forces reprocessing into a new dataset), or stay recorded-only as now (D2-27)? Including them makes reuse
+strictly reproducible but creates a new cleaned dataset whenever a threshold is tuned.
 
 ## Open decisions carried forward (not needed for Stage 2)
 
