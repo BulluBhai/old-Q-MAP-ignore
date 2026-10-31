@@ -28,6 +28,8 @@ STEPS = (
     "after_cleaned_temp",
     "after_cleaned_rename",
     "before_result_commit",
+    "restore_after_quarantine",
+    "restore_after_replace",
 )
 
 

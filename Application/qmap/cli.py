@@ -19,6 +19,7 @@ from .data_engine.preview import preview_file
 from .data_engine.profiles import check_profile_against_settings, find_profile
 from .storage.db import open_database
 from .storage.recovery import recover_incomplete, verify_registry
+from .storage.registry import restore_raw_file
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -44,6 +45,11 @@ def _build_parser() -> argparse.ArgumentParser:
     pre.add_argument("--timeframe")
     pre.add_argument("file")
 
+    rest = sub.add_parser("restore-raw", help="restore a corrupt stored raw file from the original (explicit, audited)")
+    rest.add_argument("--dataset-id", type=int, required=True, help="the raw dataset named in the corruption message")
+    rest.add_argument("--from", dest="source", required=True, help="the original file (must match the registered checksum)")
+    rest.add_argument("--reason", required=True, help="written reason, recorded in the audit trail")
+
     sub.add_parser("recover", help="finish or clean up interrupted work and report problems")
     sub.add_parser("verify", help="re-check every registered file against its checksum")
     return p
@@ -62,6 +68,14 @@ def main(argv: list[str] | None = None) -> int:
                                timeframe=args.timeframe))
             return 0
         db = open_database(settings.db_path)
+        if args.command == "restore-raw":
+            with run_context(settings, db, "FOUND", area="Recovery", module_name="Foundation",
+                             params={"command": "restore-raw", "dataset_id": args.dataset_id,
+                                     "source": args.source, "reason": args.reason}) as run:
+                receipt = restore_raw_file(run, args.dataset_id, args.source, reason=args.reason)
+                print(f"RESTORED    raw dataset {args.dataset_id}\n            {receipt.detail}")
+                print(f"Run {run.run_id}  outputs: {run.dir}")
+            return 0
         if args.command in ("recover", "verify"):
             report = (recover_incomplete if args.command == "recover" else verify_registry)(settings, db)
             summary = report.summary()
@@ -71,6 +85,9 @@ def main(argv: list[str] | None = None) -> int:
             for label in ("orphan_raw_files", "missing_files", "checksum_mismatches"):
                 for item in getattr(report, label):
                     print(f"  {label}: {item}")
+            if report.checksum_mismatches:
+                print("  To restore a corrupt raw file from its original: python -m qmap restore-raw "
+                      "--dataset-id <id> --from <original file> --reason \"<why>\"")
             return 1 if report.needs_attention else 0
         profile = find_profile(settings, args.profile)
         exit_code = 0

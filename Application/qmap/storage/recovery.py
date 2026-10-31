@@ -51,11 +51,14 @@ class RecoveryReport:
         return ", ".join(parts) if parts else "nothing to recover"
 
 
-def _files_under(root: Path, skip_dir_name: str = "_incoming"):
+_SKIPPED_DIRS = {"_incoming", "_quarantine"}  # temp files and preserved corrupt copies are handled separately
+
+
+def _files_under(root: Path):
     if not root.exists():
         return
     for path in root.rglob("*"):
-        if path.is_file() and skip_dir_name not in path.relative_to(root).parts:
+        if path.is_file() and not (_SKIPPED_DIRS & set(path.relative_to(root).parts)):
             yield path
 
 

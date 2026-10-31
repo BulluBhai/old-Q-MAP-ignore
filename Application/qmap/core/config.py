@@ -27,6 +27,7 @@ DEFAULT_REQUIREMENT_SETS = {
 
 DATA_SUBFOLDERS = (
     "Raw_Data/_incoming",
+    "Raw_Data/_quarantine",
     "Cleaned_Data/_incoming",
     "Timeframe_Data",
     "Reference_Files",
@@ -87,6 +88,11 @@ class Settings:
     @property
     def raw_incoming_dir(self) -> Path:
         return self.raw_dir / "_incoming"
+
+    @property
+    def raw_quarantine_dir(self) -> Path:
+        """Corrupt stored raw copies are moved here (never deleted) when explicitly restored."""
+        return self.raw_dir / "_quarantine"
 
     @property
     def cleaned_dir(self) -> Path:

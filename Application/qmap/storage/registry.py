@@ -7,17 +7,21 @@ Design rules (Stage 2):
   including receipts of content that is already registered.
 * The intent is committed (`started` event) before any file is moved, so recovery can finish
   or discard an interrupted registration after a restart.
-* A registered raw file is never overwritten, modified or automatically deleted.
+* A registered raw file is never overwritten, modified or automatically deleted, and its SHA-256 is verified
+  against the registered checksum before it is reused (size is never trusted). A mismatch fails the receipt;
+  `restore_raw_file` is the explicit, audited way to put the original back (the corrupt copy is quarantined).
 """
 
 from __future__ import annotations
 
 import os
 import sqlite3
+import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
+from ..core.errors import IngestError
 from ..core.runs import Run
 from ..data_engine.format_detect import STORED_EXTENSION, DetectedFormat, detect_format
 from .db import Database, utc_now_iso
@@ -104,23 +108,39 @@ def receive_file(run: Run, src: str | Path, *, source_label: str | None = None, 
         log.error("Receipt %s unsupported: %s (%s)", eid, detected.reason, src.name)
         return Receipt(event_id=eid, status="unsupported", sha256=sha, detected=detected, detail=detected.reason)
 
-    # 3. Already registered? Then just record the receipt.
+    # 3. Already registered? Verify the stored copy against the REGISTERED checksum before reusing it.
+    #    File size is not proof of integrity: a same-size corruption must not be reused or processed.
     existing = find_raw_by_sha(db, sha)
     repair = False
     if existing is not None:
         stored = settings.data_path(existing["relative_path"])
-        if stored.is_file() and stored.stat().st_size == st.st_size:
-            eid = _insert_event(db, run, status="reused_existing", sha256=sha, detected_format=detected.kind,
-                                intended_relative_path=existing["relative_path"],
-                                raw_dataset_id=existing["dataset_id"],
-                                detail="identical content already registered", **base)
-            log.info("Receipt %s: %s already registered as dataset %s (no new copy)", eid, src.name,
-                     existing["dataset_id"])
-            return Receipt(event_id=eid, status="reused_existing", raw_dataset_id=existing["dataset_id"], sha256=sha,
-                           detected=detected, relative_path=existing["relative_path"],
-                           detail="identical content already registered")
-        repair = True  # record exists but the stored file is missing: restore it
         rel = existing["relative_path"]
+        if stored.is_file():
+            try:
+                actual = sha256_file(stored)
+            except OSError as exc:
+                actual = f"unreadable ({exc})"
+            if actual == existing["sha256"]:
+                eid = _insert_event(db, run, status="reused_existing", sha256=sha, detected_format=detected.kind,
+                                    intended_relative_path=rel, raw_dataset_id=existing["dataset_id"],
+                                    detail="identical content already registered; stored copy verified", **base)
+                log.info("Receipt %s: %s already registered as dataset %s (stored copy verified, no new copy)", eid,
+                         src.name, existing["dataset_id"])
+                return Receipt(event_id=eid, status="reused_existing", raw_dataset_id=existing["dataset_id"],
+                               sha256=sha, detected=detected, relative_path=rel,
+                               detail="identical content already registered; stored copy verified")
+            detail = (f"E_RAW_CORRUPT: the stored raw file {rel} (dataset {existing['dataset_id']}) no longer matches its "
+                      f"registered SHA-256 (registered {existing['sha256'][:12]}..., found {actual[:12]}...). It was NOT "
+                      f"used, overwritten or deleted, and nothing was processed. The file you supplied DOES match the "
+                      f"registered checksum, so you can restore the stored copy explicitly (the corrupt copy is "
+                      f"preserved in Raw_Data/_quarantine): python -m qmap restore-raw --dataset-id "
+                      f"{existing['dataset_id']} --from \"{resolved}\" --reason \"<why>\"")
+            eid = _insert_event(db, run, status="failed", sha256=sha, detected_format=detected.kind,
+                                intended_relative_path=rel, raw_dataset_id=existing["dataset_id"], detail=detail, **base)
+            log.error("Receipt %s: %s", eid, detail)
+            return Receipt(event_id=eid, status="failed", raw_dataset_id=existing["dataset_id"], sha256=sha,
+                           detected=detected, relative_path=rel, detail=detail)
+        repair = True  # the stored file is MISSING (nothing to overwrite): restore it from this verified source
     else:
         rel = raw_relative_path(sha, detected.kind)
 
@@ -166,12 +186,14 @@ def receive_file(run: Run, src: str | Path, *, source_label: str | None = None, 
                    relative_path=rel, detail=detail)
 
 
-def _commit_registration(db: Database, event_id: int, sha: str, detected: DetectedFormat, rel: str, existing):
+def _commit_registration(db: Database, event_id: int, sha: str, detected: DetectedFormat, rel: str, existing,
+                         detail_override: str | None = None):
     """Insert the raw dataset (unless it exists) and mark the event. Shared with crash recovery."""
     with db.transaction() as conn:
         maybe_fail("before_db_commit")
         if existing is not None:
-            ds_id, status, detail = existing["dataset_id"], "reused_existing", "stored file was missing and has been restored"
+            ds_id, status = existing["dataset_id"], "reused_existing"
+            detail = detail_override or "stored file was missing and has been restored"
         else:
             try:
                 cur = conn.execute(
@@ -189,3 +211,81 @@ def _commit_registration(db: Database, event_id: int, sha: str, detected: Detect
                 detail = "identical content was registered concurrently by another ingest"
         _finish_event(conn, event_id, status, ds_id, detail)
     return status, ds_id, detail
+
+
+def restore_raw_file(run: Run, dataset_id: int, source: str | Path, *, reason: str) -> Receipt:
+    """Explicitly restore a registered raw file whose stored copy is corrupt (or missing).
+
+    Safe by construction:
+    * a written reason is required and recorded;
+    * `source` must match the REGISTERED SHA-256 (a wrong file changes nothing);
+    * an intact stored file is never replaced;
+    * the corrupt copy is MOVED to Raw_Data/_quarantine (evidence kept, never deleted);
+    * the intent is committed first and the registration machinery is reused, so a crash at any step
+      is completed or cleaned up by recovery, and the earlier failed receipt stays in the audit trail.
+    """
+    settings, db, log = run.settings, run.db, run.logger
+    if not reason or not reason.strip():
+        raise IngestError("A written reason is required to restore a raw file.", code="E_REASON_REQUIRED",
+                          check="raw_integrity", action='Add --reason "why this restore is correct".')
+    row = db.one("SELECT * FROM datasets WHERE dataset_id = ? AND layer = 'raw'", (dataset_id,))
+    if row is None:
+        raise IngestError(f"There is no registered raw dataset {dataset_id}.", code="E_DATASET_NOT_FOUND", check="raw_integrity")
+    src = Path(source)
+    try:
+        st = src.stat()
+        src_sha = sha256_file(src)
+    except OSError as exc:
+        raise IngestError(f"The restore source could not be read: {exc}.", code="E_RESTORE_SOURCE", check="raw_integrity") from exc
+    if src_sha != row["sha256"]:
+        raise IngestError(
+            f"The file you supplied does not match dataset {dataset_id}'s registered SHA-256 "
+            f"(registered {row['sha256'][:12]}..., supplied {src_sha[:12]}...). Nothing was changed.",
+            code="E_RESTORE_MISMATCH", check="raw_integrity", action="Supply the original, unmodified file.")
+    rel = row["relative_path"]
+    final = settings.data_path(rel)
+    if final.is_file():
+        try:
+            intact = sha256_file(final) == row["sha256"]
+        except OSError:
+            intact = False
+        if intact:
+            raise IngestError(f"The stored file for dataset {dataset_id} is intact. Nothing to restore.",
+                              code="E_RAW_INTACT", check="raw_integrity")
+
+    try:
+        resolved = str(src.resolve())
+    except OSError:
+        resolved = str(src)
+    base = dict(original_path=resolved, original_filename=src.name, original_extension=src.suffix.lower(),
+                file_size=st.st_size, file_mtime=datetime.fromtimestamp(st.st_mtime, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                source_label="restore-raw", note=f"restore reason: {reason.strip()}")
+    eid = _insert_event(db, run, status="started", sha256=src_sha, detected_format=row["file_format"],
+                        intended_relative_path=rel, raw_dataset_id=row["dataset_id"], **base)
+    tmp = settings.raw_incoming_dir / f"{eid}.tmp"
+    copy_durably(src, tmp)
+    if sha256_file(tmp) != src_sha:
+        safe_remove(tmp)
+        detail = "The restore source changed while it was being copied. Nothing was changed; try again."
+        _fail_event(db, eid, detail)
+        raise IngestError(detail, code="E_RESTORE_SOURCE", check="raw_integrity")
+
+    quarantined = None
+    if final.is_file():
+        qdir = settings.raw_quarantine_dir
+        qdir.mkdir(parents=True, exist_ok=True)
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        target = qdir / f"{row['sha256']}.{stamp}_{uuid.uuid4().hex[:6]}.corrupt"
+        os.replace(final, target)  # move, never delete: the corrupt copy stays available as evidence
+        quarantined = settings.to_relative(target)
+    maybe_fail("restore_after_quarantine")
+    os.replace(tmp, final)
+    maybe_fail("restore_after_replace")
+    make_read_only(final)
+    detail = (f"RESTORED from {resolved}; reason: {reason.strip()}; "
+              + (f"the corrupt copy was preserved at {quarantined}" if quarantined else "the stored file had been missing"))
+    status, ds_id, detail = _commit_registration(db, eid, src_sha, DetectedFormat(kind=row["file_format"]), rel, row,
+                                                 detail_override=detail)
+    log.warning("Restored raw dataset %s: %s", dataset_id, detail)
+    return Receipt(event_id=eid, status=status, raw_dataset_id=ds_id, sha256=src_sha,
+                   detected=DetectedFormat(kind=row["file_format"]), relative_path=rel, detail=detail)

@@ -104,11 +104,32 @@ Finish or clean up after a crash, and check every stored file against its checks
 "<ENV_FOLDER>\Scripts\python.exe" -m qmap --config "<CONFIG_FILE>" verify
 ```
 
+## If a stored raw file turns out to be corrupt
+
+Whenever you ingest content that is already registered, Q-MAP re-reads the stored copy and checks its SHA-256
+against the registered checksum (file size alone is never trusted). If they differ:
+
+- the ingest is reported as `FAILED` with the code `E_RAW_CORRUPT`, nothing is processed, and the stored file is
+  **not** used, overwritten or deleted;
+- the problem is recorded in the audit trail, and `verify` lists the file under `checksum_mismatches`.
+
+To fix it you need the original, unmodified file (the one you were just ingesting matches the registered checksum, so
+it qualifies). Restore explicitly, with a written reason (use the dataset number from the message):
+
+```bash
+"<ENV_FOLDER>\Scripts\python.exe" -m qmap --config "<CONFIG_FILE>" restore-raw --dataset-id <NUMBER> --from "<ORIGINAL_FILE>" --reason "<why this is correct>"
+```
+
+Q-MAP refuses if the reason is missing, if the file does not match the registered checksum, or if the stored file is
+intact. On success the corrupt copy is **moved** to `Q-MAP_DATA/Raw_Data/_quarantine` (kept as evidence, never
+deleted), the original is put back, and the restore is recorded next to the earlier failure. After a crash during a
+restore, run `recover`, then ingest the original again.
+
 ## What the foundation guarantees
 
 - Original files are never changed. Identical content is stored once (whatever its name or extension) and every
   receipt is still recorded with its own filename, path, time and source.
-- Raw files are never overwritten or automatically deleted.
+- Raw files are never overwritten or automatically deleted, and a stored raw file is checksum-verified before every reuse.
 - Invalid data is reported, never repaired or discarded. A rejected file leaves an audit trail.
 - Dates, timestamp units, time zones, instrument identity and volume mapping are declared, never guessed.
 - Missing volume does not invalidate OHLC data unless the requirement set says volume is required.
@@ -121,3 +142,4 @@ Finish or clean up after a crash, and check every stored file against its checks
 - Very long folder names can exceed Windows' 260-character path limit; keep the data and output roots short.
 - Only a command line exists; there is no graphical front end (the front end is an open Blueprint decision).
 - Selecting the "current" dataset across several raw files for one instrument is not defined yet.
+- Re-receiving registered content re-reads the stored copy to verify it, so very large files take correspondingly longer.
