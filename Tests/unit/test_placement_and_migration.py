@@ -171,12 +171,17 @@ def test_a_version_2_registry_with_results_upgrades_and_keeps_every_record(tmp_p
     ins = ("INSERT INTO datasets(layer,instrument_id,timeframe,relative_path,sha256,parent_dataset_id,processing_version,"
            "canonical_schema_version,volume_status,requirement_set,created_by_attempt_id,config_fingerprint,created_at) "
            "VALUES ('cleaned',1,'1D',?,'d',?,'p@1+c1',1,'absent','price_only',?,?,?)")
-    conn.execute(ins, ("Cleaned_Data/d.parquet", raw, att2, "vs1:x", NOW))
+    new_id = conn.execute(ins, ("Cleaned_Data/d.parquet", raw, att2, "vs1:x", NOW)).lastrowid
+    conn.execute("UPDATE datasets SET status='superseded' WHERE dataset_id=?", (new_id,))  # so "one active" is not what fails
     # ... but the same derivation twice under one fingerprint is not, and a fingerprint can no longer be left out
-    with pytest.raises(sqlite3.IntegrityError):
+    with pytest.raises(sqlite3.IntegrityError, match="config_fingerprint"):
         conn.execute(ins, ("Cleaned_Data/e.parquet", raw, att2, "vs1:x", NOW))
-    with pytest.raises(sqlite3.IntegrityError):
+    with pytest.raises(sqlite3.IntegrityError, match="must record its configuration fingerprint"):
         conn.execute(ins, ("Cleaned_Data/f.parquet", raw, att2, None, NOW))
+    with pytest.raises(sqlite3.IntegrityError, match="must record its configuration fingerprint"):
+        conn.execute("INSERT INTO ingest_attempts(event_id,run_id,raw_dataset_id,outcome,profile_id,profile_version,"
+                     "processing_version,detected_format,extension_matches,reader,created_at) "
+                     "VALUES (1,'R1',?,'rejected','p',1,'p@1+c1','delimited_text',1,'csv',?)", (raw, NOW))
 
 
 def test_applied_migrations_are_frozen():
