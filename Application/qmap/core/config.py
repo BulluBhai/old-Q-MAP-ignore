@@ -129,6 +129,27 @@ def _is_inside(child: Path, parent: Path) -> bool:
     return child == parent or parent in child.parents
 
 
+def location_rule_violation(label: str, root: Path, code_root: Path) -> tuple[str, str] | None:
+    """(message, action) if `root` breaks the separation rule against the code folder, else None.
+
+    Works whether or not the folder exists yet, so a front end can warn before creating it.
+    """
+    if _is_inside(root, code_root):
+        return (f"{label} folder is inside the code folder: {root}.",
+                "Choose a location outside the Q-MAP code repository.")
+    if _is_inside(code_root, root):
+        return (f"The code folder is inside the {label} folder: {root}.",
+                "Choose a location that does not contain the code repository.")
+    return None
+
+
+def overlap_violation(data_root: Path, output_root: Path) -> tuple[str, str] | None:
+    if _is_inside(data_root, output_root) or _is_inside(output_root, data_root):
+        return ("Q-MAP_DATA and Q-MAP_OUTPUT overlap.",
+                "Choose two separate folders that are not inside each other.")
+    return None
+
+
 def validate_roots(data_root: Path, output_root: Path, code_root: Path) -> None:
     for label, root in (("Q-MAP_DATA", data_root), ("Q-MAP_OUTPUT", output_root)):
         if not root.is_dir():
@@ -137,21 +158,12 @@ def validate_roots(data_root: Path, output_root: Path, code_root: Path) -> None:
                 action="Create the folder first (Q-MAP never creates a root folder, so a typing mistake cannot go unnoticed).",
             )
         _check_writable(root, label)
-        if _is_inside(root, code_root):
-            raise ConfigError(
-                f"{label} folder is inside the code folder: {root}.",
-                action="Choose a location outside the Q-MAP code repository.",
-            )
-        if _is_inside(code_root, root):
-            raise ConfigError(
-                f"The code folder is inside the {label} folder: {root}.",
-                action="Choose a location that does not contain the code repository.",
-            )
-    if _is_inside(data_root, output_root) or _is_inside(output_root, data_root):
-        raise ConfigError(
-            "Q-MAP_DATA and Q-MAP_OUTPUT overlap.",
-            action="Choose two separate folders that are not inside each other.",
-        )
+        problem = location_rule_violation(label, root, code_root)
+        if problem:
+            raise ConfigError(problem[0], action=problem[1])
+    problem = overlap_violation(data_root, output_root)
+    if problem:
+        raise ConfigError(problem[0], action=problem[1])
 
 
 def ensure_layout(settings: Settings) -> None:
