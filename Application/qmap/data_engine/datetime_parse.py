@@ -315,16 +315,27 @@ def parse_times(values: list, spec: DatetimeSpec, *, timeframe: str, settings: S
 
     # plausible range -------------------------------------------------------------
     lo, hi = settings.plausible_min_date, today + timedelta(days=settings.plausible_max_days_ahead)
+    before = after = 0
+    latest_after = None
     for i in range(n):
         d = session_dates[i] if session_dates[i] is not None else None
         if d is None:
             continue
         if d < lo or d > hi:
+            if d < lo:
+                before += 1
+            else:
+                after += 1
+                latest_after = d if latest_after is None or d > latest_after else latest_after
             hint = _unix_hint("s" if spec.kind == "unix_s" else "ms", unix_numbers[i]) if unix_numbers[i] is not None else ""
             collector.add("date_in_range", ERROR, i + 1, "date", values[i],
                           f"Date {d.isoformat()} is outside the plausible range {lo.isoformat()} to {hi.isoformat()}.{hint}")
             session_dates[i] = None
             ts_utc[i] = None
+    # Evidence for the retry rule (D2-33): which side of the plausible range was violated, and how far ahead.
+    prov["plausible_range"] = {"min": lo.isoformat(), "max": hi.isoformat(), "rows_before_min": before,
+                               "rows_after_max": after,
+                               "latest_date_after_max": latest_after.isoformat() if latest_after else None}
     if spec.kind in ("unix_s", "unix_ms"):
         numbers = [parse_number(v)[0] for v in values if not _missing(v)]
         lengths = {len(str(int(abs(x)))) for x in numbers if math.isfinite(x)}

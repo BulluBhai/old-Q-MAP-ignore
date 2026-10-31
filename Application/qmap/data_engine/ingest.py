@@ -13,7 +13,7 @@ import json
 import os
 import sqlite3
 from dataclasses import dataclass, field
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from .. import CLEANING_CODE_VERSION, __version__
@@ -140,6 +140,30 @@ def _attempt_fingerprint(attempt) -> str | None:
     return None
 
 
+def _date_limit_retry(db, attempt, today: date, settings) -> tuple[bool, date | None]:
+    """Can the run date alone have cured this rejected attempt? Returns (cured now, earliest run date that cures it).
+
+    The run date is not part of the processing identity (D2-32), so an unchanged retry is normally pointless and is
+    blocked. The one exception (D2-33): the attempt failed ONLY because some dates were later than run date +
+    plausible_max_days_ahead (no other error check failed, no date before plausible_min_date). That rejection is
+    cured once the run date reaches latest_future_date - plausible_max_days_ahead. Attempts recorded before this
+    evidence existed are never retried automatically (a written force_reason still works).
+    """
+    failed = {r["check_name"] for r in db.query(
+        "SELECT check_name FROM quality_checks WHERE attempt_id = ? AND severity = 'error' AND passed = 0",
+        (attempt["attempt_id"],))}
+    if failed != {"date_in_range"}:
+        return False, None
+    try:
+        pr = json.loads(attempt["datetime_rules_json"] or "{}").get("applied", {}).get("plausible_range")
+    except (ValueError, AttributeError):
+        return False, None
+    if not pr or pr.get("rows_before_min") or not pr.get("rows_after_max") or not pr.get("latest_date_after_max"):
+        return False, None
+    earliest = date.fromisoformat(pr["latest_date_after_max"]) - timedelta(days=settings.plausible_max_days_ahead)
+    return today >= earliest, earliest
+
+
 def _settings_difference(recorded_json: str | None, current: dict) -> str:
     """Plain description of how the current validation settings differ from those recorded (ignoring the date)."""
     if not recorded_json:
@@ -207,11 +231,25 @@ def _process_registered(run: Run, receipt: Receipt, src: Path, profile: SourcePr
     if accepted_prior is not None:
         return _record_reuse(run, receipt, accepted_prior, pv, vsettings)
     rejected_same = [a for a in prior if a["outcome"] == "rejected"]
-    if rejected_same and not (force_reason and force_reason.strip()):
+    retry_note = None
+    cured, earliest = (_date_limit_retry(db, rejected_same[-1], today, settings) if rejected_same else (False, None))
+    if cured and not (force_reason and force_reason.strip()):
+        retry_note = CheckResult(
+            "retry_after_date_limit", INFO, True, 0,
+            f"Automatic retry: attempt {rejected_same[-1]['attempt_id']} was rejected only because some dates were "
+            f"later than the run date + plausible_max_days_ahead; on run date {today.isoformat()} those dates are "
+            "within the limit, so the unchanged file is processed again.")
+        log.info(retry_note.detail)
+    elif rejected_same and not (force_reason and force_reason.strip()):
         msg = (f"This file was already processed under {pv} with the same validation settings ({fingerprint}) and "
-               f"rejected (attempt {rejected_same[-1]['attempt_id']}). "
-               "Reprocessing it unchanged is blocked. Fix the profile (new profile_version) or the processing, or "
-               "retry deliberately with a written force_reason.")
+               f"rejected (attempt {rejected_same[-1]['attempt_id']}). ")
+        if earliest is not None:
+            msg += (f"It was rejected only because some dates are in the future; it will be processed again "
+                    f"automatically when ingested on or after {earliest.isoformat()} (run date). "
+                    "Nothing needs to change in the meantime.")
+        else:
+            msg += ("Reprocessing it unchanged is blocked. Fix the profile (new profile_version) or the processing, "
+                    "or retry deliberately with a written force_reason.")
         diff = _settings_difference(rejected_same[-1]["validation_settings_json"], vsettings)
         if diff:
             msg += f" Note: report-only settings differ ({diff}); they cannot change the outcome."
@@ -240,6 +278,8 @@ def _process_registered(run: Run, receipt: Receipt, src: Path, profile: SourcePr
         reader_name, reader_version = table.reader, table.reader_version
         pre_checks.append(CheckResult("file_readable", ERROR, True, 0, ""))
         result = process_table(table, profile, settings, filename=src.name, overrides=overrides, today=today)
+    if retry_note is not None:
+        pre_checks.append(retry_note)
     checks = pre_checks + result.checks
     accepted = result.accepted and not any(c.is_error for c in checks)
     report = _write_issue_report(run, receipt.event_id, result.issues)

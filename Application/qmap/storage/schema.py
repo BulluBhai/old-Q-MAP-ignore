@@ -166,6 +166,17 @@ WHEN NEW.layer IS NOT OLD.layer OR NEW.sha256 IS NOT OLD.sha256 OR NEW.relative_
 BEGIN SELECT RAISE(ABORT,'dataset identity columns are immutable'); END;
 """
 
+# Every NEW cleaned dataset and attempt must carry its fingerprint: a NULL would escape the derivation-uniqueness
+# index (SQLite treats NULLs as distinct). Rows written before migration 3 keep their NULL (never rewritten).
+MIGRATION_4 = """
+CREATE TRIGGER trg_datasets_fingerprint_required BEFORE INSERT ON datasets
+WHEN NEW.layer <> 'raw' AND (NEW.config_fingerprint IS NULL OR length(trim(NEW.config_fingerprint)) = 0)
+BEGIN SELECT RAISE(ABORT,'a derived dataset must record its configuration fingerprint'); END;
+CREATE TRIGGER trg_attempts_fingerprint_required BEFORE INSERT ON ingest_attempts
+WHEN NEW.config_fingerprint IS NULL OR length(trim(NEW.config_fingerprint)) = 0
+BEGIN SELECT RAISE(ABORT,'an ingest attempt must record its configuration fingerprint'); END;
+"""
+
 # (version, description, sql)
 MIGRATIONS = [
     (1, "Stage 2 foundation: instruments, runs, registry, ingest provenance, quality checks", MIGRATION_1),
@@ -173,6 +184,7 @@ MIGRATIONS = [
      MIGRATION_2),
     (3, "Validation-settings fingerprint is part of the processing identity (reuse and derivation uniqueness)",
      MIGRATION_3),
+    (4, "New derived datasets and attempts must record their configuration fingerprint", MIGRATION_4),
 ]
 
 LATEST_VERSION = MIGRATIONS[-1][0]

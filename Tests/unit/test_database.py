@@ -9,6 +9,7 @@ from qmap.storage.db import Database, open_database
 from qmap.storage.schema import LATEST_VERSION
 
 NOW = "2026-01-01T00:00:00Z"
+FP = "vs1:0000000000000000"
 
 
 @pytest.fixture
@@ -36,18 +37,19 @@ def event(conn, sha="S1", status="started", raw_id=None):
 def attempt(conn, event_id, raw_id, outcome="accepted", pv="p@1+c1", pver=1, **kw):
     return conn.execute(
         "INSERT INTO ingest_attempts(event_id,run_id,raw_dataset_id,outcome,profile_id,profile_version,processing_version,"
-        "detected_format,extension_matches,reader,created_at,revalidation_of_attempt_id,reused_of_attempt_id,force_reason) "
-        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        "detected_format,extension_matches,reader,created_at,revalidation_of_attempt_id,reused_of_attempt_id,force_reason,"
+        "config_fingerprint) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         (event_id, "R1", raw_id, outcome, "p", pver, pv, "delimited_text", 1, "csv", NOW,
-         kw.get("revalidation_of"), kw.get("reused_of"), kw.get("force_reason"))).lastrowid
+         kw.get("revalidation_of"), kw.get("reused_of"), kw.get("force_reason"), kw.get("fp", FP))).lastrowid
 
 
 def cleaned(conn, parent, attempt_id, pv="p@1+c1", sha="C1", rel=None, instrument=1, timeframe="1D", **kw):
     return conn.execute(
         "INSERT INTO datasets(layer,instrument_id,timeframe,relative_path,sha256,parent_dataset_id,processing_version,"
-        "canonical_schema_version,volume_status,requirement_set,created_by_attempt_id,created_at) "
-        "VALUES ('cleaned',?,?,?,?,?,?,1,'absent','price_only',?,?)",
-        (instrument, timeframe, rel or f"Cleaned_Data/{pv}/{sha}", sha, parent, pv, attempt_id, NOW)).lastrowid
+        "canonical_schema_version,volume_status,requirement_set,created_by_attempt_id,created_at,config_fingerprint) "
+        "VALUES ('cleaned',?,?,?,?,?,?,1,'absent','price_only',?,?,?)",
+        (instrument, timeframe, rel or f"Cleaned_Data/{pv}/{sha}", sha, parent, pv, attempt_id, NOW,
+         kw.get("fp", FP))).lastrowid
 
 
 def test_migrations_applied_and_idempotent(db):

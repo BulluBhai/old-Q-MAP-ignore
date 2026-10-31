@@ -96,9 +96,20 @@ Ingest one or more files:
 ```
 
 The result is `ACCEPTED`, `REUSED` (already processed the same way, with the same validation settings), `REJECTED` (see the issues report named in
-the output; nothing is repaired or dropped), `BLOCKED` (retrying an unchanged rejected file needs a written
-`--force-reason`) or `UNSUPPORTED` (the reason is shown). Each run's folder in Q-MAP_OUTPUT holds its log,
-`run_manifest.json` and any report.
+the output; nothing is repaired or dropped), `BLOCKED` (see below) or `UNSUPPORTED` (the reason is shown). Each run's
+folder in Q-MAP_OUTPUT holds its log, `run_manifest.json` and any report.
+
+### Retrying a rejected file
+
+| Situation | What happens when you ingest the same file again |
+|---|---|
+| You changed the profile (new `profile_version`) or a validation setting that affects the result | It is processed again; no reason needed |
+| It was rejected **only** because some dates were later than "today + `plausible_max_days_ahead`" | It is `BLOCKED` until those dates are allowed; the message gives the first run date on which they are. From that date on it is processed again automatically (recorded as `retry_after_date_limit`); no reason needed |
+| Anything else, unchanged | `BLOCKED`: the same file under the same rules would give the same result |
+| You want to try again anyway | Add `--force-reason "<why>"`. All checks still apply; the reason is recorded |
+
+Every attempt, including each rejection and its issues report, is kept. A retry never changes or removes an earlier
+attempt; it is linked to it (`revalidation_of_attempt_id`).
 
 Finish or clean up after a crash, and check every stored file against its checksum (both print every action taken
 and every problem found):
@@ -188,6 +199,9 @@ restore, run `recover`, then ingest the original again.
   mentioned when a result is reused. Results recorded before the fingerprint existed are reused only if their recorded
   settings match; results with no recorded settings are reprocessed.
 - Reusing a processing version that has since been superseded returns that version's (superseded) datasets and says so.
+- "Today" for the future-date check is the UTC date. Exchange dates east of UTC (for example India) can be up to one
+  calendar day ahead of it, so keep `plausible_max_days_ahead` at 1 or more (the default is 1).
+- The time-zone database version (tzdata) used for UTC conversion is not recorded; historical rules rarely change.
 - Run liveness relies on operating-system file locks. Keep Q-MAP_DATA on a local disk; locks on network shares are
   not reliable, and the `stale_minutes` age rule is then the only safeguard.
 - Parquet is used for cleaned data; DuckDB (Blueprint section 8.3) is not used yet, because nothing in Stage 2 queries
