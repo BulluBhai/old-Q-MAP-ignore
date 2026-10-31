@@ -1,0 +1,33 @@
+# EXAMPLE source profile (layout only, no data). Header row + DD-MM-YY dates (day first).
+profile_id      = "example_csv_dd_mm_yy"
+profile_version = 1
+source_label    = "CSV, DD-MM-YY dates"
+description     = "Headered CSV: time (DD-MM-YY), open, high, low, close, Volume, Net Volume"
+
+[file]
+expected_format = "delimited_text"
+header = true
+
+[instrument]
+exchange_from = "filename_pattern"
+symbol_from   = "filename_pattern"
+filename_pattern = "^(?P<exchange>[A-Za-z]+)_(?P<symbol>[A-Za-z0-9&]+)_"
+timeframe = "1D"
+
+[columns]
+date  = { name = "time" }
+open  = { name = "open" }
+high  = { name = "high" }
+low   = { name = "low" }
+close = { name = "close" }
+
+[datetime]
+kind = "format"
+format = "%d-%m-%y"             # DAY first. Q-MAP warns when the data cannot prove this.
+two_digit_year_pivot = 69       # 69-99 = 1969-1999, 00-68 = 2000-2068. CONFIRM for your data.
+
+[volume]
+rule = "use_column"
+column = "Volume"
+preserved_not_volume = ["Net Volume"]
+requirement_set = "price_only"
