@@ -24,4 +24,7 @@ jobs:
       - name: Install Q-MAP with test and .xls extras
         run: python -m pip install -e ".[dev,xls]"
       - name: Run the full test suite
+        env:
+          # Windows runners have a desktop, so every GUI test must run there (see Tests/gui/conftest.py)
+          QMAP_REQUIRE_GUI_TESTS: ${{ matrix.os == 'windows-latest' && '1' || '0' }}
         run: python -m pytest -p no:cacheprovider
