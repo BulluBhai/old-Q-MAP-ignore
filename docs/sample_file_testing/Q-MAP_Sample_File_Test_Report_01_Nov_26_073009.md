@@ -149,14 +149,91 @@ The scripts used are in `evidence_01_Nov_26/` (`run_matrix.py`, `obs_cases.py`, 
 4. **Two-digit years** in file 2: `26` is read as 2026 (pivot 69).
 
 **Decisions for you:**
-1. Should `one_bar_per_period`, and the existing `timeframe_spacing` warning (e.g. 5-minute data declared `1m`), **block** loading instead of warning?
-2. `ONESOURCE.parquet`: correct the source, or decide which copy of each duplicated session is right. Q-MAP will not choose between conflicting rows.
+1. *Decided 01-Nov-26:* `one_bar_per_period` and `timeframe_spacing` **stay non-blocking warnings for now**. They can be reconsidered later.
+2. *Decided 01-Nov-26:* `ONESOURCE.parquet` **stays rejected** until its conflicting prices and other data-quality problems are investigated (see F.4).
 3. File 8's constant volume: load it as volume (as now, with a warning) or treat the file as having no volume?
 4. Approve or decline the grey "Waiting" row and summary text (D3-15).
 
 **Limitations:**
 1. **Windows/IDLE on your computer is not tested.** Please run the acceptance checklist on this branch, in a new folder.
-2. "Some trading days are incomplete" compares days within the same file. With two or three days, or no complete day, it can miss one: files 1 and 3 have incomplete first days that were not flagged. There is no trading calendar yet.
+2. **Incomplete trading days are not reliably detected.** See F.3 for the evidence and its impact.
 3. The same data loaded from several files is stored as separate datasets. Choosing the "current" series is open decision F1.
 4. Not covered by your samples: legacy `.xls`, multi-sheet workbooks, and semicolon or tab delimiters (the automated tests cover these with synthetic files).
 5. Your sample files are **not** in the repository: only results, previews (first 8 rows) and fingerprints are.
+
+---
+
+## F. Follow-up review (01-Nov-26, before any merge request)
+
+Documentation only: no code changed. Labels: **[V]** verified from the files, the stored data or GitHub · **[I]** inference · **[Q]** needs your confirmation.
+
+### F.1 CI for PR #3 (head `3d1dc5c`): all 4 checks completed successfully [V]
+
+| Job | Result |
+|---|---|
+| windows-latest (push run 41285153172) | 612 passed, 1 skipped (the Linux-only hard-link test); `GUI tests: 152 passed, 0 skipped … (required here: yes)` |
+| windows-latest (pull-request run 41285123563) | Same counts. The Tk start-up retry fired **once** ("Can't find a usable init.tcl") and the next attempt succeeded |
+| ubuntu-latest (both runs) | 561 passed, 52 skipped. The window tests skip by design (no display; required here: no) |
+
+That retry matters. The main-thread clean-up (D3-13) fixed the test crash, but it did **not** stop the intermittent Windows Tk start-up fault. The earlier idea that the two were linked is therefore not supported [V]. The fault stays handled by the test-only retry, and its cause is unknown.
+
+### F.2 Assumptions: what the data shows, and what only you can confirm
+
+| Assumption used in testing | Evidence in your files | Status |
+|---|---|---|
+| **Instrument identity** (`TEST:F01`–`F11`) | No file name or column names an instrument [V]. On every day the files overlap (23, 26, 27, 29 and 30 Oct 2026), the 5-minute and 1-minute highs and lows lie within the daily file's range [V]. That fits one instrument, but cannot identify it [I]. Price levels: about 22,000–23,200 (2025–26 files), 900–1,000 (1995 file), 1,400–2,200 (Parquet) [V] | **[Q]** Exchange and symbol for each file, and whether the Parquet file is a different instrument |
+| **Timeframes** 5m / 1D / 1m | Spacing measured: 5 minutes between 207 of 209 consecutive bars (files 1, 4, 9, 11); 1 minute for 429 of 430 (file 3) and 39,795 of 39,902 (Parquet); exactly one bar per date in the daily files [V] | Strongly supported. **[Q]** please confirm |
+| **Bar timestamps mark the START of each bar** (new) | Full Parquet days run 09:15 → 15:29 (375 one-minute bars); full 5-minute days start 09:15 [V]. Q-MAP stores times exactly as given and does not record which convention a source uses | **[Q]** Confirm for each source. This matters later for avoiding look-ahead: a bar stamped 09:15 is only complete at 09:16 (or 09:20) |
+| **Time zone Asia/Kolkata** | ISO files carry an explicit +05:30 [V], so only the trading date depends on the setting. Unix files: the first bars fall at 09:15 IST [V]. Naive Parquet times run 09:15–15:29 [V]; read as UTC instead, trading would be 14:45–20:59 IST, which is implausible [I] | Strongly supported. **[Q]** please confirm for the Parquet source |
+| **Two-digit years** (`26` = 2026) | The same 24 rows read from `xls headers std.xlsx` as real Excel dates give 2026-09-25 … 2026-10-30, and stored identical rows [V]. The ISO-dated text file agrees on all 10 shared days [V] | Corroborated by the data. **[Q]** please confirm the source's convention |
+| **Weekend bars** (new) | Daily Unix file: Saturday 01-Feb-25. Parquet: Saturday 08-Nov-25 (92 bars, 11:01–12:32, including the 3 rows with open below low) [V] | **[Q]** Real special sessions, or errors? |
+
+### F.3 Known limitation: incomplete trading days are not reliably detected
+
+**How it works now.** The warning "Some trading days are incomplete" compares each day's bar count with the most common count *in the same file*. Q-MAP has no trading calendar and no session hours, so it cannot know how many bars a full day should have. Days with *more* bars than usual are not flagged by this check either. Duplicated days are caught separately, as errors.
+
+**Evidence from your files** [V]:
+
+| File | Day | Bars (IST) | Full session would be | Flagged? |
+|---|---|---|---|---|
+| 5-minute (files 1, 4, 9, 11) | 23-Oct-26 | 71 (09:20–15:10) | 75 (09:15–15:25) | No |
+| | 26-Oct-26 | 72 (09:15–15:10) | 75 | No |
+| | 27-Oct-26 | 67 (09:15–14:45) | 75 | **Yes** |
+| 1-minute (file 3) | 29-Oct-26 | 71 (14:04–15:14) | 375 (09:15–15:29) | No |
+| | 30-Oct-26 | 360 (09:15–15:14) | 375 | No |
+| Parquet | 21-Oct-25 | 61 (13:45–14:45) | 375 | Yes |
+| | 08-Nov-25 (Sat) | 92 (11:01–12:32) | – | Yes |
+
+So **4 of the 5 incomplete intraday days in your 5-minute and 1-minute files were not flagged.** None of those days is complete. ("Full session" assumes NSE's regular 09:15–15:30 hours with start-of-bar stamps [I].)
+
+**Impact.**
+- **Loading is not affected.** Every bar is stored exactly as in the source, and nothing is filled in or dropped.
+- **The risk is to later research that treats a day's bars as a full session.** That includes daily open and close built from intraday bars, session returns, opening-range and closing studies, volume-by-time-of-day, bars-per-day statistics, and session-based features in MIQP and QLOPB.
+- Example [V]: the last 5-minute close on 23-Oct-26 is 22,517.00, while the daily file's close is 22,600.00. Aggregating the 5-minute file would give a daily close that is 83 points off, and that day is not flagged.
+- **Until this is fixed, do not use the warning as proof that a day is complete.** Check intraday coverage before any session-based analysis.
+
+**Remedy (not implemented; needs your decision later).** A trading calendar with session hours per exchange, including special sessions. It is already listed as an open decision ("trading calendar"). With it, Q-MAP could flag every short, long or out-of-hours day against the expected session.
+
+### F.4 ONESOURCE.parquet stays rejected
+
+Rejection is the existing behaviour, so nothing changed. Items to investigate with the data provider [V]:
+
+1. **Two whole sessions appear twice.** 17-Oct-25 and 24-Oct-25 (750 rows each instead of 375; source rows 28501–30811). 322 of the 750 duplicated timestamps have *different* prices or volume, so neither copy can be assumed right.
+2. **Impossible bars.** Three rows on Saturday 08-Nov-25 (11:01, 11:02, 11:05; source rows 34187, 34188, 34191) have open 1425 below a high and low of 1777.6.
+3. **Unusual sessions.** 21-Oct-25 has only 61 bars (13:45–14:45). 08-Nov-25 is a Saturday.
+4. **Zero volume and an extra column.** 922 bars have zero volume (allowed, recorded). The `index` column (0–2,249, on 14,778 of 39,903 rows) looks like a row counter left over from processing; it is kept as `x_index` and never used.
+
+After correction, the file can be loaded as new content with the same profile. The old rejection stays in the audit trail.
+
+### F.5 Scope of PR #3 [V]
+
+- **Branches.** PR #3 is based on PR #2's head `ff28305` and adds 6 commits (5 at the last review, plus this documentation-only one).
+- **What it changes.**
+  - `Application/qmap/data_engine`: ingest, mapping, process, readers and validation.
+  - `Application/qmap_gui`.
+  - Five new example profiles.
+  - Tests.
+  - One CI workflow line.
+  - README, the decision log, and `docs/sample_file_testing/`.
+- **What it does not touch.** Storage, the registry, the database schema and migrations, `core` configuration and runs, `pyproject.toml` and `CLEANING_CODE_VERSION`. No file is deleted.
+- **Other branches unchanged.** `main` (`ad1baf1`), PR #1 (`424955d`) and PR #2 (`ff28305`) are as they were.

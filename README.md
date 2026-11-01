@@ -238,8 +238,13 @@ restore, run `recover`, then ingest the original again.
 - A daily, weekly or monthly timeframe on data with several bars per day/week/month (for example 5-minute bars
   declared `1D`) is reported as a warning (`one_bar_per_period`), not rejected; a 5-minute file declared `1m` is
   likewise only a warning (`timeframe_spacing`). The timeframe you declare is always used as declared.
-- "Some trading days are incomplete" compares each day with the most common day length in the same file, so with
-  only two or three days (or no complete day) it can miss an incomplete day. There is no trading calendar yet.
+- **Incomplete trading days are not reliably detected.** "Some trading days are incomplete" compares each day with
+  the most common day length in the same file; there is no trading calendar. In the owner's sample files 4 of 5
+  incomplete intraday days were not flagged. Every bar is still stored exactly as in the source, but do not treat
+  the absence of this warning as proof that a day is complete before session-based analysis (daily values built
+  from intraday bars, opening/closing studies). Details: `docs/sample_file_testing/`, section F.3.
+- Bar timestamps are stored exactly as given; whether a source stamps the start or the end of each bar is not
+  recorded yet and must be confirmed per source.
 - Results of testing the Project Owner's 11 sample files: `docs/sample_file_testing/`.
 - Re-receiving registered content re-reads the stored copy to verify it, so very large files take correspondingly longer.
 - A result is reused only when the raw content, processing version, ingest request **and validation settings** match.
