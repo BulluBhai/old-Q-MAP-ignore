@@ -1,25 +1,49 @@
 # Q-MAP
 Quantitative Market Analytics Platform [Q-MAP]
 
-The governing document is [docs/Q-MAP_Master_Blueprint_v1.0.md](docs/Q-MAP_Master_Blueprint_v1.0.md).
+The governing document is [docs/Q-MAP_Master_Blueprint_v1.0.md](docs/Q-MAP_Master_Blueprint_v1.0.md) (Blueprint v1.2,
+the reference for the two-application work, is not yet in the repository).
 Material decisions are recorded in [docs/decision_log.md](docs/decision_log.md).
 
-## Status: Stage 2 (Foundation) and the first graphical version
+## Two applications, one platform
 
-Implemented: configuration and path management, structured logging, unique Run IDs and run manifests,
-the SQLite registry, raw-data registration with a receipt for every file received, readers for CSV, text,
-Excel (.xlsx, optional .xls) and Parquet, explicit source profiles, strict date/time parsing, the canonical
-OHLC(V) structure, validation with rejection reports, crash recovery and reprocessing controls.
+| Open (Thonny or IDLE, press F5) | Application | For |
+|---|---|---|
+| **`database_manager.py`** | Q-MAP Database Manager | Load and check source files, see every prepared dataset with its lineage, keep it Permanent or Temporary, delete Temporary data, derive weekly/monthly/quarterly/yearly data from daily data |
+| **`analytical_workbench.py`** | Q-MAP Analytical Workbench | Run analyses on prepared data: readiness checks first, a Run ID and a full record of inputs for every run. Never imports source files |
+| `Q-MAP.py` | (older launcher) | Opens Database Manager |
 
-Also included: a first graphical window (`Q-MAP.py`) with the Data Management workflow. The window is a separate layer
-(`Application/qmap_gui`) that only calls the Foundation; the Foundation never depends on it.
+Both use the same Data Registry, data definitions and remembered folders. They can be open at the same time, and
+neither needs the other to be running. Clone or copy this repository into a folder named **`Q-MAP_APP`** next to
+`Q-MAP_DATA`, `Q-MAP_OUTPUT` and `Q-MAP_TEST_FILES`.
 
-Not implemented (later roadmap stages): research modules, backtesting, portfolio and risk.
+Documentation:
+- [Architecture and implementation](docs/Q-MAP_Architecture_and_Implementation.md) (includes the folder guide and
+  migration notes)
+- [Database Manager guide](docs/user_guides/Database_Manager_User_Guide.md)
+- [Analytical Workbench guide](docs/user_guides/Analytical_Workbench_User_Guide.md)
+- [Data Registry and schema](docs/Data_Registry_and_Schema.md)
+- [Testing and acceptance report](docs/acceptance_testing/Q-MAP_Testing_and_Acceptance_Report_01_Nov_26_160000.md)
+- [Outstanding work and owner decisions](docs/Outstanding_Work_Register.md)
 
-## Opening the Q-MAP window (first graphical version)
+**Working now:**
+- the Stage 2 foundation: configuration, Run IDs, the SQLite registry, raw-file preservation, readers for CSV, text,
+  Excel and Parquet, source profiles, validation and recovery;
+- Data Management;
+- Datasets and Storage;
+- derived timeframes;
+- the analytical run pipeline with Dataset Summary, a descriptive utility.
 
-1. Do the one-time setup below (the window also needs `tkinter`, which comes with Python from python.org).
-2. Open **`Q-MAP.py`** (in this folder) in **Thonny** or **IDLE** and press **F5**.
+**Not implemented yet:** MIQP Market Intelligence and QLOPB MA research (their code is not in this repository),
+other research modules, backtesting, portfolio and risk. They are shown as COMING SOON.
+
+![Database Manager: Datasets and Storage](docs/acceptance_testing/evidence_01_Nov_26/screenshots/04_datasets_and_storage_01_Nov_26.png)
+![Analytical Workbench after a run](docs/acceptance_testing/evidence_01_Nov_26/screenshots/06_workbench_completed_01_Nov_26.png)
+
+## Database Manager: Data Management (loading files)
+
+1. Do the one-time setup below (the windows also need `tkinter`, which comes with Python from python.org).
+2. Open **`database_manager.py`** (in this folder) in **Thonny** or **IDLE** and press **F5**.
    - In Thonny, make sure the interpreter is the Python of your Q-MAP environment: Tools > Options > Interpreter,
      then choose the `python.exe` inside your `<ENV_FOLDER>\Scripts` folder.
    - If something is missing (an old Python, or a package), Q-MAP explains it in a message and, for missing
@@ -28,7 +52,7 @@ Not implemented (later roadmap stages): research modules, backtesting, portfolio
    with the same rules as the Foundation and remembers them in your own user settings (on Windows:
    `%APPDATA%\Q-MAP\gui_settings.json`), never inside the program folder. Your own source profiles are kept
    in a `profiles` folder next to that file.
-4. **Data Management** (the one working area) follows the numbered sections on the screen:
+4. **Data Management** follows the numbered sections on the screen:
    - **1. Input**: add files, preview any of them (nothing is saved by previewing).
    - **2. Output**: your two folders, and buttons to open the last run folder and the problem report.
    - **3. Options**: pick a source profile (its settings are shown in plain English; you can copy an example,
@@ -41,24 +65,17 @@ Not implemented (later roadmap stages): research modules, backtesting, portfolio
      row, ISO text timestamps or real Excel date cells) and Parquet. Check every setting against your file first.
    - **Check files** tests everything and saves nothing. **Load files into Q-MAP** loads them with the Foundation.
    - Progress, results (click a row for a plain-English explanation of any problem) and a live log are shown below.
-5. The Home screen lists every planned module. Only the ones that really work say **READY**; the rest say
-   **COMING SOON**.
-
-![Home screen](docs/gui/home.png)
-![Data Management after a load](docs/gui/data_management_results.png)
+5. **Datasets and Storage** and the **Analytical Workbench** are described in their user guides (links above).
 
 If you close the window while a load is running, Q-MAP finishes the file it is working on and then stops; the next
 start tidies up anything unfinished.
-
-Not in this version: a data-coverage view, restoring a damaged raw file from the screen (use the `restore-raw`
-command below), and every module marked Coming Soon.
 
 ## Three separate locations
 
 | Location | What it holds | In Git? |
 |---|---|---|
 | **Code folder** (this repository) | programs, tests, example settings, source profiles | yes |
-| **Q-MAP_DATA** | raw files, cleaned datasets, the metadata database, future research repository | never |
+| **Q-MAP_DATA** | raw files, cleaned datasets, derived timeframes, Temporary datasets, the metadata database | never |
 | **Q-MAP_OUTPUT** | one folder per run: logs, manifests, rejection reports, later reports and charts | never |
 
 Both data and output folders must already exist, must be **outside** the code folder, and must not be inside
@@ -231,8 +248,7 @@ restore, run `recover`, then ingest the original again.
 - Automated tests run on Linux and, through `.github/workflows/tests.yml`, on Windows (Python 3.11). Network drives,
   OneDrive-synchronised folders and antivirus interference are not covered by any automated test.
 - Very long folder names can exceed Windows' 260-character path limit; keep the data and output roots short.
-- The graphical window covers Data Management only. It has been exercised on Linux (real windows on a virtual
-  screen), **not yet on Windows**: Windows-only behaviour (opening folders, remembered-settings location, high-DPI
+- Both applications have been exercised on Linux (real windows on a virtual screen), **not yet on Windows**: Windows-only behaviour (opening folders, remembered-settings location, high-DPI
   text) is covered by simulation. The command line remains for `recover`, `verify` and `restore-raw`.
 - Selecting the "current" dataset across several raw files for one instrument is not defined yet.
 - A daily, weekly or monthly timeframe on data with several bars per day/week/month (for example 5-minute bars
@@ -260,5 +276,6 @@ restore, run `recover`, then ingest the original again.
 - The time-zone database version (tzdata) used for UTC conversion is not recorded; historical rules rarely change.
 - Run liveness relies on operating-system file locks. Keep Q-MAP_DATA on a local disk; locks on network shares are
   not reliable, and the `stale_minutes` age rule is then the only safeguard.
-- Parquet is used for cleaned data; DuckDB (Blueprint section 8.3) is not used yet, because nothing in Stage 2 queries
+- Parquet is used for cleaned and derived data; DuckDB (Blueprint section 8.3) is not used yet, because nothing queries
   across datasets.
+- More limitations and the decisions needed: [docs/Outstanding_Work_Register.md](docs/Outstanding_Work_Register.md).

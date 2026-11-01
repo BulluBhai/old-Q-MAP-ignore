@@ -114,3 +114,26 @@ that was rejected before. Evidence: `docs/sample_file_testing/`.
 Project Owner instruction (01-Nov-26): `ONESOURCE.parquet` stays rejected until its conflicting prices and data-quality
 problems are investigated (no code change; this is existing behaviour). Known limitation, not yet decided: incomplete
 trading days are not reliably detected without a trading calendar (sample-file report, section F.3).
+
+## Database Manager and Analytical Workbench (01-Nov-26)
+
+Status of every entry: implemented on branch `claude/adoring-curie-5h2mx4` (pull request against PR #3's branch);
+**awaiting Project Owner review**. Reference: the development instruction "Implementing the Database Manager and
+Analytical Workbench Architecture". Blueprint v1.2 is not in the repository (see
+`Q-MAP_Architecture_and_Implementation.md`, conflict C1). No validation rule, parsing rule, identity rule or severity was
+changed.
+
+| Ref | Decision | Why | Affects |
+|---|---|---|---|
+| D4-01 | The repository folder IS `Q-MAP_APP` (the code folder). `database_manager.py` and `analytical_workbench.py` sit at its top level, next to `Q-MAP.py`. Existing packages are not moved: `qmap.core` is the common layer; `qmap.data_engine` and `qmap.storage` are the database engine; the new `qmap.analytical_engine` is the analytical engine; the new `qmap.catalog` is the shared registry access. **Owner to confirm.** | Satisfies the two-entry-point structure without moving about 18,000 lines under three open PRs | layout |
+| D4-02 | One window shell (`QMapWindow`) and two applications (`DatabaseManagerApp`, `AnalyticalWorkbenchApp`), each with its own entry point and no dependency on the other running. `Q-MAP.py` is kept and opens Database Manager; `QMapApp` is kept as an alias | Separate user interfaces, one platform | qmap_gui/app.py, launchers |
+| D4-03 | Both applications share one remembered-settings file; saving re-reads the file first, so one application never overwrites the other's newer choice | Both can be open at once | app.py |
+| D4-04 | Storage classes: only standardised and derived datasets can be Permanent or Temporary; raw originals are always permanent and never moved or deleted. Temporary path = `Temporary_Data/<permanent path>`. Temporary data never expire | Instruction 4.6; reversible mapping; lineage kept in file names | schema 5, storage_class |
+| D4-05 | A move records its intent first (`storage_actions`), copies and verifies the checksum, places without overwriting, switches the registry in one transaction, then removes the old copy. Recovery finishes or undoes interrupted actions and never deletes an unfinished move's destination | No window in which a crash or a concurrent recovery can lose data | storage_class, recovery |
+| D4-06 | Deleting is user-initiated, Temporary only, refused while derived datasets depend on it, and needs a second confirmation if research runs used it. The record, lineage and audit trail are kept; `file_deleted_at` is final | Instruction 4.6 (check dependencies; prevent unsafe operations) | storage_class, schema 5 |
+| D4-07 | Schema migration 5 adds `storage_class`, `file_deleted_at`, `storage_actions` and `dataset_derivations`, and allows a registered path to change only together with its storage class. Migrations 1-4 are unchanged; migration 5 is pinned | Database-enforced rules, as for earlier migrations | schema |
+| D4-08 | Derived timeframes (method `ohlcv_period_aggregation` v1): first open, max high, min low, last close, summed volume (empty if any session's volume is empty); calendar periods; a bar is dated by its last included session; edge periods flagged `period_may_be_incomplete`; source must be daily with one bar per date (intraday sources refused) | Instruction 4.7; no look-ahead; no silent partial sums; honest about the missing calendar | derive |
+| D4-09 | A derived dataset carries its source's `created_by_attempt_id` as inherited lineage (a migration-1 rule requires it); the true provenance is in `dataset_derivations`. Recorded as technical debt OW-09 | Avoids a risky rebuild of the `datasets` table | derive |
+| D4-10 | Readiness is computed per analysis (`catalog.check_readiness`) and kept separate from the processing outcome and the validation status. The Workbench never offers deleted datasets, and never starts a run when a requirement fails | Instruction 4.4 and 5.1 | catalog, analytical_engine |
+| D4-11 | Analyses are described by `AnalysisSpec` and run by one pipeline: Run ID, `run_inputs`, outputs only in `Q-MAP_OUTPUT/Research_Reports/<Run ID>`, and `Run_Metadata_<dd_mmm_yy_hhmmss>.json` with full input provenance. The first analysis is Dataset Summary, a descriptive utility (not a methodology), because no MIQP or QLOPB code exists in the repository | Instruction 5 and 6 (reproducibility) without inventing methodology | analytical_engine |
+| D4-12 | The Workbench's screen, logic and engine must not load data-preparation code (enforced by a test); neutral helpers moved to `qmap_gui/common.py` | "The Workbench must not silently start an ingestion workflow" | qmap_gui |
