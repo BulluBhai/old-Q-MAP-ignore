@@ -238,7 +238,7 @@ restore, run `recover`, then ingest the original again.
 - A daily, weekly or monthly timeframe on data with several bars per day/week/month (for example 5-minute bars
   declared `1D`) is reported as a warning (`one_bar_per_period`), not rejected; a 5-minute file declared `1m` is
   likewise only a warning (`timeframe_spacing`). The timeframe you declare is always used as declared.
-- **Incomplete trading days are not reliably detected.** "Some trading days are incomplete" compares each day with
+- **Incomplete trading days are not reliably detected.** The note "Some days have fewer bars than usual" compares each day with
   the most common day length in the same file; there is no trading calendar. In the owner's sample files 4 of 5
   incomplete intraday days were not flagged. Every bar is still stored exactly as in the source, but do not treat
   the absence of this warning as proof that a day is complete before session-based analysis (daily values built

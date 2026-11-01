@@ -82,8 +82,13 @@ CHECKS: dict[str, tuple[str, str, str]] = {
                            "The profile declares a daily, weekly or monthly timeframe, but some days (weeks, months) "
                            "have several bars, which looks like intraday data.",
                            "Check the timeframe you chose (for example 5m instead of 1D). Q-MAP never changes it for you."),
-    "partial_session": ("Some trading days are incomplete", "Some days have fewer bars than usual.",
-                        "This is normal for the first and last day of an export."),
+    "partial_session": ("Some days have fewer bars than usual",
+                        "Q-MAP found days with fewer bars than the most common number of bars per day in this file. "
+                        "This does not show whether a trading session is complete or incomplete: Q-MAP has no trading "
+                        "calendar, so a day can also be missing bars without this note appearing (for example when "
+                        "every day in the file is short).",
+                        "Check the source data and its session coverage (first and last bar time of each day) before "
+                        "using these days in session-based analysis."),
     "not_empty": ("The file has no data rows", "There is a header but no data, or the file is empty.", "Check you chose the right file."),
     "profile_version": ("The profile changed without a new version number",
                         "This profile version was used before with different settings.",

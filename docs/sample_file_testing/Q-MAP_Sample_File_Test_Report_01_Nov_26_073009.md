@@ -190,7 +190,7 @@ That retry matters. The main-thread clean-up (D3-13) fixed the test crash, but i
 
 ### F.3 Known limitation: incomplete trading days are not reliably detected
 
-**How it works now.** The warning "Some trading days are incomplete" compares each day's bar count with the most common count *in the same file*. Q-MAP has no trading calendar and no session hours, so it cannot know how many bars a full day should have. Days with *more* bars than usual are not flagged by this check either. Duplicated days are caught separately, as errors.
+**How it works now.** The warning (shown in the window as "Some days have fewer bars than usual"; until `786d3d4` it was titled "Some trading days are incomplete") compares each day's bar count with the most common count *in the same file*. Q-MAP has no trading calendar and no session hours, so it cannot know how many bars a full day should have. Days with *more* bars than usual are not flagged by this check either. Duplicated days are caught separately, as errors.
 
 **Evidence from your files** [V]:
 
@@ -237,3 +237,20 @@ After correction, the file can be loaded as new content with the same profile. T
   - README, the decision log, and `docs/sample_file_testing/`.
 - **What it does not touch.** Storage, the registry, the database schema and migrations, `core` configuration and runs, `pyproject.toml` and `CLEANING_CODE_VERSION`. No file is deleted.
 - **Other branches unchanged.** `main` (`ad1baf1`), PR #1 (`424955d`) and PR #2 (`ff28305`) are as they were.
+
+### F.6 Correction to the wording of the "fewer bars" warning (after `786d3d4`)
+
+The window's explanation of check `partial_session` used to say "Some trading days are incomplete … This is normal for
+the first and last day of an export." That was misleading: the incomplete 27-Oct-26 above is in the middle of an export,
+and a bar count compared within one file cannot show whether a session is complete.
+
+It now reads: **"Some days have fewer bars than usual"**. Q-MAP found days with fewer bars than the most common number in
+this file. This does not show whether a trading session is complete or incomplete. Check the source data and its session
+coverage before using these days in session-based analysis.
+
+Only the wording changed (`Application/qmap_gui/messages.py`). The check, its warning severity and its detail text are
+unchanged, and no trading calendar was added. Regression test:
+`Tests/gui/test_logic_services.py::test_fewer_bars_wording_does_not_claim_whether_a_session_is_complete`. It fails on
+the old wording.
+
+The files in `evidence_01_Nov_26/` were captured at `76dde7f` and keep the old wording as a historical record.
