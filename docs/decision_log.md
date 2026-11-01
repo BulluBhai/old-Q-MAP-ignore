@@ -34,7 +34,8 @@ Status of every entry: implemented on branch `claude/keen-carson-x872ge`; **awai
 
 Every change below has a regression test in `Tests/integration/test_review_regressions.py`, `Tests/integration/test_config_fingerprint.py` or
 `Tests/unit/test_placement_and_migration.py` that failed on the code as first submitted. Status: implemented on
-branch `claude/keen-carson-x872ge`; **awaiting Project Owner review**.
+branch `claude/keen-carson-x872ge`. D2-22 to D2-31: **awaiting Project Owner review**. D2-32: Project Owner decision
+(see the entry). D2-33 and D2-34: **approved by the Project Owner on 31-Oct-26** (comment on PR #1).
 
 | Ref | Decision | Previously | Why | Affects |
 |---|---|---|---|---|
@@ -59,7 +60,8 @@ Owner and implemented as D2-32.
 
 Regression tests: `Tests/integration/test_future_date_retry.py` (D2-33) and the migration tests in
 `Tests/unit/test_placement_and_migration.py` (D2-34). Status: implemented on branch `claude/keen-carson-x872ge`;
-**awaiting Project Owner review**. No change to methodology: the validation rules and their severities are unchanged;
+**approved by the Project Owner on 31-Oct-26** (comment on PR #1). No change to methodology: the validation rules and
+their severities are unchanged;
 only the decision of when an unchanged rejected file may be processed again.
 
 ## Open decisions carried forward (not needed for Stage 2)
