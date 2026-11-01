@@ -15,6 +15,32 @@ from fixtures.builders import HEADER, daily_rows, write_delimited  # noqa: E402
 
 NET_HEADER = HEADER + ["Net Volume"]
 
+TK_STARTUP_ATTEMPTS = 3
+
+
+def create_with_tk_startup_retry(make):
+    """Call `make()` (which creates a Tk window), retrying ONLY Tk's own start-up failure.
+
+    On GitHub's Windows runner a window occasionally fails to start because Tk cannot read one of its own library
+    files (init.tcl, tk.tcl, ttk/*.tcl) from the Python install - for example "couldn't read file ... No error" or
+    "no such file" for a file that exists. It happens before any Q-MAP code runs and the next window starts normally.
+    Only that exact error is retried, and every retry is reported as a warning; any other error is raised at once, and a
+    start-up that keeps failing is raised after `TK_STARTUP_ATTEMPTS` attempts. No assertion of any test is affected.
+    """
+    import time
+    import tkinter
+    import warnings
+
+    for attempt in range(1, TK_STARTUP_ATTEMPTS + 1):
+        try:
+            return make()
+        except tkinter.TclError as exc:
+            if "Can't find a usable" not in str(exc) or attempt == TK_STARTUP_ATTEMPTS:
+                raise
+            warnings.warn(f"Tk start-up failed (attempt {attempt} of {TK_STARTUP_ATTEMPTS}), retrying: "
+                          f"{str(exc).splitlines()[0]}", RuntimeWarning, stacklevel=2)
+            time.sleep(0.5 * attempt)
+
 
 def dd_mm_yy_rows(n=12, seed=1):
     return [[datetime.fromisoformat(r[0]).strftime("%d-%m-%y")] + r[1:] + [r[5] // 3] for r in daily_rows(n, seed)]
@@ -41,8 +67,7 @@ def display():
     try:
         import tkinter
 
-        root = tkinter.Tk()
-        root.destroy()
+        create_with_tk_startup_retry(tkinter.Tk).destroy()
     except Exception as exc:  # no display / no tkinter
         pytest.skip(f"no usable display for tkinter ({exc}). Run under xvfb-run, or on a desktop.")
 
@@ -67,7 +92,8 @@ class Gui:
     def start(self, settings_dir=None):
         from qmap_gui.app import QMapApp
 
-        app = QMapApp(REPO, settings_dir=settings_dir or self.world.settings, dialogs=self.dialogs)
+        app = create_with_tk_startup_retry(
+            lambda: QMapApp(REPO, settings_dir=settings_dir or self.world.settings, dialogs=self.dialogs))
         app.geometry("1100x900+0+0")
         self.apps.append(app)
         self.pump(0.05, app)
