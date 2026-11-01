@@ -1,55 +1,91 @@
-# Q-MAP: testing report and acceptance checklist (01-Nov-26)
+# Q-MAP: testing report and acceptance checklist (01-Nov-26, updated after the PR #4 reviews)
 
-Branch `claude/adoring-curie-5h2mx4`. Code tested at commit `1c55f07`; later commits change documentation only.
-Evidence: `evidence_01_Nov_26/` next to this file.
+Branch `claude/adoring-curie-5h2mx4` (PR #4).
 
-Status words used: **Passed**, **Failed**, **Skipped**, **Not run**, **Blocked** (by environment or dependency), **Not
-applicable**.
+| Commit | Kind of change |
+|---|---|
+| `dee232e` | Code: storage classes (schema 5), derived timeframes, catalogue, analytical engine |
+| `1c55f07` | Code: the two applications |
+| `8ea0f4a` | Documentation |
+| `832b788` | **Code**: schema migration 6 (audited storage changes) and the recovery consistency report |
+| `330a9aa` | **Code**: original-path reconstruction for detecting earlier tampering (no schema change) |
+| later commits | Documentation only (this report, guides, decision log, register) |
 
-## 1. Automated tests (local)
+**Four kinds of evidence, kept separate:**
 
-| Run | Environment | Command | Result |
+| Kind | Who / where | Status |
+|---|---|---|
+| Automated tests run locally | Claude, Ubuntu 24.04 container | Section 1 |
+| GitHub CI | GitHub Actions, Windows and Ubuntu, Python 3.11 | Section 2 |
+| Practical acceptance | Claude, real windows on a virtual Linux screen, synthetic files | Section 4 |
+| Windows / Thonny or IDLE acceptance with the owner's real sample files | Project Owner, own computer | **Outstanding** (section 5) |
+
+Status words: **Passed**, **Failed**, **Skipped**, **Not run**, **Blocked**, **Not applicable**.
+
+## 1. Automated tests run locally by Claude
+
+| Code commit | Environment | Command | Result |
 |---|---|---|---|
-| Baseline, before any change (PR #3 head `852247f`) | Ubuntu 24.04, Python 3.12.3, Tk 8.6, virtual screen (Xvfb) | `QMAP_REQUIRE_GUI_TESTS=1 xvfb-run -a python3.12 -m pytest -p no:cacheprovider` | **614 passed**, 0 failed (153 GUI tests) |
-| Final, with GUI | Same | Same | **685 passed**, 0 failed, 0 skipped (175 GUI tests, all required to run) |
-| Final, no tkinter, Python 3.11 (the CI Python version) | Ubuntu 24.04, Python 3.11 | `python3.11 -m pytest -p no:cacheprovider` | **597 passed, 62 skipped** (window tests skip without tkinter, by design), 0 failed |
-| Final, no tkinter, Python 3.13 | Ubuntu 24.04, Python 3.13 | `python3.13 -m pytest -p no:cacheprovider` | **597 passed, 62 skipped**, 0 failed |
+| `852247f` (PR #3 head, baseline) | Python 3.12.3, Tk 8.6, Xvfb | `QMAP_REQUIRE_GUI_TESTS=1 xvfb-run -a python3.12 -m pytest -p no:cacheprovider` | 614 passed |
+| `1c55f07` | Same | Same | 685 passed, 0 failed, 0 skipped |
+| `1c55f07` | Python 3.11 / 3.13, no tkinter | `python3.11 -m pytest -p no:cacheprovider` | 597 passed, 62 skipped, 0 failed (each) |
+| `832b788` | Python 3.12, Tk, Xvfb | as above | 701 passed, 0 failed, 0 skipped |
+| `832b788` | Python 3.11, no tkinter | as above | 613 passed, 62 skipped, 0 failed |
+| **`330a9aa` (latest code)** | Python 3.12.3, Tk 8.6, Xvfb, GUI tests required | as above | **704 passed**, 0 failed, 0 skipped (175 GUI) |
+| **`330a9aa`** | Python 3.11, no tkinter | as above | **616 passed, 62 skipped** (window tests skip without tkinter, by design), 0 failed |
 
-New failures introduced: **none**. Pre-existing failures: **none**.
+New failures introduced: none. Pre-existing failures: none.
 
-**71 new tests**:
+**New tests in PR #4: 90.**
 
 | File | Tests | Covers |
 |---|---|---|
-| `test_storage_class.py` | 15 | Moves, deletion, protection of raw files, dependents, confirmation for runs, crash recovery during a move |
+| `test_storage_class.py` | 15 | Moves, deletion, raw protection, dependents, confirmation for runs, crash recovery during a move |
+| `test_storage_integrity.py` | 19 | Migration 6: every invalid direct update refused; the audit trail cannot be faked; normal workflows; earlier tampering reported, including a class and path changed together and ending Permanent elsewhere |
 | `test_derive.py` | 17 | Calendar periods, aggregation rules, look-ahead dating, edge flags, volume rule, refusals, provenance, reuse |
-| `test_catalog_and_analysis.py` | 17 | Catalogue, lineage, readiness (passing and each failure), run pipeline, metadata, an independent statistics check, blocked and failed runs |
-| `test_two_applications.py` | 15 | Each entry point, both apps open together, shared folders, Datasets screen, Workbench readiness and runs, two regressions found in acceptance |
-| `test_architecture.py` | 4 more | Entry points; the Workbench loads no data-preparation code; one registry access path; the engine has no GUI dependency |
-| `test_logic_modules_env_store.py` | 2 more | The module catalogue split by application |
-| `test_window_home_and_folders.py` | 1 more | The Home test now runs once per application |
+| `test_catalog_and_analysis.py` | 17 | Catalogue, lineage, readiness, run pipeline, metadata, an independent statistics check, blocked and failed runs |
+| `test_two_applications.py` | 15 | Entry points, both apps together, shared folders, Datasets screen, Workbench, two regressions found in acceptance |
+| `test_architecture.py` | +4 | Entry points; the Workbench loads no data-preparation code; one registry access path; no GUI dependency in the engine |
+| `test_logic_modules_env_store.py` | +2 | Module catalogue split by application |
+| `test_window_home_and_folders.py` | +1 | Home test runs once per application |
+
+**Proof that the migration-6 tests detect the issue:** with migration 6 withheld, 10 of the then 16 integrity tests
+fail. The other 6 cover migration-5 safeguards and the normal workflow. The reconstruction test was confirmed by a
+reproduction on the code before `330a9aa`, where `find_storage_inconsistencies()` returned an empty list for the same
+history.
 
 Tests changed because a requirement changed (none weakened or removed):
 
 | Test | Change |
 |---|---|
-| `test_placement_and_migration.py` | Expects schema 5; migration 5 pinned |
+| `test_placement_and_migration.py` | Expects schema **6**; migrations 5 and 6 pinned by SHA-256 |
 | `test_logic_modules_env_store.py` | Exact READY set updated |
 | `test_window_home_and_folders.py` | Each app's Home lists its own modules |
 | `Tests/gui/conftest.py` | The harness can start either app |
+| `test_storage_integrity.py::test_tampering_done_before_migration_6_is_reported` | One assertion made precise: a class changed without its path is reported once, as a class/path mismatch |
 
-## 2. CI
+## 2. GitHub CI (workflow `tests`, Windows and Ubuntu, Python 3.11, GUI tests required on Windows)
 
-**Not run yet for this branch.** CI (`.github/workflows/tests.yml`, Windows and Ubuntu, Python 3.11) runs when the pull
-request is opened. Its result will be reported on the pull request. The base branch (PR #3 head `852247f`) was green on
-both operating systems.
+| Commit | Run(s) | Windows | Ubuntu |
+|---|---|---|---|
+| `852247f` (base, PR #3) | from PR #3 | success | success |
+| `832b788` | 41325137464 and 41325143242 (push and pull-request triggers) | **success** (both) | **success** (both) |
+| `330a9aa` and later | see the PR #4 conversation and checks tab | reported in the PR description | reported in the PR description |
 
-## 3. Practical acceptance
+## 3. What is NOT covered by any of the above
+
+- Windows with Thonny or IDLE on the owner's computer (CI uses Windows, but not an IDE, and not the owner's files).
+- The owner's 11 real sample files (not available in this environment; PR #3 tested them through Data Management,
+  which is unchanged).
+
+## 4. Practical acceptance in a virtual Linux environment (performed by Claude)
 
 **How it was done.** `evidence_01_Nov_26/acceptance_walkthrough.py` drives the **real** windows of both applications
 on a virtual screen (Linux), clicking the same buttons a person would. Where possible it checks results with plain
 Python, independently of Q-MAP code: rows against the source CSV, weekly bars, statistics. Results:
 `acceptance_results_01_Nov_26.json`; screenshots in `screenshots/`.
+
+Re-run unchanged on code commits `832b788` and `330a9aa`: same 13 passed, 1 not applicable.
 
 **Limitations.**
 
@@ -68,7 +104,7 @@ Python, independently of Q-MAP code: rows against the source CSV, weekly bars, s
 | 6 | Standardise and validate | **Passed** | Loaded: "Accepted, 1 dataset(s) created" |
 | 7 | Register and access the dataset | **Passed** | All 60 stored rows identical to the source (dates, OHLC, volume); Net Volume kept separately, exactly as read |
 | 8 | Original source file unchanged | **Passed** | SHA-256 identical before and after the whole walkthrough |
-| 9 | Permanent/Temporary and safe registry update | **Passed** | Moved to `Temporary_Data/...`; checksum unchanged; `verify` found nothing missing or mismatched; audit row "completed" with its reason (screenshot 04) |
+| 9 | Permanent/Temporary and safe registry update | **Passed** | Moved to `Temporary_Data/...` (folder name awaiting owner decision OD-8); checksum unchanged; `verify` found nothing missing or mismatched; audit row "completed" with its reason (screenshot 04) |
 | 9a | Derived timeframes (extra) | **Passed** | Weekly (12 bars) and monthly (3 bars) created; every weekly bar equals an independent re-calculation |
 | 10 | Workbench discovers and uses ready data | **Passed** | Offered daily, weekly and monthly; folders shared |
 | 11 | Analysis blocked with a clear explanation | **Passed** | A period without data: "NOT READY", with the reason and a pointer to Database Manager; no run created (screenshot 05) |
@@ -86,7 +122,7 @@ Python, independently of Q-MAP code: rows against the source CSV, weekly bars, s
 A third mismatch was in the walkthrough script itself: it compared the text-preserved Net Volume with a number. The
 script was corrected; Q-MAP was right.
 
-## 4. Acceptance checklist for the Project Owner (Windows, Thonny or IDLE, your own files)
+## 5. Windows / IDLE acceptance on the Project Owner's computer: OUTSTANDING
 
 **Outstanding.** Please tick each item on your own computer:
 
@@ -96,7 +132,7 @@ script was corrected; Q-MAP was right.
 - [ ] Check one file against a deliberately wrong profile: it must be rejected with an understandable reason.
 - [ ] In Datasets and Storage, click a dataset: the details show your original file name and the lineage.
 - [ ] Derive Weekly and Monthly from a daily dataset; compare a few weekly bars with your own calculation.
-- [ ] Move a dataset to Temporary and back; confirm `Q-MAP_DATA/Temporary_Data` is used, and nothing else changed.
+- [ ] Move a dataset to Temporary and back; confirm the Temporary folder under `Q-MAP_DATA` is used (today `Temporary_Data`; see OD-8), and nothing else changed.
 - [ ] Try to delete a Permanent dataset (refused), then a Temporary one with derived data (refused, with the reason).
 - [ ] In the Workbench, run Dataset Summary on a daily dataset; open the run folder and read the CSV and the
       Run_Metadata file.
@@ -105,26 +141,22 @@ script was corrected; Q-MAP was right.
       `docs/sample_file_testing/`).
 
 
-## Addendum: storage-integrity fix from the PR #4 review (01-Nov-26)
 
-**Issue confirmed** before any change. On a real migrated database, six direct updates that bypass Q-MAP were all
-**allowed** by schema 5:
+## 6. Storage-integrity reviews of PR #4 (01-Nov-26)
 
-1. class changed without its path;
-2. class changed with an arbitrary path;
-3. a correctly mapped move with no audit record;
-4. Temporary changed to Permanent by class only;
-5. `file_deleted_at` set with no delete action;
+**Review 1 (fixed in `832b788`, schema migration 6).** Confirmed first: on a real migrated database, six direct
+updates bypassing Q-MAP were allowed by schema 5:
+
+1. class without path;
+2. class with an arbitrary path;
+3. a correctly mapped move without an audit record;
+4. Temporary to Permanent by class only;
+5. `file_deleted_at` without a delete action;
 6. a storage action inserted as already "completed".
 
-After migration 6 all six are **refused**.
+All six are refused at schema 6.
 
-| Run | Environment | Result |
-|---|---|---|
-| New `Tests/integration/test_storage_integrity.py` | Python 3.12 | **16 passed** |
-| Same file with migration 6 withheld (to prove the tests detect the issue) | Python 3.12 | 10 failed, 6 passed. The 6 cover migration-5 safeguards and the normal workflow, as intended. |
-| Full suite, GUI tests required | Ubuntu, Python 3.12, Tk 8.6, Xvfb | **701 passed**, 0 failed, 0 skipped (175 GUI) |
-| Full suite, no tkinter | Python 3.11 | **613 passed, 62 skipped**, 0 failed |
-| Practical acceptance walkthrough, re-run | Same as section 3 | Unchanged: 13 passed, 1 not applicable |
-
-Changed test: `test_placement_and_migration.py` now expects schema 6 and pins migration 6.
+**Review 2 (improved in `330a9aa`, no schema change).** Reproduced: a database at schema 5 had its class and path
+changed together twice without an audit action, ending Permanent at a different path. Before `330a9aa`, recovery
+reported nothing. It now rebuilds the original path from immutable lineage records and reports the unexplained path.
+The limits of this detection are in `docs/Data_Registry_and_Schema.md`, section "Limits of detecting earlier tampering".

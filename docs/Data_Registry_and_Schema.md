@@ -31,7 +31,7 @@ explicitly maps it.
 | `Raw_Data/<xx>/<sha256>.<ext>` | Preserved originals, stored by content, read-only | Always permanent; never moved or deleted |
 | `Cleaned_Data/<EXCHANGE>/<SYMBOL>/<TF>/...parquet` | Standardised datasets | Permanent |
 | `Timeframe_Data/<EXCHANGE>/<SYMBOL>/<TF>/...parquet` | Derived timeframes | Permanent |
-| `Temporary_Data/<the permanent path>` | Any standardised or derived dataset classified Temporary | Temporary |
+| `Temporary_Data/<the permanent path>` | Any standardised or derived dataset classified Temporary. **Folder name not yet approved:** Blueprint v1.2 and the handover are reported to specify `Temporary/` (owner decision OD-8) | Temporary |
 | `*/_incoming/` | Files being written; owned by a live run, cleaned by recovery | |
 | `Metadata/` | Registry database, run locks | |
 
@@ -71,3 +71,36 @@ runs can never overwrite each other.
 | Processing outcome | `ingest_attempts.outcome`, or a registered derivation |
 | Validation status | Warnings among the dataset's quality checks: **Passed** or **Passed with warnings** |
 | Readiness | Computed per analysis by `catalog.check_readiness` from the dataset AND that analysis's requirements. It is never stored, because it depends on the question being asked. |
+
+## Limits of detecting earlier tampering (report-never-repair)
+
+Since schema 6, the database itself refuses storage changes that are not covered by a matching recorded action. Rows
+changed directly **before** schema 6 cannot be prevented any more, only detected. Recovery and `verify` list them as
+`storage_inconsistencies`, and never change them.
+
+**What is detected:**
+
+1. Class and path disagree (Temporary but not under `Temporary_Data/`, or the reverse).
+2. A file marked deleted without a completed `delete_file` action for that path.
+3. A current path that its **original path plus its completed moves** do not explain. The original path is rebuilt
+   with the naming rule in `storage/paths.py` (decision D2-19) from records that earlier migrations already make
+   immutable:
+   - standardised datasets: instrument, timeframe, parent raw checksum, processing version, and the Run ID of the
+     creating attempt;
+   - derived datasets: the derivation's source checksum and Run ID.
+
+   This covers a class and path changed together and ending Permanent at a different path.
+4. A recorded move that does not start where the dataset was.
+
+**What is NOT, or not fully, detected:**
+
+- *Which* intermediate classes and paths a tampered row passed through, and *when*: the registry keeps only the
+  current path, and the tampering left no record. Only the fact that the current path is unexplained can be shown.
+- Raw (original) files are not checked this way. Their path has been immutable since migration 1 and their class since
+  migration 5, so there is nothing to detect.
+- Tampering that also deleted or rewrote the immutable lineage records. Triggers prevent that unless they themselves
+  were dropped with a database tool; no database-level rule can protect against someone who removes the rules.
+- A dataset written by code that named files differently from `storage/paths.py` would be reported as unexplained.
+  That would be a false alarm, never a repair. All code in this repository has used the same rule since PR #1.
+- Whether the **file on disk** matches the registry is a separate check: `verify` re-hashes every registered file and
+  reports missing or changed files.

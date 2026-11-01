@@ -61,7 +61,7 @@ confirming.
 
 | Action | What it does | Rules |
 |---|---|---|
-| **Move to Temporary** | Moves the dataset's file to `Q-MAP_DATA/Temporary_Data/...` and updates the registry | The data are copied and checked byte for byte (checksum) before the registry is switched; only then is the old copy removed. A file is never overwritten. |
+| **Move to Temporary** | Moves the dataset's file to `Q-MAP_DATA/Temporary_Data/...` (folder name awaiting your decision OD-8) and updates the registry | The data are copied and checked byte for byte (checksum) before the registry is switched; only then is the old copy removed. A file is never overwritten. |
 | **Make Permanent** | Moves it back | Same safeguards |
 | **Delete Temporary dataset...** | Deletes the data file of a **Temporary** dataset | Only Temporary datasets. Refused while other datasets were built from it. If research runs used it, you must confirm a second time. The registry record, lineage and audit trail are kept for ever. Cannot be undone. |
 | **Derive selected timeframes** | Builds weekly, monthly, quarterly or yearly bars from a **daily** dataset | See below. Deriving the same thing twice reuses the existing dataset. |

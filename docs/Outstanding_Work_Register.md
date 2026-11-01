@@ -12,6 +12,8 @@ Updated 01-Nov-26. Status words: **Open**, **Decision needed** (Project Owner), 
 | OD-4 | Name the **minute-data indices** and the **hourly stock universe**, and their retention | Storage supports any combination, but nothing enforces or reports the intended universes | Define them as named universes in configuration |
 | OD-5 | **Trading calendar** source (NSE holidays and session times) | Needed to confirm complete days and periods; today only heuristics flag them | Start with an exchange holiday list file under `Reference_Files` |
 | OD-6 | Should a load be able to go **straight to Temporary**? | Today every load is Permanent and must be moved afterwards | Yes: an option in Data Management |
+| OD-8 | **Temporary folder name**: approve `Temporary_Data/` as a recorded deviation (Option A), or align with `Temporary/` from Blueprint v1.2 and the handover (Option B: new migration 7, Temporary datasets made Permanent before upgrading, no automatic file movement) | `Temporary_Data/` was chosen by Claude without approval; the database rules of schema 6 contain the prefix | Option B if v1.2 is confirmed authoritative (cheapest before merge); details in the architecture document, section 7 |
+| OD-9 | **Record which Blueprint version is approved** and resolve the conflict between v1.2's own approval wording and the handover's statement that it is authoritative; commit v1.2 and the handover to `docs/` | Claude cannot see either document; the repository records no approval of v1.2 | Record the approval in the decision log |
 | OD-7 | Carry-over from PR #3: D3-15 (grey "Waiting" row) and the incomplete-day limitation | Unchanged by this work | As in PR #3 |
 
 ## Open technical work and known limitations
@@ -19,7 +21,7 @@ Updated 01-Nov-26. Status words: **Open**, **Decision needed** (Project Owner), 
 | Ref | Item | Status |
 |---|---|---|
 | OW-01 | Run the acceptance checklist on Windows, in Thonny or IDLE, with the owner's 11 sample files | Open (owner) |
-| OW-02 | CI result for this pull request (Windows and Ubuntu, Python 3.11) | Runs when the PR opens |
+| OW-02 | GitHub CI for each new commit of PR #4 | `832b788`: Windows and Ubuntu passed. Later commits: see the PR checks |
 | OW-03 | DuckDB for cross-dataset queries (Blueprint 8.3) | Planned; add it in `qmap/catalog.py` when a module queries across datasets |
 | OW-04 | Daily bars derived from intraday data | Blocked by OD-5 (session rules, incomplete-day detection) |
 | OW-05 | Corporate-action adjustment | Planned (Blueprint open decision) |
@@ -29,6 +31,7 @@ Updated 01-Nov-26. Status words: **Open**, **Decision needed** (Project Owner), 
 | OW-09 | Technical debt: derived datasets carry their source's `created_by_attempt_id` (rule from migration 1); the real derivation record is in `dataset_derivations`. A future migration could rebuild `datasets` to relax the rule | Open, low priority |
 | OW-10 | Selecting the "current" dataset when several raw files exist for one instrument and timeframe | Open (carried over) |
 | OW-11 | The Workbench window shell shares `qmap_gui/app.py` with Database Manager, which imports the folder-checking helpers in `services.py`. Those helpers sit beside the profile helpers at import time; no preparation workflow can start from the Workbench (tested) | Optional clean-up: move folder helpers to their own module |
+| OW-13 | Detection of storage tampering done before schema 6 cannot show intermediate states or timing, and depends on the D2-19 naming rule (see "Limits of detecting earlier tampering" in the registry document) | Documented limitation |
 | OW-12 | Feature Store (reusable calculated features with method and parameter versions) | Planned with the first research module that needs one |
 
 ## Roadmap after this work (unchanged priorities)
