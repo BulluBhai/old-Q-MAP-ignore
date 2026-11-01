@@ -10,6 +10,7 @@ INIT_TCL = ("Can't find a usable init.tcl in the following directories: \n    {C
             "couldn't read file \"C:/Python/tcl/tcl8.6/init.tcl\": No error")
 TK_TCL = ("Can't find a usable tk.tcl in the following directories: \n    C:/Python/tcl/tk8.6\n\n"
           "couldn't read file \"C:/Python/tcl/tk8.6/ttk/combobox.tcl\": no such file or directory")
+AUTO_TCL = "couldn't read file \"C:/Python/tcl/tcl8.6/auto.tcl\": no such file or directory"
 
 
 @pytest.fixture(autouse=True)
@@ -32,7 +33,7 @@ def failing_then_ok(*messages):
     return make
 
 
-@pytest.mark.parametrize("first", [INIT_TCL, TK_TCL])
+@pytest.mark.parametrize("first", [INIT_TCL, TK_TCL, AUTO_TCL])
 def test_a_transient_startup_failure_is_retried_and_reported(first):
     make = failing_then_ok(first)
     with pytest.warns(RuntimeWarning, match="Tk start-up failed"):
@@ -56,10 +57,12 @@ def test_a_start_up_that_keeps_failing_is_raised_after_the_last_attempt():
 
 
 def test_any_other_error_is_raised_immediately_and_not_retried():
-    make = failing_then_ok("no display name and no $DISPLAY environment variable")
-    with pytest.raises(tkinter.TclError, match="no display"):
-        conftest.create_with_tk_startup_retry(make)
-    assert len(make.calls) == 1
+    for other in ("no display name and no $DISPLAY environment variable", 'bad window path name ".x"',
+                  'invalid command name "nosuchcommand"'):
+        make = failing_then_ok(other)
+        with pytest.raises(tkinter.TclError):
+            conftest.create_with_tk_startup_retry(make)
+        assert len(make.calls) == 1
 
     def boom():
         raise ValueError("a real bug in the application")

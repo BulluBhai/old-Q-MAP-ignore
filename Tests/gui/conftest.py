@@ -18,14 +18,22 @@ NET_HEADER = HEADER + ["Net Volume"]
 TK_STARTUP_ATTEMPTS = 3
 
 
+def is_tk_library_read_failure(exc: Exception) -> bool:
+    """Tk could not read one of its own library files while creating the interpreter (two known message forms)."""
+    text = str(exc)
+    return "Can't find a usable" in text or "couldn't read file" in text
+
+
 def create_with_tk_startup_retry(make):
     """Call `make()` (which creates a Tk window), retrying ONLY Tk's own start-up failure.
 
     On GitHub's Windows runner a window occasionally fails to start because Tk cannot read one of its own library
-    files (init.tcl, tk.tcl, ttk/*.tcl) from the Python install - for example "couldn't read file ... No error" or
-    "no such file" for a file that exists. It happens before any Q-MAP code runs and the next window starts normally.
-    Only that exact error is retried, and every retry is reported as a warning; any other error is raised at once, and a
-    start-up that keeps failing is raised after `TK_STARTUP_ATTEMPTS` attempts. No assertion of any test is affected.
+    files (init.tcl, auto.tcl, tk.tcl, ttk/*.tcl) from the Python install: "Can't find a usable init.tcl", or
+    "couldn't read file ...: No error" / "no such file or directory" for a file that exists. It happens while the
+    interpreter is being created, before any Q-MAP code runs, and the next window starts normally.
+    Only those two message forms are retried, and every retry is reported as a warning; any other error is raised at
+    once, and a start-up that keeps failing is raised after `TK_STARTUP_ATTEMPTS` attempts. No assertion of any test is
+    affected.
     """
     import time
     import tkinter
@@ -35,7 +43,7 @@ def create_with_tk_startup_retry(make):
         try:
             return make()
         except tkinter.TclError as exc:
-            if "Can't find a usable" not in str(exc) or attempt == TK_STARTUP_ATTEMPTS:
+            if not is_tk_library_read_failure(exc) or attempt == TK_STARTUP_ATTEMPTS:
                 raise
             warnings.warn(f"Tk start-up failed (attempt {attempt} of {TK_STARTUP_ATTEMPTS}), retrying: "
                           f"{str(exc).splitlines()[0]}", RuntimeWarning, stacklevel=2)
