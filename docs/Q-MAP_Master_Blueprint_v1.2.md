@@ -96,10 +96,13 @@ future changes where it clarifies, replaces or conflicts with earlier
 versions. Historical work should still be interpreted in the context of
 the version and decisions that applied when that work was performed.
 
-The canonical approved copy should be maintained in the designated Q-MAP
-GitHub repository location. Copies stored elsewhere should identify
-their version and approval status and should not silently diverge from
-the canonical copy.
+The canonical approved copies are maintained in the Q-MAP GitHub
+repository under `docs/Q-MAP_Master_Blueprint_v1.2.md` and
+`docs/Q-MAP_Master_Blueprint_v1.2.html`. The v1.2 files are being added
+through a reviewed pull request; the repository copies become the
+canonical published copies when that pull request is approved and
+merged. Copies stored elsewhere should identify their version and
+approval status and should not silently diverge from the canonical copy.
 
 Superseding a Blueprint does **not** automatically approve code changes,
 alter previously approved research methodologies, authorise an
@@ -1962,10 +1965,10 @@ to make an assumption that later becomes difficult to reverse.
                                                         authority, supersession and
                                                         controlled-change rules.
 
-  1.2               1 November 2026   Approved/adopted   Added two major modules
-                                      for Project Owner (Database and Analytics), two
-                                      review; adoption  separate GUIs (Database Manager
-                                      pending           and Analytical Workbench), a
+  1.2               1 November 2026   Approved and       Added two major modules
+                                      adopted by the    (Database and Analytics), two
+                                      Project Owner     separate GUIs (Database Manager
+                                                        and Analytical Workbench), a
                                                         shared application folder with
                                                         two Python entry points, a
                                                         per-analysis data-readiness
