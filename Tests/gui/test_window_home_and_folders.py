@@ -3,7 +3,9 @@
 import json
 
 from gui.conftest import REPO, repo_snapshot
-from qmap_gui.modules import MODULES
+import pytest
+
+from qmap_gui.modules import modules_for
 
 
 def test_everything_lives_inside_the_scroll_frame(gui):
@@ -15,15 +17,20 @@ def test_everything_lives_inside_the_scroll_frame(gui):
     assert app.protocol("WM_DELETE_WINDOW")  # the close handler is installed
 
 
-def test_home_lists_every_planned_module_with_genuine_readiness(gui):
-    home = gui.start().screens["home"]
-    assert set(home.module_rows) == {m.key for m in MODULES}
-    for m in MODULES:
+@pytest.mark.parametrize("app_key, expected_ready", [
+    ("database_manager", ["data_management", "datasets"]),
+    ("analytical_workbench", ["dataset_summary"]),
+])
+def test_home_lists_its_own_modules_with_genuine_readiness(gui, app_key, expected_ready):
+    home = gui.start(app_key=app_key).screens["home"]
+    mine = modules_for(app_key)
+    assert set(home.module_rows) == {m.key for m in mine}
+    for m in mine:
         row = home.module_rows[m.key]
         assert row["status"].cget("text") == ("READY" if m.is_ready else "COMING SOON")
         assert str(row["button"].cget("state")) == ("normal" if m.is_ready else "disabled")
     ready = [k for k, r in home.module_rows.items() if r["status"].cget("text") == "READY"]
-    assert ready == ["data_management"]
+    assert ready == expected_ready
 
 
 def test_open_button_for_data_management_switches_screen(gui):

@@ -19,6 +19,7 @@ from qmap.data_engine.ingest import IngestResult, ingest_file
 from qmap.data_engine.profiles import SourceProfile
 from qmap.storage.db import open_database
 
+from .common import EmitHandler
 from .messages import OUTCOMES, Finding, findings_from_checks
 from .services import plain
 
@@ -59,19 +60,7 @@ class RunSummary:
         return sum(o.rows_read or 0 for o in self.outcomes)
 
 
-class _EmitHandler(logging.Handler):
-    """Forwards Foundation log lines to the screen's queue (thread-safe: it only puts onto a queue)."""
-
-    def __init__(self, emit: Callable[[dict], None]):
-        super().__init__(level=logging.INFO)
-        self.emit_event = emit
-        self.setFormatter(logging.Formatter("%(asctime)s  %(levelname)-7s %(message)s", datefmt="%H:%M:%S"))
-
-    def emit(self, record: logging.LogRecord) -> None:  # noqa: A003 - logging API name
-        try:
-            self.emit_event({"type": "log", "text": self.format(record)})
-        except Exception:  # never let logging break a run
-            pass
+_EmitHandler = EmitHandler  # moved to .common (shared with the Analytical Workbench)
 
 
 def outcome_from_result(res: IngestResult, path: Path, db) -> FileOutcome:

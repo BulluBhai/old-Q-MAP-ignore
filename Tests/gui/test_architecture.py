@@ -7,7 +7,8 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 GUI = REPO / "Application" / "qmap_gui"
-SCREEN_FILES = ("app.py", "home.py", "data_management.py", "profile_editor.py", "locations.py", "widgets.py")
+SCREEN_FILES = ("app.py", "home.py", "data_management.py", "profile_editor.py", "locations.py", "widgets.py",
+                "datasets.py", "analysis.py")
 
 
 def run_python(code: str) -> str:
@@ -42,6 +43,7 @@ def test_the_gui_logic_layer_has_no_tkinter():
     out = run_python(
         "import sys\n"
         "import qmap_gui.services, qmap_gui.jobs, qmap_gui.messages, qmap_gui.settings_store, qmap_gui.modules, qmap_gui.environment\n"
+        "import qmap_gui.registry_services, qmap_gui.workbench_services, qmap_gui.common, qmap_gui.launch\n"
         "print('tkinter' in sys.modules)")
     assert out == "False"
 
@@ -71,3 +73,50 @@ def test_the_launcher_is_at_the_top_level_and_needs_no_installation_step():
     top_level = {n.names[0].name.split(".")[0] for n in ast.parse(launcher).body if isinstance(n, ast.Import)}
     top_level |= {n.module.split(".")[0] for n in ast.parse(launcher).body if isinstance(n, ast.ImportFrom) and n.module}
     assert top_level <= {"sys", "pathlib"}  # nothing third-party at import time: problems are explained, not crashed on
+
+
+# ---- two applications, one platform (01-Nov-26) -----------------------------------------------------------------
+ENTRY_POINTS = ("database_manager.py", "analytical_workbench.py", "Q-MAP.py")
+DATA_PREPARATION = ("qmap.data_engine.ingest", "qmap.data_engine.process", "qmap.data_engine.profiles",
+                    "qmap.data_engine.readers", "qmap.data_engine.preview", "qmap.data_engine.derive",
+                    "qmap.storage.registry", "qmap.storage.storage_class", "qmap_gui.jobs", "qmap_gui.services",
+                    "qmap_gui.registry_services", "qmap_gui.data_management", "qmap_gui.datasets")
+
+
+def test_both_entry_points_are_in_the_application_folder_and_need_no_installation_step():
+    for name in ENTRY_POINTS:
+        launcher = (REPO / name).read_text()
+        compile(launcher, name, "exec")
+        assert 'sys.path.insert(0, str(HERE / "Application"))' in launcher, name
+        tree = ast.parse(launcher)
+        top = {n.names[0].name.split(".")[0] for n in tree.body if isinstance(n, ast.Import)}
+        top |= {n.module.split(".")[0] for n in tree.body if isinstance(n, ast.ImportFrom) and n.module}
+        assert top <= {"sys", "pathlib"}, name
+    assert 'APP_KEY = "database_manager"' in (REPO / "database_manager.py").read_text()
+    assert 'APP_KEY = "analytical_workbench"' in (REPO / "analytical_workbench.py").read_text()
+
+
+def test_the_workbench_never_loads_data_preparation_code():
+    """The Workbench analyses prepared data only: its screen, logic and engine must not import ingestion,
+    profiles, readers, registration, storage changes or the Database Manager's screens."""
+    out = run_python(
+        "import sys, qmap_gui.workbench_services, qmap.analytical_engine, qmap.catalog\n"
+        f"print(sorted(m for m in sys.modules if m in {DATA_PREPARATION!r}))")
+    assert out == "[]"
+    for imported in imports_of(GUI / "analysis.py"):
+        assert imported not in (".services", ".jobs", ".data_management", ".registry_services", ".datasets"), imported
+
+
+def test_both_applications_share_one_registry_and_one_data_definition():
+    """One authoritative implementation: both logic layers use qmap.catalog, neither defines its own SQL."""
+    for name in ("registry_services.py", "workbench_services.py"):
+        source = (GUI / name).read_text()
+        assert "from qmap.catalog import" in source, name
+        for forbidden in ("SELECT ", "INSERT ", "UPDATE ", "CREATE TABLE", "sqlite3"):
+            assert forbidden not in source, f"{name} contains {forbidden!r}"
+
+
+def test_the_analytical_engine_does_not_depend_on_any_gui():
+    out = run_python("import sys, qmap.analytical_engine, qmap.catalog\n"
+                     "print('qmap_gui' in sys.modules, 'tkinter' in sys.modules)")
+    assert out == "False False"

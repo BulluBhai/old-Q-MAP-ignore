@@ -1,0 +1,186 @@
+[
+  {
+    "no": 1,
+    "scenario": "Launch database_manager.py on its own",
+    "status": "PASSED",
+    "evidence": "exit 0; stdout='SELFTEST OK'; stderr=''"
+  },
+  {
+    "no": 2,
+    "scenario": "Launch analytical_workbench.py on its own",
+    "status": "PASSED",
+    "evidence": "exit 0; stdout='SELFTEST OK'; stderr=''"
+  },
+  {
+    "no": 3,
+    "scenario": "Import and preview a supported sample file",
+    "status": "PASSED",
+    "evidence": [
+      "PREVIEW (nothing is registered or written): NSE_NIFTY_1D.csv",
+      "Detected format: delimited_text",
+      "Suggested delimiter: ','",
+      "The first row looks like a header (text above numbers). Confirm with [file] header = true.",
+      "Rows: 60   Columns: 7   Reader: csv python-stdlib",
+      "Columns (position: name [source type]):"
+    ]
+  },
+  {
+    "no": 5,
+    "scenario": "Reject or flag an incompatible profile",
+    "status": "PASSED",
+    "evidence": {
+      "result": "Would be rejected",
+      "explanation": "NSE_NIFTY_1D.csv\nResult: Would be rejected (nothing was saved)\nRows read: 60\n\n[PROBLEM] Some dates or times could not be understood\n    What it means: The date format in the profile does not match what is in the file.\n    Details: 60 issue(s); first: Value '01-06-26' is not a number, so it cannot be a Unix timestamp. (source rows 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 (+50 more))\n    What to do: Look at the first rows in the preview and correct the date settings in the profile."
+    }
+  },
+  {
+    "no": 4,
+    "scenario": "Apply a compatible source profile",
+    "status": "PASSED",
+    "evidence": [
+      "NSE_NIFTY_1D.csv",
+      "Would be accepted",
+      "60"
+    ]
+  },
+  {
+    "no": 6,
+    "scenario": "Standardise and validate a supported dataset",
+    "status": "PASSED",
+    "evidence": {
+      "row": [
+        "NSE_NIFTY_1D.csv",
+        "Accepted",
+        "60",
+        "1 dataset(s) created"
+      ],
+      "final": "Load finished: 1 accepted. Everything was loaded."
+    }
+  },
+  {
+    "no": 7,
+    "scenario": "Register the dataset and verify it can be accessed",
+    "status": "PASSED",
+    "evidence": {
+      "dataset": 2,
+      "instrument": "NSE:NIFTY",
+      "rows": 60,
+      "all_60_rows_identical_to_source_incl_net_volume_kept_separate": true,
+      "path": "Cleaned_Data/NSE/NIFTY/1D/7ab39a360299_46a39d42_FOUND_20261101_154716.parquet"
+    }
+  },
+  {
+    "no": 8,
+    "scenario": "Original source file not modified",
+    "status": "PASSED",
+    "evidence": "SHA-256 before = after = 7ab39a36029905e16304de009a09ac1b79829bbbcbbf581f76891797c82b1158"
+  },
+  {
+    "no": "9a",
+    "scenario": "Derive weekly and monthly from daily (independently re-calculated)",
+    "status": "PASSED",
+    "evidence": {
+      "derived": [
+        [
+          3,
+          "1W",
+          12
+        ],
+        [
+          4,
+          "1M",
+          3
+        ]
+      ],
+      "weekly_bars_match_independent": true
+    }
+  },
+  {
+    "no": 9,
+    "scenario": "Permanent/Temporary classification and safe registry update",
+    "status": "PASSED",
+    "evidence": {
+      "new_path": "Temporary_Data/Cleaned_Data/NSE/NIFTY/1D/7ab39a360299_46a39d42_FOUND_20261101_154716.parquet",
+      "checksum_unchanged": true,
+      "verify_missing": [],
+      "verify_mismatch": [],
+      "audit": {
+        "action": "move",
+        "from_class": "permanent",
+        "to_class": "temporary",
+        "status": "completed",
+        "reason": "acceptance test"
+      }
+    }
+  },
+  {
+    "no": 10,
+    "scenario": "Workbench discovers and uses ready data",
+    "status": "PASSED",
+    "evidence": {
+      "datasets_offered": [
+        2,
+        3,
+        4
+      ],
+      "workbench_folder_remembered": "/tmp/claude-0/-home-user-Q-MAP/ec00b682-77be-5d4c-98f6-29bfb3b25770/scratchpad/acceptance/DATA"
+    }
+  },
+  {
+    "no": 11,
+    "scenario": "Analysis blocked with a clear explanation when data are unsuitable",
+    "status": "PASSED",
+    "evidence": {
+      "readiness": [
+        "NOT READY - the analysis cannot run reliably yet:",
+        "  Prepare the data in Database Manager (open database_manager.py): load the files, check the results, and derive weekly or monthly data there if needed.",
+        "",
+        "NSE:NIFTY Daily (dataset 2): not ready",
+        "  OK   Registered: Standardised, Temporary.",
+        "  OK   Active (not superseded)."
+      ],
+      "final": "Not started: the data are not ready (see the readiness box).",
+      "runs_created": 0
+    }
+  },
+  {
+    "no": 12,
+    "scenario": "An existing supported analysis still produces appropriate results",
+    "status": "NOT APPLICABLE",
+    "evidence": "No MIQP or QLOPB analysis exists in this repository to re-run. The new Dataset Summary was run instead; its statistics match an independent calculation: True"
+  },
+  {
+    "no": 13,
+    "scenario": "Research outputs and run metadata saved correctly",
+    "status": "PASSED",
+    "evidence": {
+      "run_id": "DSUM_20261101_154719",
+      "folder": "OUTPUT/Research_Reports/DSUM_20261101_154719",
+      "files": [
+        "Dataset_Summary_01_Nov_26_154719.csv",
+        "Run_Metadata_01_Nov_26_154719.json",
+        "run_log.txt",
+        "run_manifest.json"
+      ],
+      "metadata_inputs": [
+        [
+          2,
+          "1D",
+          "temporary"
+        ],
+        [
+          3,
+          "1W",
+          "permanent"
+        ]
+      ],
+      "manifest_status": "completed"
+    }
+  },
+  {
+    "no": 14,
+    "scenario": "Both GUIs work independently and share one registry and data definition",
+    "status": "PASSED",
+    "evidence": "Each entry point opened on its own (1, 2); both windows were open together on one Data Registry; the Workbench saw the Database Manager's Temporary move immediately (dataset shown as Temporary: Temporary)"
+  }
+]

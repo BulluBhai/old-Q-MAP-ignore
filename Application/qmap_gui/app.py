@@ -1,4 +1,12 @@
-"""The Q-MAP window: shell, navigation, remembered folders and the shutdown sequence. Screens live in other files."""
+"""The Q-MAP windows: one shared shell and two applications.
+
+* `QMapWindow` - the shell both applications share: scrollable body, navigation, remembered folders (the same
+  remembered Q-MAP_DATA / Q-MAP_OUTPUT for both), background work and the shutdown sequence.
+* `DatabaseManagerApp` - prepares and manages market data (launched by database_manager.py).
+* `AnalyticalWorkbenchApp` - runs analyses on prepared data (launched by analytical_workbench.py).
+
+Neither application needs the other to be running; both use the same Data Registry. Screens live in other files.
+"""
 
 from __future__ import annotations
 
@@ -16,7 +24,7 @@ from .settings_store import GuiSettings, GuiSettingsStore, StoreError, default_s
 from .widgets import MUTED_COLOR, ScrollFrame
 
 POLL_MS = 80
-TITLE = "Q-MAP - Quantitative Market Analytics Platform"
+TITLE = "Q-MAP - Quantitative Market Analytics Platform"  # kept for compatibility; each app sets its own
 
 
 class Dialogs:
@@ -125,21 +133,37 @@ class BackgroundTasks:
         release_garbage_collector_if_idle()
 
 
-class QMapApp(tk.Tk):
+class QMapWindow(tk.Tk):
+    """The shared shell. Subclasses say which screens they have (`build_screens`); the first one is Home."""
+
+    APP_KEY = ""
+    APP_NAME = "Q-MAP"
+    WINDOW_TITLE = TITLE
+    SUBTITLE = "Quantitative Market Analytics Platform"
+    SCREEN_KEYS: tuple[str, ...] = ("home",)
+
+    def screens_planned(self) -> tuple[str, ...]:
+        """The screens this application has (known before they are built, so Home can offer Open buttons)."""
+        return self.SCREEN_KEYS
+
+    def build_screens(self, container: tk.Frame) -> list[tuple[str, str, tk.Frame]]:
+        """[(key, navigation label, frame)], Home first."""
+        raise NotImplementedError
+
     def __init__(self, code_root: str | Path, settings_dir: str | Path | None = None, dialogs: Dialogs | None = None):
         super().__init__()
         self._closing = False
         self._orig_stdout = None  # set only if this app ever redirects sys.stdout
         self.code_root = Path(code_root).resolve()
         self.dialogs = dialogs or Dialogs()
-        self.title(TITLE)
+        self.title(self.WINDOW_TITLE)
         self.geometry("1040x800")
         self.minsize(860, 560)
 
         self.store = GuiSettingsStore(settings_dir or default_settings_dir(), self.code_root)
         self.gui_settings: GuiSettings = self.store.load()
-        self.data_var = tk.StringVar(value=self.gui_settings.data_root)
-        self.output_var = tk.StringVar(value=self.gui_settings.output_root)
+        self.data_var = tk.StringVar(self, value=self.gui_settings.data_root)
+        self.output_var = tk.StringVar(self, value=self.gui_settings.output_root)
         self.locations = check_locations("", "", self.code_root)
         self.core_settings = None
         self.core_problem = ""
@@ -151,21 +175,20 @@ class QMapApp(tk.Tk):
         self._scroll_frame.pack(fill="both", expand=True)
         body = self._scroll_frame.inner
 
-        from .data_management import DataManagementFrame
-        from .home import HomeFrame
-
         header = tk.Frame(body)
         header.pack(fill="x", padx=8, pady=(8, 2))
-        tk.Label(header, text="Q-MAP", font=("TkDefaultFont", 16, "bold")).pack(side="left")
-        tk.Label(header, text="Quantitative Market Analytics Platform", fg=MUTED_COLOR).pack(side="left", padx=8)
-        self.nav_buttons = {}
-        for key, text in (("data", "Data Management"), ("home", "Home")):
-            b = tk.Button(header, text=text, command=lambda k=key: self.show(k))
-            b.pack(side="right", padx=2)
-            self.nav_buttons[key] = b
+        tk.Label(header, text=self.APP_NAME, font=("TkDefaultFont", 16, "bold")).pack(side="left")
+        tk.Label(header, text=self.SUBTITLE, fg=MUTED_COLOR).pack(side="left", padx=8)
+        nav = tk.Frame(header)
+        nav.pack(side="right")
         self.container = tk.Frame(body)
         self.container.pack(fill="both", expand=True)
-        self.screens = {"home": HomeFrame(self.container, self), "data": DataManagementFrame(self.container, self)}
+        self.screens, self.nav_buttons = {}, {}
+        for key, text, frame in self.build_screens(self.container):
+            self.screens[key] = frame
+            b = tk.Button(nav, text=text, command=lambda k=key: self.show(k))
+            b.pack(side="left", padx=2)
+            self.nav_buttons[key] = b
         self.current = ""
         self.show("home")
         if self.store.load_warning:
@@ -179,6 +202,11 @@ class QMapApp(tk.Tk):
             frame.pack_forget()
         self.screens[name].pack(fill="both", expand=True)
         self.current = name
+        for key, b in self.nav_buttons.items():
+            b.configure(relief="sunken" if key == name else "raised")
+        on_show = getattr(self.screens[name], "on_show", None)
+        if on_show is not None:
+            on_show()
         self._scroll_frame.canvas.yview_moveto(0)
 
     # ---- remembered folders ---------------------------------------------------------------------
@@ -186,6 +214,11 @@ class QMapApp(tk.Tk):
         self._location_listeners.append(callback)
 
     def remember(self, **changes) -> None:
+        # Both applications share one settings file: start from what is on disk now, so a change made by the
+        # other application in the meantime is not overwritten with this window's older copy.
+        current = self.store.load()
+        if self.store.load_warning is None:
+            self.gui_settings = current
         for key, value in changes.items():
             setattr(self.gui_settings, key, value)
         try:
@@ -266,6 +299,46 @@ class QMapApp(tk.Tk):
                 pass
 
 
+class DatabaseManagerApp(QMapWindow):
+    """Prepares and manages market data: load and validate files, look after datasets and their storage."""
+
+    APP_KEY = "database_manager"
+    APP_NAME = "Q-MAP Database Manager"
+    WINDOW_TITLE = "Q-MAP Database Manager - prepare and manage market data"
+    SUBTITLE = "Prepare, validate, store and manage market data"
+    SCREEN_KEYS = ("home", "data", "datasets")
+
+    def build_screens(self, container):
+        from .data_management import DataManagementFrame
+        from .datasets import DatasetsFrame
+        from .home import HomeFrame
+
+        return [("home", "Home", HomeFrame(container, self)),
+                ("data", "Data Management", DataManagementFrame(container, self)),
+                ("datasets", "Datasets and Storage", DatasetsFrame(container, self))]
+
+
+class AnalyticalWorkbenchApp(QMapWindow):
+    """Runs analyses on prepared, registered data. It never imports source files."""
+
+    APP_KEY = "analytical_workbench"
+    APP_NAME = "Q-MAP Analytical Workbench"
+    WINDOW_TITLE = "Q-MAP Analytical Workbench - research on prepared data"
+    SUBTITLE = "Research and analysis on prepared, registered data"
+    SCREEN_KEYS = ("home", "analysis")
+
+    def build_screens(self, container):
+        from .analysis import AnalysisFrame
+        from .home import HomeFrame
+
+        return [("home", "Home", HomeFrame(container, self)),
+                ("analysis", "Run an analysis", AnalysisFrame(container, self))]
+
+
+QMapApp = DatabaseManagerApp  # the first graphical version's name for what is now Database Manager
+APPS = {DatabaseManagerApp.APP_KEY: DatabaseManagerApp, AnalyticalWorkbenchApp.APP_KEY: AnalyticalWorkbenchApp}
+
+
 def _enable_windows_dpi() -> None:
     if sys.platform.startswith("win"):
         try:
@@ -276,18 +349,19 @@ def _enable_windows_dpi() -> None:
             pass
 
 
-def main(code_root: str | Path, argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="Q-MAP.py")
+def main(code_root: str | Path, argv: list[str] | None = None, app_key: str = DatabaseManagerApp.APP_KEY,
+         prog: str = "database_manager.py") -> int:
+    parser = argparse.ArgumentParser(prog=prog)
     parser.add_argument("--selftest", action="store_true", help="open the window, close it again and exit (for testing)")
     parser.add_argument("--settings-dir", help="where remembered choices are kept (default: your user profile)")
     args = parser.parse_args(argv or [])
     _enable_windows_dpi()
     try:
-        app = QMapApp(code_root, settings_dir=args.settings_dir)
+        app = APPS[app_key](code_root, settings_dir=args.settings_dir)
     except StoreError as exc:
         root = tk.Tk()
         root.withdraw()
-        messagebox.showerror("Q-MAP", str(exc))
+        messagebox.showerror(APPS[app_key].APP_NAME, str(exc))
         root.destroy()
         return 1
     if args.selftest:

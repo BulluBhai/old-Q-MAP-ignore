@@ -9,7 +9,8 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "Application"))
 
 from qmap_gui import environment
-from qmap_gui.modules import COMING_SOON, MODULES, READY, ready_modules
+from qmap_gui.modules import (ANALYTICAL_WORKBENCH, COMING_SOON, DATABASE_MANAGER, MODULES, READY, modules_for,
+                              ready_modules)
 from qmap_gui.settings_store import (ENV_SETTINGS_DIR, GuiSettings, GuiSettingsStore, StoreError,
                                      default_settings_dir)
 
@@ -17,10 +18,26 @@ REPO = Path(__file__).resolve().parents[2]
 
 
 # ---- module readiness is genuine ---------------------------------------------------------------------
-def test_only_data_management_is_ready():
-    assert [m.key for m in ready_modules()] == ["data_management"]
+def test_only_genuinely_working_modules_are_ready():
+    # Requirement changed 01-Nov-26 (two applications): Database Manager has Data Management and Datasets and
+    # Storage; Analytical Workbench has Dataset Summary. Everything else must stay COMING SOON.
+    assert [(m.key, m.app) for m in ready_modules()] == [("data_management", DATABASE_MANAGER),
+                                                         ("datasets", DATABASE_MANAGER),
+                                                         ("dataset_summary", ANALYTICAL_WORKBENCH)]
     assert all(m.status in (READY, COMING_SOON) for m in MODULES)
     assert len({m.key for m in MODULES}) == len(MODULES)
+    assert all(m.screen for m in ready_modules()) and not any(m.screen for m in MODULES if not m.is_ready)
+
+
+def test_research_modules_belong_to_the_workbench_and_data_preparation_to_the_database_manager():
+    assert {m.key for m in modules_for(DATABASE_MANAGER)} == {"data_management", "datasets"}
+    research = {m.key for m in modules_for(ANALYTICAL_WORKBENCH)}
+    assert {"market_intelligence", "ma_research", "stage_analysis", "dataset_summary"} <= research
+    assert "data_management" not in research
+
+
+def test_every_planned_module_is_listed_by_one_of_the_two_applications():
+    assert {m.key for m in MODULES} == {m.key for a in (DATABASE_MANAGER, ANALYTICAL_WORKBENCH) for m in modules_for(a)}
 
 
 def test_every_coming_soon_module_says_where_it_sits_on_the_roadmap():
@@ -39,8 +56,8 @@ def test_blueprint_modules_are_all_listed():
 
 
 def test_data_management_is_honest_about_what_is_not_built():
-    dm = ready_modules()[0]
-    assert "Not built yet" in dm.note
+    for m in ready_modules(DATABASE_MANAGER):
+        assert "Not built yet" in m.note
 
 
 # ---- environment check ----------------------------------------------------------------------------------

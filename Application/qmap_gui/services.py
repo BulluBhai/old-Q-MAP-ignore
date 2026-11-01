@@ -28,6 +28,7 @@ from qmap.data_engine.readers import read_source
 from qmap.data_engine.results import ERROR, CheckResult
 from qmap.storage.db import open_database
 
+from .common import open_in_file_manager  # noqa: F401 - part of this module's interface
 from .messages import Finding, findings_from_checks
 
 
@@ -402,17 +403,4 @@ def check_file(path: str | Path, profile: SourceProfile, settings: Settings, ove
 # ---------------------------------------------------------------------------------------------------
 # Opening folders and reports
 # ---------------------------------------------------------------------------------------------------
-def open_in_file_manager(path: str | Path) -> tuple[bool, str]:
-    p = Path(path)
-    if not p.exists():
-        return False, f"{p} does not exist."
-    try:
-        if sys.platform.startswith("win"):
-            os.startfile(str(p))  # type: ignore[attr-defined]
-        elif sys.platform == "darwin":
-            subprocess.Popen(["open", str(p)])
-        else:
-            subprocess.Popen(["xdg-open", str(p)])
-    except OSError as exc:
-        return False, f"Could not open {p}: {exc}"
-    return True, "Opened."
+# open_in_file_manager lives in .common (shared with the Analytical Workbench); imported above.
