@@ -26,7 +26,7 @@ from ..core.runs import Run
 from ..data_engine.format_detect import STORED_EXTENSION, DetectedFormat, detect_format
 from .db import Database, utc_now_iso
 from .faults import maybe_fail
-from .files import copy_durably, make_read_only, safe_remove, sha256_file
+from .files import copy_durably, make_read_only, place_without_overwrite, safe_remove, sha256_file
 
 
 @dataclass
@@ -65,9 +65,16 @@ def _insert_event(db: Database, run: Run, *, original_path: str, original_filena
         return int(cur.lastrowid)
 
 
+class EventAlreadyFinished(RuntimeError):
+    """A receipt that is no longer 'started' was about to be finalised a second time."""
+
+
 def _finish_event(conn: sqlite3.Connection, event_id: int, status: str, raw_dataset_id: int | None, detail: str | None):
-    conn.execute("UPDATE ingest_events SET status = ?, raw_dataset_id = ?, detail = ? WHERE event_id = ?",
-                 (status, raw_dataset_id, detail, event_id))
+    """Move a receipt from 'started' to its final status. A final status is never rewritten."""
+    cur = conn.execute("UPDATE ingest_events SET status = ?, raw_dataset_id = ?, detail = ? "
+                       "WHERE event_id = ? AND status = 'started'", (status, raw_dataset_id, detail, event_id))
+    if cur.rowcount != 1:
+        raise EventAlreadyFinished(f"receipt {event_id} is not in progress (already finalised by another process?)")
 
 
 def _fail_event(db: Database, event_id: int, detail: str) -> None:
@@ -151,32 +158,41 @@ def receive_file(run: Run, src: str | Path, *, source_label: str | None = None, 
 
     # 5. Durable copy to a temporary file on the same volume, then verify the copy.
     tmp = settings.raw_incoming_dir / f"{eid}.tmp"
-    copy_durably(src, tmp)
-    if sha256_file(tmp) != sha:
-        safe_remove(tmp)
-        detail = "The source file changed while it was being copied. Nothing was registered; try again."
-        _fail_event(db, eid, detail)
-        log.error("Receipt %s failed: %s", eid, detail)
-        return Receipt(event_id=eid, status="failed", sha256=sha, detected=detected, detail=detail)
+    final = settings.data_path(rel)
+    try:
+        copy_durably(src, tmp)
+        copy_ok = sha256_file(tmp) == sha
+    except OSError as exc:
+        return _abandon(run, eid, tmp, sha, detected, f"Could not copy the file into the raw store: {exc}. "
+                                                      "Nothing was registered; fix the cause and try again.")
+    if not copy_ok:
+        return _abandon(run, eid, tmp, sha, detected,
+                        "The source file changed while it was being copied. Nothing was registered; try again.")
     maybe_fail("after_temp_copy")
 
-    # 6. Atomic rename into the content-addressed location. Never overwrite a stored file.
-    final = settings.data_path(rel)
-    final.parent.mkdir(parents=True, exist_ok=True)
-    if final.exists():
-        if sha256_file(final) == sha:
-            safe_remove(tmp)  # identical content already there (also the Windows read-only case)
-        else:
-            safe_remove(tmp)
-            detail = (f"A different file already occupies {rel}. It was NOT overwritten. "
-                      "Run the registry verification and investigate.")
-            _fail_event(db, eid, detail)
-            log.error("Receipt %s failed: %s", eid, detail)
-            return Receipt(event_id=eid, status="failed", sha256=sha, detected=detected, detail=detail)
-    else:
-        os.replace(tmp, final)
+    # 6. Atomic placement that can NEVER replace an existing file (no check-then-replace window).
+    try:
+        final.parent.mkdir(parents=True, exist_ok=True)
+        place_without_overwrite(tmp, final)
+    except FileExistsError:
+        # Someone else (a concurrent ingest, or an interrupted earlier one) already put a file there.
+        try:
+            same = sha256_file(final) == sha
+        except OSError:
+            same = False
+        if not same:
+            return _abandon(run, eid, tmp, sha, detected,
+                            f"A different file already occupies {rel}. It was NOT overwritten. "
+                            "Run the registry verification and investigate.")
+        safe_remove(tmp)  # identical content is already in place: adopt it, never touch it
+    except OSError as exc:
+        return _abandon(run, eid, tmp, sha, detected, f"Could not place the file in the raw store: {exc}. "
+                                                      "Nothing was registered; fix the cause and try again.")
     maybe_fail("after_rename")
-    make_read_only(final)
+    try:
+        make_read_only(final)
+    except OSError as exc:  # not fatal: the content is verified and the registration is still correct
+        log.warning("Receipt %s: could not set the read-only flag on %s (%s)", eid, rel, exc)
 
     # 7. One transaction: dataset row + event outcome.
     status, ds_id, detail = _commit_registration(db, eid, sha, detected, rel, existing if repair else None)
@@ -184,6 +200,14 @@ def receive_file(run: Run, src: str | Path, *, source_label: str | None = None, 
     log.info("Receipt %s: %s -> %s (dataset %s)%s", eid, src.name, status, ds_id, " [restored missing file]" if repair else "")
     return Receipt(event_id=eid, status=status, raw_dataset_id=ds_id, sha256=sha, detected=detected,
                    relative_path=rel, detail=detail)
+
+
+def _abandon(run: Run, event_id: int, tmp: Path, sha: str, detected: DetectedFormat, detail: str) -> Receipt:
+    """Give up a started registration: remove our temporary file, mark the receipt failed, report it."""
+    safe_remove(tmp)
+    _fail_event(run.db, event_id, detail)
+    run.logger.error("Receipt %s failed: %s", event_id, detail)
+    return Receipt(event_id=event_id, status="failed", sha256=sha, detected=detected, detail=detail)
 
 
 def _commit_registration(db: Database, event_id: int, sha: str, detected: DetectedFormat, rel: str, existing,
@@ -279,7 +303,21 @@ def restore_raw_file(run: Run, dataset_id: int, source: str | Path, *, reason: s
         os.replace(final, target)  # move, never delete: the corrupt copy stays available as evidence
         quarantined = settings.to_relative(target)
     maybe_fail("restore_after_quarantine")
-    os.replace(tmp, final)
+    try:
+        place_without_overwrite(tmp, final)
+    except FileExistsError:
+        # Another process put a file there after the corrupt copy was moved aside: never replace it.
+        try:
+            same = sha256_file(final) == src_sha
+        except OSError:
+            same = False
+        safe_remove(tmp)
+        if not same:
+            detail = (f"A different file appeared at {rel} during the restore. It was NOT overwritten"
+                      + (f"; the corrupt copy is preserved at {quarantined}" if quarantined else "") + ".")
+            _fail_event(db, eid, detail)
+            raise IngestError(detail, code="E_RESTORE_CONFLICT", check="raw_integrity",
+                              action="Run verify and investigate before trying again.")
     maybe_fail("restore_after_replace")
     make_read_only(final)
     detail = (f"RESTORED from {resolved}; reason: {reason.strip()}; "

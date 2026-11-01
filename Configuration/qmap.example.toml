@@ -4,6 +4,8 @@
 
 [paths]
 # Two folders that already exist, OUTSIDE the Q-MAP code folder and not inside each other.
+# Windows: use forward slashes "D:/Q-MAP_DATA" or single quotes 'D:\Q-MAP_DATA'. A relative path is taken
+# relative to THIS file's folder.
 data_root   = "<set locally>"     # Q-MAP_DATA: raw data, cleaned data, metadata database
 output_root = "<set locally>"     # Q-MAP_OUTPUT: run folders, reports, logs
 
@@ -19,7 +21,8 @@ max_file_size_mb = 1024
 # profiles_dir = "<optional extra folder of your own source profiles>"
 
 [recovery]
-stale_minutes = 60   # an interrupted run/registration older than this is cleaned up by recovery
+stale_minutes = 60   # work of a run whose program has ended is cleaned up once it is older than this
+                     # (work of a run that is still running is never touched, however long it takes)
 
 [logging]
 level = "INFO"

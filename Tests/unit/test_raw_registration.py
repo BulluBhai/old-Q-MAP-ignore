@@ -147,6 +147,7 @@ def test_crash_at_every_step_then_recover_then_reingest_is_consistent(step, run,
     with pytest.raises(InjectedFault):
         with inject(step):
             receive_file(run, csv)
+    run._release_lock()  # the process died: the operating system releases its run lock
     report = recover_incomplete(settings, db, stale_minutes=0)
 
     # invariant 1: no temp files left behind
@@ -172,6 +173,7 @@ def test_crash_after_rename_is_completed_by_recovery(run, settings, db, csv):
         with inject("after_rename"):
             receive_file(run, csv)
     assert not raw_rows(db)  # database never committed
+    run._release_lock()  # the process died: the operating system releases its run lock
     report = recover_incomplete(settings, db, stale_minutes=0)
     assert len(report.completed_events) == 1
     assert len(raw_rows(db)) == 1
@@ -184,6 +186,7 @@ def test_crash_before_rename_is_failed_and_cleaned_by_recovery(run, settings, db
         with inject("after_temp_copy"):
             receive_file(run, csv)
     assert list(settings.raw_incoming_dir.iterdir())  # temp file present
+    run._release_lock()  # the process died: the operating system releases its run lock
     report = recover_incomplete(settings, db, stale_minutes=0)
     assert len(report.failed_events) == 1 and report.deleted_temp_files
     assert events(db)[0]["status"] == "failed" and not raw_rows(db)

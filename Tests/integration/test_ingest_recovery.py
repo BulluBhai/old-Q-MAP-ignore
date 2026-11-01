@@ -37,6 +37,7 @@ def test_crash_while_registering_the_result_then_recovery_then_retry(step, run, 
     with pytest.raises(InjectedFault):
         with inject(step):
             do_ingest(run, good)
+    run._release_lock()  # the process died: the operating system releases its run lock
 
     # the database never saw half a result
     assert not db.query("SELECT 1 FROM ingest_attempts") and not db.query("SELECT 1 FROM datasets WHERE layer='cleaned'")
@@ -61,6 +62,9 @@ def test_fresh_orphan_cleaned_file_is_left_alone_until_it_is_stale(run, settings
     assert len(cleaned_files(settings)) == 1
     recover_incomplete(settings, db)  # default 60 minute stale limit: a live writer may still be about to commit
     assert len(cleaned_files(settings)) == 1
+    recover_incomplete(settings, db, stale_minutes=0)  # older than the limit, but its run is still live
+    assert len(cleaned_files(settings)) == 1
+    run._release_lock()  # the process died: the operating system releases its run lock
     recover_incomplete(settings, db, stale_minutes=0)
     assert not cleaned_files(settings)
 
@@ -105,6 +109,7 @@ def test_a_crashed_run_is_marked_failed_and_the_next_run_recovers(settings, db, 
         with inject("after_rename"):
             do_ingest(r1, good)
     # r1 is never finished (the process "died")
+    r1._release_lock()  # the process died: the operating system releases its run lock
     zero = dataclasses.replace(settings, stale_minutes=0)
     r2 = start_run(zero, db, "FOUND", area="Ingestion")
     assert db.one("SELECT status, error_message FROM runs WHERE run_id=?", (r1.run_id,))["error_message"] == "interrupted"

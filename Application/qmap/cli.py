@@ -51,7 +51,8 @@ def _build_parser() -> argparse.ArgumentParser:
     rest.add_argument("--reason", required=True, help="written reason, recorded in the audit trail")
 
     sub.add_parser("recover", help="finish or clean up interrupted work and report problems")
-    sub.add_parser("verify", help="re-check every registered file against its checksum")
+    sub.add_parser("verify", help="recover (without deleting cleaned files), then re-check every registered "
+                                  "file against its checksum")
     return p
 
 
@@ -82,8 +83,8 @@ def main(argv: list[str] | None = None) -> int:
             if summary == "nothing to recover":
                 summary = "no problems found" if args.command == "recover" else "no problems found; every registered file matches its checksum"
             print(f"{args.command}: {summary}")
-            for label in ("orphan_raw_files", "missing_files", "checksum_mismatches"):
-                for item in getattr(report, label):
+            for label, items in report.as_dict().items():  # every action and every problem, nothing hidden
+                for item in items:
                     print(f"  {label}: {item}")
             if report.checksum_mismatches:
                 print("  To restore a corrupt raw file from its original: python -m qmap restore-raw "

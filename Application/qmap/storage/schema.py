@@ -128,9 +128,63 @@ WHEN NEW.layer IS NOT OLD.layer OR NEW.sha256 IS NOT OLD.sha256 OR NEW.relative_
 BEGIN SELECT RAISE(ABORT,'dataset identity columns are immutable'); END;
 """
 
+# Added by the independent PR #1 review (31-Oct-26). Migration 1 is left exactly as it was.
+MIGRATION_2 = """
+ALTER TABLE ingest_attempts ADD COLUMN validation_settings_json TEXT;
+
+CREATE TRIGGER trg_events_final BEFORE UPDATE ON ingest_events
+WHEN OLD.status <> 'started' AND (NEW.status IS NOT OLD.status OR NEW.raw_dataset_id IS NOT OLD.raw_dataset_id)
+BEGIN SELECT RAISE(ABORT,'a finished ingest_events receipt cannot change its outcome'); END;
+CREATE TRIGGER trg_profiles_no_update BEFORE UPDATE ON source_profiles BEGIN SELECT RAISE(ABORT,'source_profiles snapshots are immutable'); END;
+CREATE TRIGGER trg_profiles_no_delete BEFORE DELETE ON source_profiles BEGIN SELECT RAISE(ABORT,'source_profiles snapshots are immutable'); END;
+CREATE TRIGGER trg_runs_no_delete BEFORE DELETE ON runs BEGIN SELECT RAISE(ABORT,'runs are never deleted'); END;
+CREATE TRIGGER trg_instruments_no_delete BEFORE DELETE ON instruments BEGIN SELECT RAISE(ABORT,'instruments are never deleted'); END;
+CREATE TRIGGER trg_instruments_identity BEFORE UPDATE ON instruments
+WHEN NEW.exchange IS NOT OLD.exchange OR NEW.symbol IS NOT OLD.symbol
+BEGIN SELECT RAISE(ABORT,'instrument identity (exchange, symbol) is immutable'); END;
+"""
+
+# Validation settings become part of the processing identity (Project Owner decision, 31-Oct-26).
+# The processing_version text is unchanged; the fingerprint is a separate identity component.
+MIGRATION_3 = """
+ALTER TABLE ingest_attempts ADD COLUMN config_fingerprint TEXT;
+ALTER TABLE datasets ADD COLUMN config_fingerprint TEXT;
+
+DROP INDEX ux_datasets_derivation;
+CREATE UNIQUE INDEX ux_datasets_derivation
+  ON datasets(layer, parent_dataset_id, processing_version, instrument_id, timeframe, config_fingerprint) WHERE layer <> 'raw';
+
+DROP TRIGGER trg_datasets_identity;
+CREATE TRIGGER trg_datasets_identity BEFORE UPDATE ON datasets
+WHEN NEW.layer IS NOT OLD.layer OR NEW.sha256 IS NOT OLD.sha256 OR NEW.relative_path IS NOT OLD.relative_path
+  OR NEW.parent_dataset_id IS NOT OLD.parent_dataset_id OR NEW.processing_version IS NOT OLD.processing_version
+  OR NEW.instrument_id IS NOT OLD.instrument_id OR NEW.timeframe IS NOT OLD.timeframe
+  OR NEW.created_by_attempt_id IS NOT OLD.created_by_attempt_id
+  OR NEW.config_fingerprint IS NOT OLD.config_fingerprint
+  OR (OLD.superseded_by_dataset_id IS NOT NULL AND NEW.superseded_by_dataset_id IS NOT OLD.superseded_by_dataset_id)
+  OR (OLD.status = 'superseded' AND NEW.status <> 'superseded')
+BEGIN SELECT RAISE(ABORT,'dataset identity columns are immutable'); END;
+"""
+
+# Every NEW cleaned dataset and attempt must carry its fingerprint: a NULL would escape the derivation-uniqueness
+# index (SQLite treats NULLs as distinct). Rows written before migration 3 keep their NULL (never rewritten).
+MIGRATION_4 = """
+CREATE TRIGGER trg_datasets_fingerprint_required BEFORE INSERT ON datasets
+WHEN NEW.layer <> 'raw' AND (NEW.config_fingerprint IS NULL OR length(trim(NEW.config_fingerprint)) = 0)
+BEGIN SELECT RAISE(ABORT,'a derived dataset must record its configuration fingerprint'); END;
+CREATE TRIGGER trg_attempts_fingerprint_required BEFORE INSERT ON ingest_attempts
+WHEN NEW.config_fingerprint IS NULL OR length(trim(NEW.config_fingerprint)) = 0
+BEGIN SELECT RAISE(ABORT,'an ingest attempt must record its configuration fingerprint'); END;
+"""
+
 # (version, description, sql)
 MIGRATIONS = [
     (1, "Stage 2 foundation: instruments, runs, registry, ingest provenance, quality checks", MIGRATION_1),
+    (2, "Review fixes: validation settings provenance; final receipts, profile snapshots, runs and instruments protected",
+     MIGRATION_2),
+    (3, "Validation-settings fingerprint is part of the processing identity (reuse and derivation uniqueness)",
+     MIGRATION_3),
+    (4, "New derived datasets and attempts must record their configuration fingerprint", MIGRATION_4),
 ]
 
 LATEST_VERSION = MIGRATIONS[-1][0]

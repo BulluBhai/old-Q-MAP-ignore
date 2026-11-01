@@ -59,6 +59,12 @@ command below), and every module marked Coming Soon.
 Both data and output folders must already exist, must be **outside** the code folder, and must not be inside
 each other. Q-MAP stops with a clear message otherwise.
 
+In the configuration file, write Windows paths with forward slashes (`data_root = "D:/Q-MAP_DATA"`) or in single
+quotes (`data_root = 'D:\Q-MAP_DATA'`); TOML treats a backslash inside double quotes as an escape. A relative path in
+the file is taken relative to the **configuration file's own folder**, never to the folder Q-MAP was started from
+(IDLE, a shortcut and a terminal can each start somewhere else). The environment variables `QMAP_DATA_ROOT`,
+`QMAP_OUTPUT_ROOT` and `QMAP_CONFIG` override the file; the two root variables must be full paths.
+
 ## One-time setup (Windows commands shown; on macOS/Linux use `bin/python` instead of `Scripts\python.exe`)
 
 You need Python 3.11 or newer. Check with:
@@ -127,12 +133,24 @@ Ingest one or more files:
 "<ENV_FOLDER>\Scripts\python.exe" -m qmap --config "<CONFIG_FILE>" ingest --profile example_csv_unix_seconds --timeframe 1D "<FILE>"
 ```
 
-The result is `ACCEPTED`, `REUSED` (already processed the same way), `REJECTED` (see the issues report named in
-the output; nothing is repaired or dropped), `BLOCKED` (retrying an unchanged rejected file needs a written
-`--force-reason`) or `UNSUPPORTED` (the reason is shown). Each run's folder in Q-MAP_OUTPUT holds its log,
-`run_manifest.json` and any report.
+The result is `ACCEPTED`, `REUSED` (already processed the same way, with the same validation settings), `REJECTED` (see the issues report named in
+the output; nothing is repaired or dropped), `BLOCKED` (see below) or `UNSUPPORTED` (the reason is shown). Each run's
+folder in Q-MAP_OUTPUT holds its log, `run_manifest.json` and any report.
 
-Finish or clean up after a crash, and check every stored file against its checksum:
+### Retrying a rejected file
+
+| Situation | What happens when you ingest the same file again |
+|---|---|
+| You changed the profile (new `profile_version`) or a validation setting that affects the result | It is processed again; no reason needed |
+| It was rejected **only** because some dates were later than "today + `plausible_max_days_ahead`" | It is `BLOCKED` until those dates are allowed; the message gives the first run date on which they are. From that date on it is processed again automatically (recorded as `retry_after_date_limit`); no reason needed |
+| Anything else, unchanged | `BLOCKED`: the same file under the same rules would give the same result |
+| You want to try again anyway | Add `--force-reason "<why>"`. All checks still apply; the reason is recorded |
+
+Every attempt, including each rejection and its issues report, is kept. A retry never changes or removes an earlier
+attempt; it is linked to it (`revalidation_of_attempt_id`).
+
+Finish or clean up after a crash, and check every stored file against its checksum (both print every action taken
+and every problem found):
 
 ```bash
 "<ENV_FOLDER>\Scripts\python.exe" -m qmap --config "<CONFIG_FILE>" recover
@@ -141,6 +159,31 @@ Finish or clean up after a crash, and check every stored file against its checks
 ```bash
 "<ENV_FOLDER>\Scripts\python.exe" -m qmap --config "<CONFIG_FILE>" verify
 ```
+
+## What recovery does (and when it deletes something)
+
+Recovery runs automatically at the start of every run (its actions are written to that run's
+`recovery_report.json` and log) and on demand with `recover`. `verify` runs the same recovery, except that it never
+deletes cleaned files, and then re-hashes every registered file.
+
+A run is **live** while its program is running: it holds a lock on `Q-MAP_DATA/Metadata/run_locks/<Run ID>.lock`,
+which Windows/macOS/Linux release automatically when the program ends in any way. Recovery never touches the work of
+a live run, however long it takes. Work is treated as interrupted only if its run is not live **and** the run is
+finished or older than `stale_minutes` (default 60).
+
+| Found | Action |
+|---|---|
+| Interrupted receipt whose stored raw file is present and matches its checksum | registration completed |
+| Interrupted receipt without a valid stored file | its temporary copy is **deleted**; receipt marked `failed` |
+| Temporary file in `Raw_Data/_incoming` whose receipt is finished (or unknown and older than `stale_minutes`) | **deleted** |
+| Unregistered file in `Cleaned_Data` (or `Cleaned_Data/_incoming`) of a run that is not live | **deleted** (it is reproducible from the raw file); the database is re-checked just before deleting |
+| Raw file with no database record | reported as `orphan_raw_files`, **never deleted**; ingest the original to adopt it |
+| Registered file missing, unreadable or with the wrong checksum | reported, never changed |
+| Run left `running` by a program that has ended | marked `failed` (`interrupted`) |
+
+Raw files (registered or not) and anything in `Raw_Data/_quarantine` are never deleted by Q-MAP. An orphan raw file
+whose content does not match its name cannot be adopted (ingest refuses to overwrite it); move it aside by hand after
+checking it.
 
 ## If a stored raw file turns out to be corrupt
 
@@ -168,6 +211,10 @@ restore, run `recover`, then ingest the original again.
 - Original files are never changed. Identical content is stored once (whatever its name or extension) and every
   receipt is still recorded with its own filename, path, time and source.
 - Raw files are never overwritten or automatically deleted, and a stored raw file is checksum-verified before every reuse.
+  A file is put in place with a single operating-system call that fails if anything is already there, so even two
+  programs ingesting at the same moment cannot replace each other's file.
+- A finished receipt, a stored profile snapshot, an attempt, a quality check, a dataset's identity, a run and an
+  instrument cannot be deleted or rewritten (database triggers).
 - Invalid data is reported, never repaired or discarded. A rejected file leaves an audit trail.
 - Dates, timestamp units, time zones, instrument identity and volume mapping are declared, never guessed.
 - Missing volume does not invalidate OHLC data unless the requirement set says volume is required.
@@ -176,10 +223,26 @@ restore, run `recover`, then ingest the original again.
 
 ## Known limitations (Stage 2)
 
-- Automated tests were run on Linux. Windows-specific file handling is covered by simulation, not by a Windows run.
+- Automated tests run on Linux and, through `.github/workflows/tests.yml`, on Windows (Python 3.11). Network drives,
+  OneDrive-synchronised folders and antivirus interference are not covered by any automated test.
 - Very long folder names can exceed Windows' 260-character path limit; keep the data and output roots short.
 - The graphical window covers Data Management only. It has been exercised on Linux (real windows on a virtual
   screen), **not yet on Windows**: Windows-only behaviour (opening folders, remembered-settings location, high-DPI
   text) is covered by simulation. The command line remains for `recover`, `verify` and `restore-raw`.
 - Selecting the "current" dataset across several raw files for one instrument is not defined yet.
 - Re-receiving registered content re-reads the stored copy to verify it, so very large files take correspondingly longer.
+- A result is reused only when the raw content, processing version, ingest request **and validation settings** match.
+  Changing `plausible_min_date`, `plausible_max_days_ahead`, `max_daily_move_pct`, `min_rows` or a requirement set's
+  `require_volume` reprocesses the file into a new dataset (the previous one is superseded, never deleted); its
+  `config_fingerprint` identifies the settings used. `max_gap_days` only affects a warning, and the run date only moves
+  the "not in the future" limit, so neither prevents reuse; both are recorded, and a different `max_gap_days` is
+  mentioned when a result is reused. Results recorded before the fingerprint existed are reused only if their recorded
+  settings match; results with no recorded settings are reprocessed.
+- Reusing a processing version that has since been superseded returns that version's (superseded) datasets and says so.
+- "Today" for the future-date check is the UTC date. Exchange dates east of UTC (for example India) can be up to one
+  calendar day ahead of it, so keep `plausible_max_days_ahead` at 1 or more (the default is 1).
+- The time-zone database version (tzdata) used for UTC conversion is not recorded; historical rules rarely change.
+- Run liveness relies on operating-system file locks. Keep Q-MAP_DATA on a local disk; locks on network shares are
+  not reliable, and the `stale_minutes` age rule is then the only safeguard.
+- Parquet is used for cleaned data; DuckDB (Blueprint section 8.3) is not used yet, because nothing in Stage 2 queries
+  across datasets.

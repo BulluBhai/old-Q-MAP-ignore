@@ -240,7 +240,7 @@ def test_a_crash_during_restore_is_recoverable_and_loses_no_evidence(step, run, 
     with pytest.raises(InjectedFault):
         with inject(step):
             restore_raw_file(run, rec.raw_dataset_id, good, reason="crash test")
-
+    run._release_lock()  # the process died: the operating system releases its run lock
     recover_incomplete(settings, db, stale_minutes=0)
     assert not list(settings.raw_incoming_dir.iterdir())
     assert all(e["status"] != "started" for e in events(db))
