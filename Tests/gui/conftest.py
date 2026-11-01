@@ -18,22 +18,36 @@ NET_HEADER = HEADER + ["Net Volume"]
 TK_STARTUP_ATTEMPTS = 3
 
 
-def is_tk_library_read_failure(exc: Exception) -> bool:
-    """Tk could not read one of its own library files while creating the interpreter (two known message forms)."""
-    text = str(exc)
-    return "Can't find a usable" in text or "couldn't read file" in text
+def failed_while_creating_the_tk_interpreter(exc: BaseException) -> bool:
+    """True if a TclError was raised inside tkinter's own `Tk.__init__` / `_loadtk`, i.e. while the Tcl/Tk interpreter
+    was being created, before any application code could run. Errors raised later (for example while the application
+    builds its widgets) have no such frame in their traceback. A missing display is not a start-up fault."""
+    import tkinter
+
+    text = str(exc).lower()
+    if "display" in text:  # "no display name and no $DISPLAY environment variable", "couldn't connect to display"
+        return False
+    tb = exc.__traceback__
+    while tb is not None:
+        frame = tb.tb_frame
+        if (frame.f_globals.get("__name__") == "tkinter" and frame.f_code.co_name in ("__init__", "_loadtk")
+                and isinstance(frame.f_locals.get("self"), tkinter.Tk)):
+            return True
+        tb = tb.tb_next
+    return False
 
 
 def create_with_tk_startup_retry(make):
-    """Call `make()` (which creates a Tk window), retrying ONLY Tk's own start-up failure.
+    """Call `make()` (which creates a Tk window), retrying ONLY a failure of Tk's own start-up.
 
-    On GitHub's Windows runner a window occasionally fails to start because Tk cannot read one of its own library
-    files (init.tcl, auto.tcl, tk.tcl, ttk/*.tcl) from the Python install: "Can't find a usable init.tcl", or
-    "couldn't read file ...: No error" / "no such file or directory" for a file that exists. It happens while the
-    interpreter is being created, before any Q-MAP code runs, and the next window starts normally.
-    Only those two message forms are retried, and every retry is reported as a warning; any other error is raised at
-    once, and a start-up that keeps failing is raised after `TK_STARTUP_ATTEMPTS` attempts. No assertion of any test is
-    affected.
+    On GitHub's Windows runner the Tcl/Tk interpreter occasionally fails to start because Tk cannot read its own library
+    files from the Python install. The symptom varies from run to run: "Can't find a usable init.tcl",
+    "couldn't read file ...auto.tcl: no such file or directory" (for a file that exists), or
+    'invalid command name "tcl_findLibrary"'. All happen inside `Tk.__init__`, before any Q-MAP code runs, and the next
+    window starts normally. So the rule is by phase, not by message: only a TclError raised inside Tk's own
+    interpreter creation is retried (up to `TK_STARTUP_ATTEMPTS` attempts), every retry is reported as a warning, and
+    anything else - including an error while the application builds its window, or a missing display - is raised at
+    once. No assertion of any test is affected.
     """
     import time
     import tkinter
@@ -43,7 +57,7 @@ def create_with_tk_startup_retry(make):
         try:
             return make()
         except tkinter.TclError as exc:
-            if not is_tk_library_read_failure(exc) or attempt == TK_STARTUP_ATTEMPTS:
+            if not failed_while_creating_the_tk_interpreter(exc) or attempt == TK_STARTUP_ATTEMPTS:
                 raise
             warnings.warn(f"Tk start-up failed (attempt {attempt} of {TK_STARTUP_ATTEMPTS}), retrying: "
                           f"{str(exc).splitlines()[0]}", RuntimeWarning, stacklevel=2)
