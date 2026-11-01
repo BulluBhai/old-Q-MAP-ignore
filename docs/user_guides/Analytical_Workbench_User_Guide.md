@@ -21,7 +21,52 @@ Deleted datasets are never offered; superseded ones only if you tick "Show super
 **2. Output.** Each run gets its own folder, named by its **Run ID** (for example `DSUM_20261101_154719`), in
 `Q-MAP_OUTPUT/Research_Reports`. An earlier run is never overwritten.
 
-**3. Options.** The analysis's parameters. For Dataset Summary: optional start and end dates such as `01-Jan-24`.
+- **Last run folder** shows the folder of the latest **completed** run, exactly as recorded for that run. After a
+  restart it is read from the Data Registry. A refused request or a failed run never replaces it.
+- The path is shown in a read-only box, so you can select it and copy it (Ctrl+C).
+- **Open Output Folder** opens that folder in File Explorer. It only opens it; nothing is moved, renamed or deleted.
+  - Before any run has completed, the button is greyed out.
+  - If the folder has since been moved or deleted, or Windows refuses to open it, a message explains what happened
+    instead.
+
+**3. Options.** The analysis's parameters. For Dataset Summary: an optional **Start date** and **End date**.
+
+### Entering dates
+
+Each date box accepts typing **and** has a **Calendar...** button.
+
+- **Calendar:** click a day to fill in the box.
+  - `<` and `>` change month; **Today** picks today; **Clear** empties the box.
+  - Esc or **Close** closes the calendar without changing anything.
+  - The calendar writes dates as `25-Feb-26`.
+- **Typing:** day, then month, then year. All of these mean 25 February 2026:
+
+  | You type | Format |
+  |---|---|
+  | `25/02/26` | day/month/year |
+  | `25-02-26` | day-month-year |
+  | `25-Feb-26` | day-month abbreviation-year (any letter case) |
+  | `250226` | six digits = DDMMYY |
+
+  Four-digit years (`25/02/2026`, `25-Feb-2026`) and ISO dates (`2026-02-25`) also work.
+
+  Six digits are always read as DDMMYY. A longer number, such as a Unix timestamp, is refused, never converted.
+- **Two-digit years:** 00-68 mean 2000-2068, and 69-99 mean 1969-1999. So `26` is 2026 and `95` is 1995. This is the
+  same rule Q-MAP's DD-MM-YY source profiles use.
+- **Confirmation:** next to each box, Q-MAP shows what it understood (for example `= 25-Feb-2026`), or a red
+  explanation.
+- **Empty box:** an empty Start date means "from the first bar"; an empty End date means "to the last bar".
+
+**Three different situations** are reported differently, before anything runs:
+
+| You see | Meaning | What to do |
+|---|---|---|
+| **INVALID DATE INPUT** | A date can't be understood (for example `25.02.26`), doesn't exist (`31/02/26`), or the start is after the end. Nothing was checked or run. | Correct the date; the supported formats are listed |
+| **NO DATA IN THIS PERIOD** | The dates are fine, but the selected data have no bars between them. The data's actual coverage is shown. | Choose a period inside the coverage, leave the dates empty, or load more data in Database Manager |
+| **NOT READY** | Anything else that stops the run: wrong timeframe, too few bars (for example 1 bar where 2 are needed), a damaged file ... | Follow the explanation |
+| **READY** | Valid dates, and enough bars in the period | Run |
+
+A request that is refused in any of these ways creates **no** run, no run folder and no output files.
 
 - **Check readiness** saves nothing. For every selected dataset it shows each requirement as OK, NOTE (a warning) or
   FAIL:
@@ -36,7 +81,7 @@ Deleted datasets are never offered; superseded ones only if you tick "Show super
   | Volume | Present, if the analysis needs it |
   | Validation | Status and warnings |
   | Storage | A Temporary dataset is noted, because you may delete it later |
-  | History | Enough bars in the chosen period, and whether the data cover the whole period |
+  | History | Enough bars in the chosen period (with "no bars at all" reported separately), and whether the data cover the whole period |
 
 - **RUN ANALYSIS** checks again and runs only if everything required is met. Otherwise it explains what is missing and
   creates no run.

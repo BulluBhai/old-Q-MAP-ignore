@@ -11,7 +11,8 @@ Branch `claude/adoring-curie-5h2mx4` (PR #4).
 | `330a9aa` | **Code**: original-path reconstruction for detecting earlier tampering (no schema change) |
 | `de624a6` | Documentation |
 | `1760b57` | **Code**: Temporary area moved to `Q-MAP_DATA/Temporary/` (OD-8), schema **migration 7**, safe transition; Workbench roadmap stage numbers per Blueprint v1.2 |
-| later commits | Documentation only (this report, guides, decision log, register, architecture) |
+| `fb19fb0` | **Code**: Workbench dates and calendar, request states, Open Output Folder, source-profile naming standard |
+| later commits | Documentation only (this report, guides, decision log, register, architecture, conventions) |
 
 **Four kinds of evidence, kept separate:**
 
@@ -35,12 +36,14 @@ Status words: **Passed**, **Failed**, **Skipped**, **Not run**, **Blocked**, **N
 | `832b788` | Python 3.11, no tkinter | as above | 613 passed, 62 skipped, 0 failed |
 | `330a9aa` | Python 3.12.3, Tk 8.6, Xvfb, GUI tests required | as above | 704 passed, 0 failed, 0 skipped |
 | `330a9aa` | Python 3.11, no tkinter | as above | 616 passed, 62 skipped, 0 failed |
-| **`1760b57` (latest code)** | Python 3.12.3, Tk 8.6, Xvfb, GUI tests required | as above | **712 passed**, 0 failed, 0 skipped (175 GUI) |
-| **`1760b57`** | Python 3.11, no tkinter | as above | **624 passed, 62 skipped** (window tests skip without tkinter, by design), 0 failed |
+| `1760b57` | Python 3.12.3, Tk 8.6, Xvfb, GUI tests required | as above | 712 passed, 0 failed, 0 skipped |
+| `1760b57` | Python 3.11, no tkinter | as above | 624 passed, 62 skipped, 0 failed |
+| **`fb19fb0` (latest code)** | Python 3.12.3, Tk 8.6, Xvfb, GUI tests required | as above | **797 passed**, 0 failed, 0 skipped (191 GUI) |
+| **`fb19fb0`** | Python 3.11, no tkinter | as above | **693 passed, 78 skipped** (window tests skip without tkinter, by design), 0 failed |
 
 New failures introduced: none. Pre-existing failures: none.
 
-**New tests in PR #4: 98.**
+**New tests in PR #4: 183** (98 before the enhancement, plus 85 for it: `test_user_dates.py` 39, `test_workbench_dates_and_runs.py` 17, `test_workbench_dates_and_output.py` 16, `test_profile_library.py` 13).
 
 | File | Tests | Covers |
 |---|---|---|
@@ -93,7 +96,7 @@ on a virtual screen (Linux), clicking the same buttons a person would. Where pos
 Python, independently of Q-MAP code: rows against the source CSV, weekly bars, statistics. Results:
 `acceptance_results_01_Nov_26.json`; screenshots in `screenshots/`.
 
-Re-run on code commits `832b788`, `330a9aa` and `1760b57`: same 13 passed, 1 not applicable. On `1760b57` the Temporary move landed in `Temporary/Cleaned_Data/...` and no `Temporary_Data` folder was created. The evidence files in `evidence_01_Nov_26/` are from the original run, so they still show `Temporary_Data/`; that was correct for the code at the time.
+Re-run on code commits `832b788`, `330a9aa`, `1760b57` and `fb19fb0`: same 13 passed, 1 not applicable. On `fb19fb0` scenario 11 shows "NO DATA IN THIS PERIOD" (the walkthrough's check was updated to accept the new, more precise wording). On `1760b57` the Temporary move landed in `Temporary/Cleaned_Data/...` and no `Temporary_Data` folder was created. The evidence files in `evidence_01_Nov_26/` are from the original run, so they still show `Temporary_Data/`; that was correct for the code at the time.
 
 **Limitations.**
 
@@ -168,3 +171,48 @@ All six are refused at schema 6.
 changed together twice without an audit action, ending Permanent at a different path. Before `330a9aa`, recovery
 reported nothing. It now rebuilds the original path from immutable lineage records and reports the unexplained path.
 The limits of this detection are in `docs/Data_Registry_and_Schema.md`, section "Limits of detecting earlier tampering".
+
+
+## 7. Enhancement: Workbench dates, Open Output Folder, profile naming (01-Nov-26)
+
+**Implemented and tested automatically.** The local results are in section 1; see the PR description for CI.
+
+| Requirement | Evidence (automated) |
+|---|---|
+| Calendar on both date fields | `test_workbench_dates_and_output.py`: both boxes have a calendar; pick, clear and change month; typing still works afterwards |
+| Four formats, DDMMYY, two-digit-year rule | `test_user_dates.py`: all four formats; six digits always DDMMYY; Unix timestamps refused; rule 00-68 / 69-99 for every format and equal to the profiles' pivot; independent of the computer's language |
+| Invalid / impossible / reversed / blank | `test_user_dates.py`, `test_workbench_dates_and_runs.py` |
+| Valid period without bars versus invalid input | `test_workbench_dates_and_runs.py` (after, before and inside the data on a weekend); window test |
+| No run records or outputs for refused requests | Each refused case checks that there are no `runs` rows and no `Research_Reports` folder |
+| Open Output Folder | Window tests: disabled before any run; exact recorded folder after a run; read-only copyable path; read from the registry after a restart; failed or refused runs do not replace it; missing folder; operating-system refusal |
+| Profile standard and compatibility | `test_profile_library.py`: 14 IDs follow the rule; file name equals ID; display names match format, structure, Net Volume and fixed timeframe; Standard versus Example; each example reads like its standard; each standard reads like the verified sample-file profile; all earlier names resolve; glossary covers every token; user documents use no retired name; copies are labelled as yours; re-loading under a new name keeps the old dataset |
+
+**Awaiting manual verification by the Project Owner (Windows, IDLE).** This is the short guide. Use the test folders
+from the acceptance procedure.
+
+1. **Database Manager → Data Management → Source profile list.**
+   - Entries read like "Headered CSV: time (DD-MM-YY), … [Standard] (csv_hdr_ddmmyy v1)".
+   - The Standard profiles come first, then the three "Example - …" profiles.
+   - Selecting one shows "Kind of profile", "Profile ID" and "Earlier names".
+2. **Load `csv headers std.csv`** with `csv_hdr_ddmmyy` (Standard; type the exchange, symbol and 1D).
+   - **Expected:** accepted, 24 rows. This is the same result as with the earlier profile.
+3. **Analytical Workbench → Run an analysis.** Select the dataset.
+   - In **Start date**, type each of `07/10/26`, `07-10-26`, `07-Oct-26` and `071026` in turn.
+   - **Expected:** each time, "= 07-Oct-2026" appears next to the box.
+4. **Click Calendar...**, pick a day, then reopen it and press Clear.
+   - **Expected:** the box fills with a date like "15-Oct-26", then empties.
+5. **Type End date `31/02/26`.**
+   - **Expected:** a red "not a real calendar date: February 2026 has 28 days".
+   - **Run** → "INVALID DATE INPUT", and nothing is created in `Research_Reports`.
+6. **Start date `01-Jan-30`, End date empty** → Run.
+   - **Expected:** "NO DATA IN THIS PERIOD", showing the data's coverage. Nothing is created.
+7. **Clear both dates** → Run.
+   - **Expected:** "Completed".
+   - "Last run folder" shows the run's folder; you can select the path and copy it with Ctrl+C.
+   - **Open Output Folder** opens exactly that folder in File Explorer.
+8. **Close and reopen the Workbench.**
+   - **Expected:** the same folder is shown, and the button works.
+
+**Known limitations:**
+- The calendar is a small separate window; it closes when you pick a day, press Close or press Esc.
+- Month abbreviations are English (Jan … Dec) by design, independent of Windows' language.

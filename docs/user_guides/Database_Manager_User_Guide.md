@@ -22,6 +22,28 @@ The screen and its rules are unchanged from the first graphical version:
 3. **Options**: pick the **source profile** that describes the file layout (header row, date format, time zone,
    volume column ...). Q-MAP never guesses these. If the profile cannot read the exchange, symbol or timeframe from
    the file, type them.
+   - The list shows each profile's plain description first. For example: "Headered CSV: time (DD-MM-YY), open,
+     high, low, close, Volume, Net Volume   [Standard]   (csv_hdr_ddmmyy v1)".
+   - **Standard** profiles are recommended for routine use; each was checked against your sample files.
+   - **Example** profiles are for learning and testing. They read the exchange and symbol from the file name (for
+     example `NSE_NIFTY_1D.csv`), and each names the Standard profile to use instead.
+   - Your own profiles are shown as **My profile**.
+   - Profiles renamed under the naming standard keep working when asked for by their earlier names. Datasets loaded
+     before the rename are unaffected. See `docs/standards/Q-MAP_Naming_and_Reference_Conventions.md`.
+
+   | Your file | Standard profile |
+   |---|---|
+   | CSV with a header row, dates like 30-10-26 | `csv_hdr_ddmmyy` |
+   | CSV with a header row, ISO date-times with +05:30 | `csv_hdr_isodt` |
+   | CSV with a header row, Unix seconds | `csv_hdr_unixs` |
+   | CSV without a header row, ISO date-times | `csv_nohdr_isodt` |
+   | CSV without a header row, Unix seconds | `csv_nohdr_unixs` |
+   | Text with a header row, dates like 2026-10-30, daily | `txt_hdr_isodate` |
+   | Text without a header row, two identical volume columns, daily | `txt_nohdr_isodate_dupvol` |
+   | Excel with a header row, ISO date-times as text | `xlsx_hdr_isodt` |
+   | Excel without a header row, ISO date-times as text | `xlsx_nohdr_isodt` |
+   | Excel with a header row, real date cells | `xlsx_hdr_xldate` |
+   | Parquet with Date (no time zone), Open ... Volume, 1-minute | `parquet_hdr_naivedt` |
    - **Check files** tests everything and saves nothing.
    - **LOAD FILES INTO Q-MAP** stores the original, standardises it, validates it and registers the result.
 

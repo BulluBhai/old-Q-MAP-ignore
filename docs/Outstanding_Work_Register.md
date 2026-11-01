@@ -14,6 +14,9 @@ Updated 01-Nov-26, after reviewing Blueprint v1.2 (approved and adopted 1 Novemb
 | OD-5 | **Trading calendar** source (NSE holidays and session times) | v1.2 §8.4; needed to confirm complete days and periods | Start with an exchange holiday list file |
 | OD-6 | Should a load be able to go **straight to Temporary**? | Today every load is Permanent and must be moved afterwards | Yes: an option in Data Management |
 | OD-7 | Carry-over from PR #3: D3-15 (grey "Waiting" row) and the incomplete-day limitation | Unchanged by this work | As in PR #3 |
+| OD-12 | Which record is the single issuer of `TC`/`OBV`/`RQT`/`DCN`/`CR`/`TR` numbers? | Issuing them from the repository could collide with the Excel master register | The Excel register issues them; repository entries quote them |
+| OD-13 | Finalise (or drop) the proposed codes `C`/`T`/`E`/`P`, `ISO`/`UNI`/`STD`, `DMY`/`YMD` | They are recorded as proposals only; `STD` is not precise enough to drive parsing | Use them only as separate register attributes, define `STD` narrowly, and keep profile IDs on the descriptive tokens |
+| OD-14 | Approve the source-profile naming standard (IDs, display names, statuses, earlier-name aliases) | Introduced in PR #4 | Approve as documented |
 | OD-10 | Align the **other §9.1 folder names** with v1.2's proposal? Data: `Permanent/` (today `Cleaned_Data/` + `Timeframe_Data/`), `Reference_Data/` (today `Reference_Files/`). Output: `Database_Reports/`, `Analytical_Results/` (today `Ingestion/`, `Data_Management/`; `Research_Reports/` already matches). | v1.2 calls them "proposals, not a demand" and asks for the smallest safe migration. A data-folder rename touches every stored path, recovery and the naming rule, but could reuse the OD-8 transition pattern. Output folders hold no registered data. | Keep the data folders as they are. Rename output folders for NEW runs only if you want strict alignment. |
 
 **Resolved:**

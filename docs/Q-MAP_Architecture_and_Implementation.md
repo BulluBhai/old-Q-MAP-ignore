@@ -138,6 +138,14 @@ The first analysis is `dataset_summary`, a descriptive utility (not a methodolog
 **GUIs**: two applications on one shell, a new Datasets and Storage screen, a new Run an analysis screen, and a module
 catalogue split by application.
 
+**Enhancement (01-Nov-26, decisions D4-16 to D4-21):**
+- Workbench calendar date boxes, and typed dates in four formats with a fixed two-digit-year rule (`qmap/core/dates.py`).
+- Requests classified as invalid input / no eligible data / not ready / ready before anything runs.
+- **Open Output Folder** for the latest completed run.
+- The source-profile naming standard: 11 Standard and 3 Example profiles, earlier names still recognised, reading rules
+  unchanged.
+- Conventions document: `docs/standards/Q-MAP_Naming_and_Reference_Conventions.md`.
+
 ## 5. Folder and entry-point guide
 
 | To... | Open | Then |
@@ -271,4 +279,5 @@ Consistent with v1.2:
 | 5. Data Registry and schema | [Data_Registry_and_Schema.md](Data_Registry_and_Schema.md) |
 | 6. Testing report and acceptance checklist | [acceptance_testing/Q-MAP_Testing_and_Acceptance_Report_01_Nov_26_160000.md](acceptance_testing/Q-MAP_Testing_and_Acceptance_Report_01_Nov_26_160000.md) |
 | 8. Outstanding work register | [Outstanding_Work_Register.md](Outstanding_Work_Register.md) |
-| Decisions | [decision_log.md](decision_log.md), entries D4-01 to D4-15 |
+| Naming and reference conventions | [standards/Q-MAP_Naming_and_Reference_Conventions.md](standards/Q-MAP_Naming_and_Reference_Conventions.md) |
+| Decisions | [decision_log.md](decision_log.md), entries D4-01 to D4-21 |
