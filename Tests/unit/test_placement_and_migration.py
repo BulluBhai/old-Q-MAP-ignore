@@ -92,16 +92,16 @@ def test_a_version_1_database_is_upgraded_in_place_and_keeps_its_data(tmp_path):
     path = tmp_path / "old.sqlite"
     _v1_database(path)
     db = open_database(path)
-    assert db.current_version() == LATEST_VERSION == 4
-    assert [r["version"] for r in db.query("SELECT version FROM schema_version ORDER BY version")] == [1, 2, 3, 4]
+    assert db.current_version() == LATEST_VERSION == 5
+    assert [r["version"] for r in db.query("SELECT version FROM schema_version ORDER BY version")] == [1, 2, 3, 4, 5]
     assert db.one("SELECT content_text FROM source_profiles")["content_text"] == "text"
     cols = {r["name"] for r in db.query("PRAGMA table_info(ingest_attempts)")}
     assert {"validation_settings_json", "config_fingerprint"} <= cols
     assert "config_fingerprint" in {r["name"] for r in db.query("PRAGMA table_info(datasets)")}
     with pytest.raises(sqlite3.IntegrityError):
         db.connection().execute("UPDATE source_profiles SET content_text='changed'")
-    assert open_database(path).current_version() == 4  # re-opening changes nothing
-    assert len(db.query("SELECT * FROM schema_version")) == 4
+    assert open_database(path).current_version() == 5  # re-opening changes nothing
+    assert len(db.query("SELECT * FROM schema_version")) == 5
 
 
 def test_foreign_keys_are_enforced_on_every_connection(tmp_path):
@@ -185,7 +185,7 @@ def test_a_version_2_registry_with_results_upgrades_and_keeps_every_record(tmp_p
 
 
 def test_applied_migrations_are_frozen():
-    """An applied migration must never be edited (add a new one instead). These hashes pin migrations 1-4."""
+    """An applied migration must never be edited (add a new one instead). These hashes pin migrations 1-5."""
     import hashlib
 
     pinned = {
@@ -193,6 +193,7 @@ def test_applied_migrations_are_frozen():
         2: "7e58647827776ffa218ee612b4b1d7bfdb7480bcc0dab226071af3d18042a27e",
         3: "79bb18bbcf3fcb42c554a533fefae9bbb15a98079c57eaa09a4250a59c396e0e",
         4: "3dc564ae6db0c51277e9c51ff62433ee6816cbd8d76118f7a07f303dbcf02253",
+        5: "43938f6918a9ebe3e5c36ebb7d3970b553eba5334cbd4904cfff0d668f969932",  # storage classes (pinned on submission)
     }
     actual = {v: hashlib.sha256(sql.encode("utf-8")).hexdigest() for v, _, sql in MIGRATIONS}
     assert [v for v, _, _ in MIGRATIONS] == list(range(1, len(MIGRATIONS) + 1))  # numbered without gaps

@@ -29,13 +29,15 @@ DATA_SUBFOLDERS = (
     "Raw_Data/_incoming",
     "Raw_Data/_quarantine",
     "Cleaned_Data/_incoming",
-    "Timeframe_Data",
+    "Timeframe_Data/_incoming",
+    "Temporary_Data",
     "Reference_Files",
     "Feature_Store",
     "Research_Repository",
     "Metadata",
 )
 OUTPUT_SUBFOLDERS = ("Logs",)
+TEMPORARY_FOLDER = "Temporary_Data"
 
 
 def _default_code_root() -> Path:
@@ -101,6 +103,20 @@ class Settings:
     @property
     def cleaned_incoming_dir(self) -> Path:
         return self.cleaned_dir / "_incoming"
+
+    @property
+    def timeframe_dir(self) -> Path:
+        """Derived timeframes (weekly, monthly, quarterly, yearly) built from registered daily datasets."""
+        return self.data_root / "Timeframe_Data"
+
+    @property
+    def timeframe_incoming_dir(self) -> Path:
+        return self.timeframe_dir / "_incoming"
+
+    @property
+    def temporary_dir(self) -> Path:
+        """Datasets classified TEMPORARY live here, under their permanent relative path (never auto-deleted)."""
+        return self.data_root / TEMPORARY_FOLDER
 
     @property
     def logs_dir(self) -> Path:

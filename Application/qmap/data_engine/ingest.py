@@ -405,8 +405,8 @@ def _record_reuse(run: Run, receipt: Receipt, original, pv: str, vsettings: dict
             validation_settings_json=original["validation_settings_json"],
             config_fingerprint=_attempt_fingerprint(original), created_at=utc_now_iso())
         rows = conn.execute(
-            "SELECT dataset_id, status, superseded_by_dataset_id FROM datasets WHERE created_by_attempt_id = ? "
-            "ORDER BY dataset_id", (original["attempt_id"],)).fetchall()
+            "SELECT dataset_id, status, superseded_by_dataset_id, file_deleted_at FROM datasets "
+            "WHERE created_by_attempt_id = ? AND layer = 'cleaned' ORDER BY dataset_id", (original["attempt_id"],)).fetchall()
     ids = [r["dataset_id"] for r in rows]
     msg = (f"Already processed under {pv} with the same validation settings ({_attempt_fingerprint(original)}); "
            f"existing dataset(s) {ids} reused.")
@@ -414,10 +414,15 @@ def _record_reuse(run: Run, receipt: Receipt, original, pv: str, vsettings: dict
     if superseded:
         msg += (f" Note: dataset(s) {', '.join(superseded)} have since been SUPERSEDED by a later processing version; "
                 "they are this version's result but not the active dataset(s).")
+    deleted = [f"{r['dataset_id']} (on {r['file_deleted_at'][:10]})" for r in rows if r["file_deleted_at"]]
+    if deleted:
+        msg += (f" WARNING: the stored file of dataset(s) {', '.join(deleted)} was deleted by the user (Temporary "
+                "data); the registry record remains but the data are no longer available. Loading the same file "
+                "unchanged does not re-create it; give the profile a new profile_version to process it again.")
     diff = _settings_difference(original["validation_settings_json"], vsettings)
     if diff:
         msg += f" Note: report-only settings differ ({diff}); the dataset and its flags are unaffected."
-    (log.warning if superseded or diff else log.info)(
+    (log.warning if superseded or diff or deleted else log.info)(
         "Reused: raw dataset %s already processed under %s (attempt %s); no new dataset. %s",
         original["raw_dataset_id"], pv, original["attempt_id"], msg)
     return IngestResult("reused", msg, receipt.event_id, original["raw_dataset_id"], attempt_id, ids, [], None,

@@ -1,0 +1,218 @@
+"""How every analysis is described, checked and run, so that each run is reproducible.
+
+An analysis declares what it is (`AnalysisSpec`): identifier, version, the data it needs (`DataRequirement`), its
+parameters and how many datasets it takes. `run_analysis` then always does the same things in the same order:
+
+1. check the parameters and the readiness of every selected dataset - nothing starts if anything is missing;
+2. reserve a unique Run ID and a run folder in Q-MAP_OUTPUT/Research_Reports (never overwriting an earlier run);
+3. record the input datasets in the registry (`run_inputs`);
+4. execute the analysis, which writes its outputs only inside the run folder;
+5. write `Run_Metadata_<dd_mmm_yy_hhmmss>.json` (analysis and code versions, parameters, every input dataset with
+   its checksum, processing version, settings fingerprint and lineage, readiness warnings, outputs) and close the run
+   with its manifest.
+
+The analytical engine only READS prepared, registered data. It never imports, standardises or registers source files;
+when data are missing it says what to prepare in Database Manager.
+"""
+
+from __future__ import annotations
+
+import json
+from dataclasses import asdict, dataclass, field
+from datetime import date, datetime, timezone
+from pathlib import Path
+from typing import Callable
+
+from .. import CLEANING_CODE_VERSION, __version__
+from ..catalog import DataRequirement, ReadinessReport, check_readiness, get_dataset, provenance
+from ..core.config import Settings
+from ..core.runs import run_context
+from ..storage.db import Database
+from ..storage.files import atomic_write_bytes
+
+OUTPUT_AREA = "Research_Reports"
+AVAILABLE, PLANNED = "available", "planned"
+
+
+def file_stamp(moment: datetime | None = None) -> str:
+    """dd_mmm_yy_hhmmss suffix for output file names (local time of the person running it)."""
+    return (moment or datetime.now()).strftime("%d_%b_%y_%H%M%S")
+
+
+@dataclass(frozen=True)
+class Parameter:
+    key: str
+    label: str
+    kind: str  # date | int
+    required: bool = False
+    default: object = None
+    help: str = ""
+    minimum: int | None = None
+
+
+@dataclass
+class RunContext:
+    """What an executing analysis may use."""
+
+    settings: Settings
+    db: Database
+    run_id: str
+    run_dir: Path
+    dataset_ids: list[int]
+    params: dict
+    stamp: str
+    log: Callable[[str], None]
+
+    def output(self, name: str) -> Path:
+        return self.run_dir / name
+
+
+@dataclass
+class AnalysisSpec:
+    analysis_id: str
+    name: str
+    version: int
+    description: str
+    run_prefix: str  # Run ID prefix, e.g. DSUM -> DSUM_20261101_101500
+    requirement: DataRequirement
+    execute: Callable[[RunContext], list[Path]]
+    parameters: tuple[Parameter, ...] = ()
+    min_datasets: int = 1
+    max_datasets: int = 50
+    kind_note: str = ""  # what kind of result this is, shown to the user (e.g. "descriptive statistics only")
+
+
+@dataclass
+class AnalysisReadiness:
+    ready: bool
+    problems: list[str] = field(default_factory=list)  # parameter / selection problems
+    reports: list[ReadinessReport] = field(default_factory=list)
+    params: dict = field(default_factory=dict)  # cleaned parameter values
+
+    @property
+    def warnings(self) -> list[str]:
+        return [f"{r.label}: {w.detail}" for r in self.reports for w in r.warnings]
+
+
+@dataclass
+class AnalysisRunResult:
+    outcome: str  # completed | blocked | failed
+    message: str
+    run_id: str | None = None
+    run_dir: Path | None = None
+    outputs: list[Path] = field(default_factory=list)
+    metadata_path: Path | None = None
+    readiness: AnalysisReadiness | None = None
+
+    @property
+    def ok(self) -> bool:
+        return self.outcome == "completed"
+
+
+def _parse_param(p: Parameter, raw) -> tuple[object, str | None]:
+    text = "" if raw is None else str(raw).strip()
+    if text == "":
+        if p.required:
+            return None, f"{p.label} is required."
+        return p.default, None
+    if p.kind == "date":
+        if isinstance(raw, date):
+            return raw, None
+        for fmt in ("%d-%b-%y", "%d-%b-%Y", "%d %b %y", "%d %b %Y", "%Y-%m-%d"):
+            try:
+                return datetime.strptime(text, fmt).date(), None
+            except ValueError:
+                continue
+        return None, f"{p.label}: '{text}' is not a date such as 01-Jan-24."
+    if p.kind == "int":
+        try:
+            value = int(text)
+        except ValueError:
+            return None, f"{p.label}: '{text}' is not a whole number."
+        if p.minimum is not None and value < p.minimum:
+            return None, f"{p.label} must be at least {p.minimum}."
+        return value, None
+    return text, None
+
+
+def check_analysis(settings: Settings, db: Database, spec: AnalysisSpec, dataset_ids: list[int], raw_params: dict,
+                   *, verify_checksum: bool = True) -> AnalysisReadiness:
+    """Parameters + selection + readiness of every dataset. Nothing is written."""
+    res = AnalysisReadiness(ready=False)
+    for p in spec.parameters:
+        value, problem = _parse_param(p, raw_params.get(p.key))
+        res.params[p.key] = value
+        if problem:
+            res.problems.append(problem)
+    start, end = res.params.get("date_from"), res.params.get("date_to")
+    if start and end and start > end:
+        res.problems.append("The start date is after the end date.")
+    ids = list(dict.fromkeys(int(i) for i in dataset_ids))
+    if len(ids) < spec.min_datasets:
+        res.problems.append(f"Select at least {spec.min_datasets} dataset(s).")
+    if len(ids) > spec.max_datasets:
+        res.problems.append(f"Select at most {spec.max_datasets} datasets.")
+    req = spec.requirement
+    if start or end:
+        req = DataRequirement(**{**asdict(req), "date_from": start, "date_to": end})
+    for i in ids:
+        res.reports.append(check_readiness(settings, db, i, req, verify_checksum=verify_checksum))
+    res.ready = not res.problems and all(r.ready for r in res.reports) and bool(ids)
+    return res
+
+
+def _dataset_record(db: Database, dataset_id: int, report: ReadinessReport) -> dict:
+    d = get_dataset(db, dataset_id)
+    return {"dataset_id": dataset_id, "instrument": d.instrument, "timeframe": d.timeframe, "layer": d.layer,
+            "sha256": d.sha256, "processing_version": d.processing_version, "config_fingerprint": d.config_fingerprint,
+            "canonical_schema_version": d.canonical_schema_version, "storage_class": d.storage_class,
+            "relative_path": d.relative_path, "date_from": d.date_from, "date_to": d.date_to, "row_count": d.row_count,
+            "rows_in_window": report.rows_in_window, "validation_status": d.validation_status,
+            "validation_warnings": d.warnings, "source_files": d.source_files, "lineage": provenance(db, dataset_id)}
+
+
+def run_analysis(settings: Settings, db: Database, spec: AnalysisSpec, dataset_ids: list[int], raw_params: dict, *,
+                 log: Callable[[str], None] | None = None, now: datetime | None = None) -> AnalysisRunResult:
+    say = log or (lambda _m: None)
+    say(f"Checking readiness of {len(dataset_ids)} dataset(s) for {spec.name}...")
+    readiness = check_analysis(settings, db, spec, dataset_ids, raw_params)
+    if not readiness.ready:
+        reasons = readiness.problems + [f"{r.label}: {f.detail}" for r in readiness.reports for f in r.failures]
+        say("Not started: " + " | ".join(reasons))
+        return AnalysisRunResult("blocked", "The analysis cannot run reliably: " + " ".join(reasons), readiness=readiness)
+    for w in readiness.warnings:
+        say(f"Warning: {w}")
+    ids = [r.dataset_id for r in readiness.reports]
+    params = {"analysis_id": spec.analysis_id, "analysis_version": spec.version, "dataset_ids": ids,
+              "parameters": {k: (v.isoformat() if isinstance(v, date) else v) for k, v in readiness.params.items()}}
+    stamp = file_stamp()
+    run_id = run_dir = None
+    try:
+        with run_context(settings, db, spec.run_prefix, area=OUTPUT_AREA, module_name=spec.name, params=params,
+                         now=now) as run:
+            run_id, run_dir = run.run_id, run.dir
+            say(f"Run {run.run_id} started; results go to {run.dir}")
+            with db.transaction() as conn:
+                conn.executemany("INSERT OR IGNORE INTO run_inputs(run_id, dataset_id) VALUES (?, ?)",
+                                 [(run.run_id, i) for i in ids])
+            ctx = RunContext(settings, db, run.run_id, run.dir, ids, readiness.params, stamp,
+                             lambda m: (run.logger.info(m), say(m)))
+            outputs = list(spec.execute(ctx))
+            meta = {
+                "run_id": run.run_id, "analysis_id": spec.analysis_id, "analysis_name": spec.name,
+                "analysis_version": spec.version, "result_kind": spec.kind_note,
+                "qmap_version": __version__, "cleaning_code_version": CLEANING_CODE_VERSION,
+                "created_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "parameters": params["parameters"], "readiness_warnings": readiness.warnings,
+                "input_datasets": [_dataset_record(db, r.dataset_id, r) for r in readiness.reports],
+                "outputs": [p.name for p in outputs],
+            }
+            meta_path = run.dir / f"Run_Metadata_{stamp}.json"
+            atomic_write_bytes(meta_path, json.dumps(meta, indent=2, default=str, sort_keys=True).encode("utf-8"))
+    except Exception as exc:
+        say(f"FAILED: {type(exc).__name__}: {exc}")
+        return AnalysisRunResult("failed", f"The analysis failed ({type(exc).__name__}: {exc}). The run is recorded as "
+                                 "failed; see its log.", run_id, run_dir, readiness=readiness)
+    say(f"Run {run_id} completed: {len(outputs)} output file(s).")
+    return AnalysisRunResult("completed", f"Completed. Results are in {run_dir}", run_id, run_dir, outputs, meta_path,
+                             readiness)

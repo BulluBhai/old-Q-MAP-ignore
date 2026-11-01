@@ -18,6 +18,11 @@ second, independent safeguard for the moment a run is being created and for file
 |                                                                | registration is re-checked first     |
 | Run left `running`                                             | Mark failed (interrupted)            |
 | Registered file missing / unreadable / wrong checksum          | REPORT (verify re-hashes everything) |
+| Storage action (move / delete) left `started`                  | Finish or undo it (storage_class.py) |
+| Derived-timeframe file / temp file not registered              | Delete (reproducible from its source)|
+| Unregistered file in Temporary_Data                            | REPORT (never deleted)               |
+
+A dataset whose file the user deleted (Temporary data, `file_deleted_at`) is not reported as missing.
 """
 
 from __future__ import annotations
@@ -34,6 +39,7 @@ from ..data_engine.format_detect import DetectedFormat
 from .db import Database
 from .files import make_read_only, safe_remove, sha256_file
 from .registry import EventAlreadyFinished, _commit_registration, _finish_event
+from .storage_class import is_open_destination, open_destinations, recover_storage_actions
 
 log = get_logger("recovery")
 
@@ -49,12 +55,14 @@ class RecoveryReport:
     checksum_mismatches: list[str] = field(default_factory=list)
     unreadable_files: list[str] = field(default_factory=list)
     interrupted_runs: list[str] = field(default_factory=list)
+    storage_actions_closed: list[int] = field(default_factory=list)
+    unregistered_temporary_files: list[str] = field(default_factory=list)
     problems: list[str] = field(default_factory=list)  # anything recovery could not do; nothing is hidden
 
     @property
     def needs_attention(self) -> bool:
         return bool(self.orphan_raw_files or self.missing_files or self.checksum_mismatches
-                    or self.unreadable_files or self.problems)
+                    or self.unreadable_files or self.unregistered_temporary_files or self.problems)
 
     @property
     def has_actions(self) -> bool:
@@ -188,9 +196,14 @@ def recover_incomplete(settings: Settings, db: Database, *, stale_minutes: int |
             if deletable and safe_remove(tmp):
                 report.deleted_temp_files.append(tmp.name)
 
-    # --- stray temporary cleaned files ---------------------------------------
-    if settings.cleaned_incoming_dir.exists():
-        for tmp in list(settings.cleaned_incoming_dir.iterdir()):
+    # --- storage actions (Permanent/Temporary moves and deletions) left unfinished -------------
+    recover_storage_actions(settings, db, live.is_live, report)
+
+    # --- stray temporary managed files (names start with the Run ID of the run that owns them) ----------
+    for incoming in (settings.cleaned_incoming_dir, settings.timeframe_incoming_dir, settings.temporary_dir / "_incoming"):
+        if not incoming.exists():
+            continue
+        for tmp in list(incoming.iterdir()):
             if not tmp.is_file() or not _cleaned_safe_to_delete(tmp, live, cutoff_epoch):
                 continue
             if safe_remove(tmp):
@@ -206,24 +219,33 @@ def recover_incomplete(settings: Settings, db: Database, *, stale_minutes: int |
             report.orphan_raw_files.append(rel)
             log.warning("Orphan raw file (no database record): %s. Not deleted; re-ingest the original to adopt it.", rel)
 
-    # --- orphan cleaned files (reproducible, so removed when provably abandoned) --------
-    for path in _files_under(settings.cleaned_dir):
+    # --- orphan cleaned / derived-timeframe files (reproducible, so removed when provably abandoned) --------
+    moving_to = open_destinations(db)
+    for path in [*_files_under(settings.cleaned_dir), *_files_under(settings.timeframe_dir)]:
         rel = settings.to_relative(path)
-        if rel in registered or not delete_cleaned_orphans:
+        if rel in registered or rel in moving_to or not delete_cleaned_orphans:
             continue
         if not _cleaned_safe_to_delete(path, live, cutoff_epoch):
             continue
-        # re-check at the moment of deletion: never delete a file that has just been registered
-        if db.one("SELECT 1 FROM datasets WHERE relative_path = ?", (rel,)) is not None:
+        # re-check at the moment of deletion: never delete a file that has just been registered or is being moved here
+        if db.one("SELECT 1 FROM datasets WHERE relative_path = ?", (rel,)) is not None or is_open_destination(db, rel):
             continue
         if safe_remove(path):
             report.deleted_cleaned_orphans.append(rel)
-            log.warning("Removed orphan cleaned file (unregistered, its run is not live; reproducible from raw): %s", rel)
+            log.warning("Removed orphan managed file (unregistered, its run is not live; reproducible from its source): %s",
+                        rel)
         elif path.exists():
-            report.problems.append(f"could not remove orphan cleaned file {rel}")
+            report.problems.append(f"could not remove orphan managed file {rel}")
 
-    # --- registered files that are missing ---------------------------------
-    for row in db.query("SELECT relative_path FROM datasets"):
+    # --- unregistered files in the Temporary area (report only: never deleted automatically) -------------
+    for path in _files_under(settings.temporary_dir):
+        rel = settings.to_relative(path)
+        if rel not in registered and rel not in moving_to:
+            report.unregistered_temporary_files.append(rel)
+            log.warning("Unregistered file in Temporary_Data (not deleted): %s", rel)
+
+    # --- registered files that are missing (a file the user deleted on purpose is not missing) ----------
+    for row in db.query("SELECT relative_path FROM datasets WHERE file_deleted_at IS NULL"):
         if not settings.data_path(row["relative_path"]).is_file():
             report.missing_files.append(row["relative_path"])
             log.error("Registered file is missing: %s", row["relative_path"])
@@ -245,7 +267,7 @@ def verify_registry(settings: Settings, db: Database) -> RecoveryReport:
     Reports problems; never repairs a registered file.
     """
     report = recover_incomplete(settings, db, delete_cleaned_orphans=False)
-    for row in db.query("SELECT relative_path, sha256 FROM datasets"):
+    for row in db.query("SELECT relative_path, sha256 FROM datasets WHERE file_deleted_at IS NULL"):
         path = settings.data_path(row["relative_path"])
         if not path.is_file():
             continue  # already listed as missing
