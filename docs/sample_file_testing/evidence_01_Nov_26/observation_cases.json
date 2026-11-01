@@ -1,0 +1,404 @@
+[
+  {
+    "case": "A1",
+    "what": "Filename pattern, name 'NSE_NIFTY, 1(1).csv' (renamed copy of file 9)",
+    "file": "NSE_NIFTY, 1(1).csv",
+    "profile": "example_csv_iso_offset",
+    "request": {
+      "timeframe": "5m"
+    },
+    "window_boxes_enabled": {
+      "exchange": false,
+      "symbol": false,
+      "timeframe": true
+    },
+    "outcome": "would_be_rejected",
+    "rows_read": 210,
+    "shown_to_user": "[PROBLEM] Exchange, symbol or timeframe is missing or not valid\n    What it means: Q-MAP needs to know exactly which instrument and timeframe the file is for, and will not guess.\n    Details: The file name 'NSE_NIFTY, 1(1).csv' does not fit this profile's file-name pattern '^(?P<exchange>[A-Za-z]+)_(?P<symbol>[A-Za-z0-9&]+)_', so the exchange cannot be read from it. This profile reads the exchange only from the file name; a value typed when loading is not used.  What to do: Rename the file so that it fits the pattern, or use a profile that asks for the exchange and symbol (exchange_from and symbol_from = \"ingest\").\n    What to do: Follow the advice under Details. Depending on the profile: type the value in section 3, rename the file to fit the profile's file-name pattern, or choose a profile that asks you for it."
+  },
+  {
+    "case": "A2",
+    "what": "Filename pattern, original name of file 9",
+    "file": "xls headers iso.csv",
+    "profile": "example_csv_iso_offset",
+    "request": {
+      "timeframe": "5m"
+    },
+    "window_boxes_enabled": {
+      "exchange": false,
+      "symbol": false,
+      "timeframe": true
+    },
+    "outcome": "would_be_rejected",
+    "rows_read": 210,
+    "shown_to_user": "[PROBLEM] Exchange, symbol or timeframe is missing or not valid\n    What it means: Q-MAP needs to know exactly which instrument and timeframe the file is for, and will not guess.\n    Details: The file name 'xls headers iso.csv' does not fit this profile's file-name pattern '^(?P<exchange>[A-Za-z]+)_(?P<symbol>[A-Za-z0-9&]+)_', so the exchange cannot be read from it. This profile reads the exchange only from the file name; a value typed when loading is not used.  What to do: Rename the file so that it fits the pattern, or use a profile that asks for the exchange and symbol (exchange_from and symbol_from = \"ingest\").\n    What to do: Follow the advice under Details. Depending on the profile: type the value in section 3, rename the file to fit the profile's file-name pattern, or choose a profile that asks you for it."
+  },
+  {
+    "case": "A3",
+    "what": "Filename pattern, a name that matches ('NSE_NIFTY_5m.csv', copy of file 9)",
+    "file": "NSE_NIFTY_5m.csv",
+    "profile": "example_csv_iso_offset",
+    "request": {
+      "timeframe": "5m"
+    },
+    "window_boxes_enabled": {
+      "exchange": false,
+      "symbol": false,
+      "timeframe": true
+    },
+    "outcome": "would_be_accepted",
+    "rows_read": 210,
+    "shown_to_user": "[NOTE] Some trading days are incomplete\n    What it means: Some days have fewer bars than usual.\n    Details: Sessions with fewer bars than the usual 71: 2026-10-27: 67/71 bars\n    What to do: This is normal for the first and last day of an export."
+  },
+  {
+    "case": "A4",
+    "what": "Profile asks for identity, none typed",
+    "file": "xls headers iso.csv",
+    "profile": "csv_headers_iso_offset",
+    "request": {
+      "timeframe": "5m"
+    },
+    "window_boxes_enabled": {
+      "exchange": true,
+      "symbol": true,
+      "timeframe": true
+    },
+    "outcome": "would_be_rejected",
+    "rows_read": 210,
+    "shown_to_user": "[PROBLEM] Exchange, symbol or timeframe is missing or not valid\n    What it means: Q-MAP needs to know exactly which instrument and timeframe the file is for, and will not guess.\n    Details: The profile takes the exchange from the ingest request, but none was supplied.  What to do: Supply the exchange when ingesting. Q-MAP never guesses instrument identity.\n    What to do: Follow the advice under Details. Depending on the profile: type the value in section 3, rename the file to fit the profile's file-name pattern, or choose a profile that asks you for it."
+  },
+  {
+    "case": "A5",
+    "what": "Profile asks for identity, invalid values typed ('NSE 1', 'NIFTY 50')",
+    "file": "xls headers iso.csv",
+    "profile": "csv_headers_iso_offset",
+    "request": {
+      "exchange": "NSE 1",
+      "symbol": "NIFTY 50",
+      "timeframe": "5m"
+    },
+    "window_boxes_enabled": {
+      "exchange": true,
+      "symbol": true,
+      "timeframe": true
+    },
+    "outcome": "would_be_rejected",
+    "rows_read": 210,
+    "shown_to_user": "[PROBLEM] Exchange, symbol or timeframe is missing or not valid\n    What it means: Q-MAP needs to know exactly which instrument and timeframe the file is for, and will not guess.\n    Details: The exchange code 'NSE 1' is not valid (letters, digits and underscore only).\n    What to do: Follow the advice under Details. Depending on the profile: type the value in section 3, rename the file to fit the profile's file-name pattern, or choose a profile that asks you for it."
+  },
+  {
+    "case": "A6",
+    "what": "Filename pattern, values typed anyway (window disables the boxes; checking the engine)",
+    "file": "NSE_NIFTY, 1(1).csv",
+    "profile": "example_csv_iso_offset",
+    "request": {
+      "exchange": "NSE",
+      "symbol": "NIFTY",
+      "timeframe": "5m"
+    },
+    "window_boxes_enabled": {
+      "exchange": false,
+      "symbol": false,
+      "timeframe": true
+    },
+    "outcome": "would_be_rejected",
+    "rows_read": 210,
+    "shown_to_user": "[PROBLEM] Exchange, symbol or timeframe is missing or not valid\n    What it means: Q-MAP needs to know exactly which instrument and timeframe the file is for, and will not guess.\n    Details: The file name 'NSE_NIFTY, 1(1).csv' does not fit this profile's file-name pattern '^(?P<exchange>[A-Za-z]+)_(?P<symbol>[A-Za-z0-9&]+)_', so the exchange cannot be read from it. This profile reads the exchange only from the file name; a value typed when loading is not used.  What to do: Rename the file so that it fits the pattern, or use a profile that asks for the exchange and symbol (exchange_from and symbol_from = \"ingest\").\n    What to do: Follow the advice under Details. Depending on the profile: type the value in section 3, rename the file to fit the profile's file-name pattern, or choose a profile that asks you for it."
+  },
+  {
+    "case": "B1",
+    "what": "Headerless file 4 with a HEADERED profile",
+    "file": "csv noheaders iso.csv",
+    "profile": "csv_headers_iso_offset",
+    "request": {
+      "exchange": "TEST",
+      "symbol": "B1",
+      "timeframe": "5m"
+    },
+    "window_boxes_enabled": {
+      "exchange": true,
+      "symbol": true,
+      "timeframe": true
+    },
+    "outcome": "would_be_rejected",
+    "rows_read": 209,
+    "shown_to_user": "[PROBLEM] A required column is missing\n    What it means: The profile expects columns (date, open, high, low, close) that are not in this file.\n    Details: Column 'time' for 'date' was not found. The first row of this file looks like data, not column names: ['2026-10-23T09:20:00+05:30', '22726.25', '22747.65', '22699.7'] ....  What to do: If the file has no header row, choose a profile with header = false that takes the columns by position (position = 0, 1, 2 ...). Otherwise fix the column name in the profile.\n    What to do: Choose the profile that matches this file, or edit the profile's column names."
+  },
+  {
+    "case": "B2",
+    "what": "Headerless file 4 with the example 'duplicated volume' profile (col 7 is Net Volume, not a copy)",
+    "file": "csv noheaders iso.csv",
+    "profile": "example_text_headerless_seven_columns",
+    "request": {
+      "exchange": "TEST",
+      "symbol": "B2"
+    },
+    "window_boxes_enabled": {
+      "exchange": true,
+      "symbol": true,
+      "timeframe": false
+    },
+    "outcome": "would_be_rejected",
+    "rows_read": 210,
+    "shown_to_user": "[PROBLEM] The volume columns are unclear\n    What it means: There are several volume-like columns, or two that disagree, and Q-MAP will not merge them.\n    Details: 203 issue(s); first: Duplicate volume columns differ: 5 = '7428682' but 6 = '-1100468'. They are not merged automatically. (source rows 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 (+193 more))\n    What to do: Say in the profile which column is volume (and which others to keep but not use).\n[NOTE] Some trading days are incomplete\n    What it means: Some days have fewer bars than usual.\n    Details: Sessions with fewer bars than the usual 71: 2026-10-27: 67/71 bars\n    What to do: This is normal for the first and last day of an export."
+  },
+  {
+    "case": "B3",
+    "what": "Headered file 9 with a HEADERLESS profile",
+    "file": "xls headers iso.csv",
+    "profile": "csv_noheaders_iso_offset",
+    "request": {
+      "exchange": "TEST",
+      "symbol": "B3",
+      "timeframe": "5m"
+    },
+    "window_boxes_enabled": {
+      "exchange": true,
+      "symbol": true,
+      "timeframe": true
+    },
+    "outcome": "would_be_rejected",
+    "rows_read": 211,
+    "shown_to_user": "[PROBLEM] Some dates or times could not be understood\n    What it means: The date format in the profile does not match what is in the file.\n    Details: Value 'time' is not an ISO 8601 date or timestamp (expected YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS[+HH:MM]). (source rows 1)\n    What to do: Look at the first rows in the preview and correct the date settings in the profile.\n[PROBLEM] A price or volume is not a number\n    What it means: A cell contains text where a number is expected.\n    Details: 5 issue(s); first: Open value 'open' is not a number. (source rows 1)\n    What to do: Fix those cells in the source file, or check the decimal/thousands settings in the profile.\n[NOTE] The first row looks like column names\n    What it means: The profile says this file has no header row, but row 1 contains words such as 'time' and 'open'. Row 1 was treated as data, as the profile says.\n    Details: Row 1 looks like column names ('time', 'open', 'high', 'low', 'close'), but the profile says the file has no header row. If it has one, choose a profile with header = true.\n    What to do: If the file has a header row, choose a profile with 'First row is a header: Yes'.\n[NOTE] Some trading days are incomplete\n    What it means: Some days have fewer bars than usual.\n    Details: Sessions with fewer bars than the usual 71: 2026-10-27: 67/71 bars\n    What to do: This is normal for the first and last day of an export."
+  },
+  {
+    "case": "C1",
+    "what": "Parquet without exchange/symbol (the observed E_INSTRUMENT_REQUIRED)",
+    "file": "ONESOURCE.parquet",
+    "profile": "example_parquet_naive_timestamp",
+    "request": {},
+    "window_boxes_enabled": {
+      "exchange": true,
+      "symbol": true,
+      "timeframe": false
+    },
+    "outcome": "would_be_rejected",
+    "rows_read": 39903,
+    "shown_to_user": "[PROBLEM] Exchange, symbol or timeframe is missing or not valid\n    What it means: Q-MAP needs to know exactly which instrument and timeframe the file is for, and will not guess.\n    Details: The profile takes the exchange from the ingest request, but none was supplied.  What to do: Supply the exchange when ingesting. Q-MAP never guesses instrument identity.\n    What to do: Follow the advice under Details. Depending on the profile: type the value in section 3, rename the file to fit the profile's file-name pattern, or choose a profile that asks you for it."
+  },
+  {
+    "case": "C2",
+    "what": "Parquet with exchange/symbol",
+    "file": "ONESOURCE.parquet",
+    "profile": "example_parquet_naive_timestamp",
+    "request": {
+      "exchange": "TEST",
+      "symbol": "C2"
+    },
+    "window_boxes_enabled": {
+      "exchange": true,
+      "symbol": true,
+      "timeframe": false
+    },
+    "outcome": "would_be_rejected",
+    "rows_read": 39903,
+    "shown_to_user": "[PROBLEM] Low price is higher than Open or Close\n    What it means: A bar cannot have its low above its open or close.\n    Details: 3 row(s): source rows 34187, 34188, 34191\n    What to do: These rows are wrong in the source; correct them there.\n[PROBLEM] Two or more rows have the same date/time\n    What it means: Each date/time may appear only once. Q-MAP will not choose between duplicates.\n    Details: 1500 row(s) share a timestamp: source rows 28501, 28502, 28503, 28504, 28505, 28506, 28507, 28508, 28509, 28510 (+1490 more)\n    What to do: Remove or correct the duplicates in the source.\n[NOTE] Rows were not in date order\n    What it means: Q-MAP stored a sorted copy and kept each row's original position.\n    Details: 2 out-of-order step(s) in the source\n    What to do: Nothing is lost. Check the source if the order matters to you.\n[NOTE] Some trading days are incomplete\n    What it means: Some days have fewer bars than usual.\n    Details: Sessions with fewer bars than the usual 375: 2025-10-21: 61/375 bars; 2025-11-08: 92/375 bars\n    What to do: This is normal for the first and last day of an export."
+  },
+  {
+    "case": "D1",
+    "what": "XLSX file 1 with a CSV profile",
+    "file": "csv headers iso.xlsx",
+    "profile": "csv_headers_iso_offset",
+    "request": {
+      "exchange": "TEST",
+      "symbol": "D1",
+      "timeframe": "5m"
+    },
+    "window_boxes_enabled": {
+      "exchange": true,
+      "symbol": true,
+      "timeframe": true
+    },
+    "outcome": "unreadable",
+    "rows_read": 0,
+    "shown_to_user": "[PROBLEM] The profile is for a different file type\n    What it means: This file is readable, but the chosen profile was written for another file type (for example a CSV profile for an Excel file).\n    Details: The profile expects a 'delimited_text' file but this file is 'xlsx'. Use the matching profile, or correct expected_format in the profile.\n    What to do: Choose a profile made for this file type (see 'File type' in the profile details)."
+  },
+  {
+    "case": "D2",
+    "what": "File 9 (named 'xls', really CSV) with an XLSX profile",
+    "file": "xls headers iso.csv",
+    "profile": "xlsx_headers_iso_offset",
+    "request": {
+      "exchange": "TEST",
+      "symbol": "D2",
+      "timeframe": "5m"
+    },
+    "window_boxes_enabled": {
+      "exchange": true,
+      "symbol": true,
+      "timeframe": true
+    },
+    "outcome": "unreadable",
+    "rows_read": 0,
+    "shown_to_user": "[PROBLEM] The profile is for a different file type\n    What it means: This file is readable, but the chosen profile was written for another file type (for example a CSV profile for an Excel file).\n    Details: The profile expects a 'xlsx' file but this file is 'delimited_text'. Use the matching profile, or correct expected_format in the profile.\n    What to do: Choose a profile made for this file type (see 'File type' in the profile details)."
+  },
+  {
+    "case": "D3",
+    "what": "XLSX file 1 renamed to .csv (copy) with an XLSX profile",
+    "file": "renamed_xlsx.csv",
+    "profile": "xlsx_headers_iso_offset",
+    "request": {
+      "exchange": "TEST",
+      "symbol": "D3",
+      "timeframe": "5m"
+    },
+    "window_boxes_enabled": {
+      "exchange": true,
+      "symbol": true,
+      "timeframe": true
+    },
+    "outcome": "would_be_accepted",
+    "rows_read": 210,
+    "shown_to_user": "[NOTE] File name ending does not match the contents\n    What it means: The file was read by what it really contains, not by its ending.\n    Details: The ending .csv does not match the contents (xlsx).\n    What to do: Rename the file with the correct ending to avoid confusion.\n[NOTE] Some trading days are incomplete\n    What it means: Some days have fewer bars than usual.\n    Details: Sessions with fewer bars than the usual 71: 2026-10-27: 67/71 bars\n    What to do: This is normal for the first and last day of an export."
+  },
+  {
+    "case": "E1",
+    "what": "5-minute file, no timeframe supplied",
+    "file": "xls headers iso.csv",
+    "profile": "csv_headers_iso_offset",
+    "request": {
+      "exchange": "TEST",
+      "symbol": "E1"
+    },
+    "window_boxes_enabled": {
+      "exchange": true,
+      "symbol": true,
+      "timeframe": true
+    },
+    "outcome": "would_be_rejected",
+    "rows_read": 210,
+    "shown_to_user": "[PROBLEM] Exchange, symbol or timeframe is missing or not valid\n    What it means: Q-MAP needs to know exactly which instrument and timeframe the file is for, and will not guess.\n    Details: The profile takes the timeframe from the ingest request, but none was supplied.  What to do: Supply the timeframe when ingesting (it is never inferred).\n    What to do: Follow the advice under Details. Depending on the profile: type the value in section 3, rename the file to fit the profile's file-name pattern, or choose a profile that asks you for it."
+  },
+  {
+    "case": "E2",
+    "what": "5-minute file declared 1m",
+    "file": "xls headers iso.csv",
+    "profile": "csv_headers_iso_offset",
+    "request": {
+      "exchange": "TEST",
+      "symbol": "E2",
+      "timeframe": "1m"
+    },
+    "window_boxes_enabled": {
+      "exchange": true,
+      "symbol": true,
+      "timeframe": true
+    },
+    "outcome": "would_be_accepted",
+    "rows_read": 210,
+    "shown_to_user": "[NOTE] Bar spacing does not match the timeframe\n    What it means: The gaps between bars differ from the profile's timeframe.\n    Details: Bars are typically 5 minute(s) apart but the profile declares 1m.\n    What to do: Check the timeframe you chose.\n[NOTE] Some trading days are incomplete\n    What it means: Some days have fewer bars than usual.\n    Details: Sessions with fewer bars than the usual 71: 2026-10-27: 67/71 bars\n    What to do: This is normal for the first and last day of an export."
+  },
+  {
+    "case": "E3",
+    "what": "5-minute file declared 1D",
+    "file": "xls headers iso.csv",
+    "profile": "csv_headers_iso_offset",
+    "request": {
+      "exchange": "TEST",
+      "symbol": "E3",
+      "timeframe": "1D"
+    },
+    "window_boxes_enabled": {
+      "exchange": true,
+      "symbol": true,
+      "timeframe": true
+    },
+    "outcome": "would_be_accepted",
+    "rows_read": 210,
+    "shown_to_user": "[NOTE] More than one bar per day, week or month\n    What it means: The profile declares a daily, weekly or monthly timeframe, but some days (weeks, months) have several bars, which looks like intraday data.\n    Details: 3 day(s) have more than one bar (e.g. 2026-10-23: 71 bars; 2026-10-26: 72 bars; 2026-10-27: 67 bars), so the data look finer than the declared timeframe 1D.\n    What to do: Check the timeframe you chose (for example 5m instead of 1D). Q-MAP never changes it for you."
+  },
+  {
+    "case": "E4",
+    "what": "Daily DD-MM-YY file read as MM-DD-YY",
+    "file": "csv headers std.csv",
+    "profile": "csv_headers_dd_mm_yy",
+    "request": {
+      "exchange": "TEST",
+      "symbol": "E4",
+      "timeframe": "1D"
+    },
+    "window_boxes_enabled": {
+      "exchange": true,
+      "symbol": true,
+      "timeframe": true
+    },
+    "outcome": "would_be_rejected",
+    "rows_read": 24,
+    "shown_to_user": "[PROBLEM] Some dates or times could not be understood\n    What it means: The date format in the profile does not match what is in the file.\n    Details: 17 issue(s); first: Value '25-09-26' does not match the declared format %m-%d-%y. (source rows 1, 2, 3, 4, 12, 13, 14, 15, 16, 17 (+7 more))\n    What to do: Look at the first rows in the preview and correct the date settings in the profile.\n[PROBLEM] A date looks wrong\n    What it means: A date is far in the past or future, which usually means the wrong format, century or Unix time unit (seconds vs milliseconds).\n    Details: Date 2026-12-10 is outside the plausible range 1990-01-01 to 2026-11-02. (source rows 11)\n    What to do: Check the date settings in the profile.\n[NOTE] Day/month order could not be proven\n    What it means: Every date has a day of 12 or less, so day-first and month-first look the same.\n    Details: Every date has a day of 12 or less, so day-first and month-first cannot be told apart from the data. The profile declares %m-%d-%y; please confirm it is correct.\n    What to do: Please confirm the profile's date format is right for this file.\n[NOTE] Long gaps between dates\n    What it means: Some dates are missing for more than the allowed number of days.\n    Details: 2026-01-10 -> 2026-05-10; 2026-05-10 -> 2026-06-10; 2026-06-10 -> 2026-07-10; 2026-07-10 -> 2026-08-10; 2026-08-10 -> 2026-09-10\n    What to do: Check the source is complete."
+  },
+  {
+    "case": "E5",
+    "what": "Unix-seconds file declared as milliseconds",
+    "file": "csv headers unix.csv",
+    "profile": "csv_headers_unix_seconds",
+    "request": {
+      "exchange": "TEST",
+      "symbol": "E5",
+      "timeframe": "1m"
+    },
+    "window_boxes_enabled": {
+      "exchange": true,
+      "symbol": true,
+      "timeframe": true
+    },
+    "outcome": "would_be_rejected",
+    "rows_read": 431,
+    "shown_to_user": "[PROBLEM] A date looks wrong\n    What it means: A date is far in the past or future, which usually means the wrong format, century or Unix time unit (seconds vs milliseconds).\n    Details: 431 issue(s); first: Date 1970-01-21 is outside the plausible range 1990-01-01 to 2026-11-02. The value looks like SECONDS but the profile declares milliseconds (unix_ms). (source rows 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 (+421 more))\n    What to do: Check the date settings in the profile."
+  },
+  {
+    "case": "E6",
+    "what": "Naive Parquet timestamps with NO time zone declared",
+    "file": "ONESOURCE.parquet",
+    "profile": "example_parquet_naive_timestamp",
+    "request": {
+      "exchange": "TEST",
+      "symbol": "E6"
+    },
+    "window_boxes_enabled": {
+      "exchange": true,
+      "symbol": true,
+      "timeframe": false
+    },
+    "outcome": "would_be_rejected",
+    "rows_read": 39903,
+    "shown_to_user": "[PROBLEM] Time zone is missing\n    What it means: The times have no time zone and Q-MAP will not guess it.\n    Details: The timestamps have no UTC offset and the profile declares no time zone.  What to do: Set [datetime] timezone (for example \"Asia/Kolkata\"). Q-MAP never assumes it.\n    What to do: Set the time zone in the profile."
+  },
+  {
+    "case": "E7",
+    "what": "ISO-offset file with NO exchange_timezone (trading date source)",
+    "file": "xls headers iso.csv",
+    "profile": "csv_headers_iso_offset",
+    "request": {
+      "exchange": "TEST",
+      "symbol": "E7",
+      "timeframe": "5m"
+    },
+    "window_boxes_enabled": {
+      "exchange": true,
+      "symbol": true,
+      "timeframe": true
+    },
+    "outcome": "would_be_rejected",
+    "rows_read": 210,
+    "shown_to_user": "[PROBLEM] Time zone is missing\n    What it means: The times have no time zone and Q-MAP will not guess it.\n    Details: The profile declares no exchange_timezone, which is needed to work out each bar's trading date.  What to do: Set [datetime] exchange_timezone (for example \"Asia/Kolkata\").\n    What to do: Set the time zone in the profile."
+  },
+  {
+    "case": "E8",
+    "what": "Daily ISO-date file declared 5m",
+    "file": "text headers ymd.txt",
+    "profile": "example_text_headered_iso_date",
+    "request": {
+      "exchange": "TEST",
+      "symbol": "E8",
+      "timeframe": "5m"
+    },
+    "window_boxes_enabled": {
+      "exchange": true,
+      "symbol": true,
+      "timeframe": true
+    },
+    "outcome": "would_be_rejected",
+    "rows_read": 10,
+    "shown_to_user": "[PROBLEM] Some dates or times could not be understood\n    What it means: The date format in the profile does not match what is in the file.\n    Details: The dates carry no time of day but the timeframe is intraday (5m).  What to do: Check the timeframe in the profile, or use a source with timestamps.\n    What to do: Look at the first rows in the preview and correct the date settings in the profile."
+  }
+]

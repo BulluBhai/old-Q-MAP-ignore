@@ -1,0 +1,25 @@
+PREVIEW (nothing is registered or written): xls headers std.xlsx
+Detected format: xlsx
+Rows: 24   Columns: 7   Reader: openpyxl 3.1.5
+Reader note: {'step': 'sheet', 'name': 'csv headers std'}
+Columns (position: name [source type]):
+  0: 'time' [datetime]
+  1: 'open' [int]
+  2: 'high' [float]
+  3: 'low' [float]
+  4: 'close' [float]
+  5: 'Volume' [int]
+  6: 'Net Volume' [int]
+Volume-like columns: ['Volume', 'Net Volume']. Decide in [volume] which one is volume; nothing is merged for you.
+First 8 row(s):
+  2026-09-25 00:00:00 | 23035 | 23162.7 | 23020.95 | 23140.5 | 242720711 | 4218396
+  2026-09-28 00:00:00 | 23064.9 | 23080.25 | 22762.2 | 22780.25 | 261457054 | -70408846
+  2026-09-29 00:00:00 | 22732.45 | 22753.25 | 22569.65 | 22716.2 | 603190549 | -43374174
+  2026-09-30 00:00:00 | 22665 | 22809.35 | 22595.2 | 22620.45 | 378961167 | -8340697
+  2026-10-01 00:00:00 | 22543.7 | 22610.6 | 22217.3 | 22421.95 | 463551691 | -67142281
+  2026-10-05 00:00:00 | 22532.4 | 22621.8 | 22397.1 | 22555.75 | 412554239 | 19509722
+  2026-10-06 00:00:00 | 22603.25 | 22776.1 | 22561.6 | 22776.1 | 328807304 | 54230194
+  2026-10-07 00:00:00 | 22690.45 | 22717.65 | 22546.3 | 22603.05 | 359028710 | -56731314
+Date/time suggestions for column 0 (suggestions only, never applied automatically):
+  - ISO timestamps (declare kind = "iso"); NO UTC offset: a time zone must be declared
+With profile xlsx_headers_native_date v1: WOULD BE ACCEPTED

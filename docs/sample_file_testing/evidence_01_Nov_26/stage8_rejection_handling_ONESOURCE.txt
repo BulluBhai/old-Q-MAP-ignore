@@ -1,0 +1,25 @@
+Stage 8 - rejection handling with the owner's actual ONESOURCE.parquet (isolated test location, code 76dde7f)
+Profile example_parquet_naive_timestamp@1, exchange TEST, symbol F06 (artificial identity), timeframe 1m (fixed in profile)
+
+Load through the window's own load job (IngestJob):
+  outcome: rejected | label shown: "Rejected - see problems" | report: issues_event1.csv
+  issues report rows: 1504 | by check: low_le_open_close 3, source_order 1, no_duplicate_timestamps 1500
+  rows named for low_le_open_close: 34187, 34188, 34191
+  datasets: raw (active) only - the original is kept; no cleaned dataset was created
+  attempts: rejected, rows read 39903, rows flagged 1503
+  failed error checks recorded in the audit trail: low_le_open_close, no_duplicate_timestamps
+Loading the unchanged file again: blocked | "Not retried (already rejected)"
+
+New example profiles checked against the owner's actual files (check stage, nothing saved):
+  example_xlsx_headers_iso_offset     on 'csv headers iso.xlsx'   (5m): would_be_accepted, rows 210, errors 0
+  example_xlsx_noheaders_iso_offset   on 'xls noheaders iso.xlsx' (5m): would_be_accepted, rows 210, errors 0
+  example_xlsx_headers_native_date    on 'xls headers std.xlsx'   (1D): would_be_accepted, rows 24, errors 0
+  example_csv_noheaders_iso_offset    on 'csv noheaders iso.csv'  (5m): would_be_accepted, rows 210, errors 0
+  example_csv_noheaders_unix_seconds  on 'csv noheaders unix.csv' (1D): would_be_accepted, rows 144, errors 0
+
+Parquet interpretation verified without storing (process_table on all 39903 rows, compared with an independent
+pyarrow reading): 0 mismatches in timestamp_utc (naive time declared Asia/Kolkata -> UTC), session_date, OHLC,
+volume and x_index. Example: 2025-06-30 09:15 (naive) -> 2025-06-30T03:45Z, session date 2025-06-30.
+Duplicates: 750 timestamps on 17-Oct-25 and 24-Oct-25 (each whole session appears twice); 428 identical in OHLCV,
+322 conflicting. 'index' column: integer counter 0-2249, present on 14778 of 39903 rows; kept as x_index, listed as
+not a quantitative input.

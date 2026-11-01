@@ -1,0 +1,566 @@
+{
+  "label": "final_76dde7f",
+  "repo_head": "see git",
+  "samples_unchanged": true,
+  "results": [
+    {
+      "no": 1,
+      "file": "csv headers iso.xlsx",
+      "profile": "xlsx_headers_iso_offset@1",
+      "request": {
+        "exchange": "TEST",
+        "symbol": "F01",
+        "timeframe": "5m"
+      },
+      "1_format": {
+        "kind": "xlsx",
+        "extension": ".xlsx",
+        "extension_matches": true
+      },
+      "2_preview": "ok",
+      "3_check": {
+        "outcome": "would_be_accepted",
+        "rows_read": 210,
+        "errors": [],
+        "warnings": [
+          "Some trading days are incomplete: Sessions with fewer bars than the usual 71: 2026-10-27: 67/71 bars"
+        ],
+        "info": []
+      },
+      "4_ingest": {
+        "outcome": "accepted",
+        "label": "Accepted",
+        "message": "1 dataset(s) created",
+        "run_id": "FOUND_20261101_072512",
+        "datasets": [
+          2
+        ],
+        "issues_report": null
+      },
+      "5_verification": {
+        "identity": "TEST:F01 timeframe 5m",
+        "raw_copy_identical_to_source": true,
+        "row_count": "stored 210 vs source 210",
+        "row_count_equal": true,
+        "rows_identical_time_ohlc_volume": true,
+        "first_mismatches": [],
+        "preserved_extra_columns": [
+          "x_volume",
+          "x_net_volume"
+        ],
+        "preserved_volume_copy_identical": true,
+        "preserved_extra_column": "x_net_volume",
+        "extra_column_values_identical": true,
+        "src_row_is_1_to_n": true,
+        "first_last_session_date": "2026-10-23 .. 2026-10-27",
+        "quality_flags_nonzero_rows": 0,
+        "stored_dataset_path": "Cleaned_Data/TEST/F01/5m/8ec55c534973_8fe0b1cc_FOUND_20261101_072512.parquet"
+      }
+    },
+    {
+      "no": 2,
+      "file": "csv headers std.csv",
+      "profile": "csv_headers_dd_mm_yy@1",
+      "request": {
+        "exchange": "TEST",
+        "symbol": "F02",
+        "timeframe": "1D"
+      },
+      "1_format": {
+        "kind": "delimited_text",
+        "extension": ".csv",
+        "extension_matches": true
+      },
+      "2_preview": "ok",
+      "3_check": {
+        "outcome": "would_be_accepted",
+        "rows_read": 24,
+        "errors": [],
+        "warnings": [],
+        "info": []
+      },
+      "4_ingest": {
+        "outcome": "accepted",
+        "label": "Accepted",
+        "message": "1 dataset(s) created",
+        "run_id": "FOUND_20261101_072513",
+        "datasets": [
+          4
+        ],
+        "issues_report": null
+      },
+      "5_verification": {
+        "identity": "TEST:F02 timeframe 1D",
+        "raw_copy_identical_to_source": true,
+        "row_count": "stored 24 vs source 24",
+        "row_count_equal": true,
+        "rows_identical_time_ohlc_volume": true,
+        "first_mismatches": [],
+        "preserved_extra_columns": [
+          "x_volume",
+          "x_net_volume"
+        ],
+        "preserved_volume_copy_identical": true,
+        "preserved_extra_column": "x_net_volume",
+        "extra_column_values_identical": true,
+        "src_row_is_1_to_n": true,
+        "first_last_session_date": "2026-09-25 .. 2026-10-30",
+        "quality_flags_nonzero_rows": 0,
+        "stored_dataset_path": "Cleaned_Data/TEST/F02/1D/1091d68e11c4_767d083a_FOUND_20261101_072513.parquet"
+      }
+    },
+    {
+      "no": 3,
+      "file": "csv headers unix.csv",
+      "profile": "csv_headers_unix_seconds@1",
+      "request": {
+        "exchange": "TEST",
+        "symbol": "F03",
+        "timeframe": "1m"
+      },
+      "1_format": {
+        "kind": "delimited_text",
+        "extension": ".csv",
+        "extension_matches": true
+      },
+      "2_preview": "ok",
+      "3_check": {
+        "outcome": "would_be_accepted",
+        "rows_read": 431,
+        "errors": [],
+        "warnings": [],
+        "info": []
+      },
+      "4_ingest": {
+        "outcome": "accepted",
+        "label": "Accepted",
+        "message": "1 dataset(s) created",
+        "run_id": "FOUND_20261101_072513_02",
+        "datasets": [
+          6
+        ],
+        "issues_report": null
+      },
+      "5_verification": {
+        "identity": "TEST:F03 timeframe 1m",
+        "raw_copy_identical_to_source": true,
+        "row_count": "stored 431 vs source 431",
+        "row_count_equal": true,
+        "rows_identical_time_ohlc_volume": true,
+        "first_mismatches": [],
+        "preserved_extra_columns": [
+          "x_volume",
+          "x_net_volume"
+        ],
+        "preserved_volume_copy_identical": true,
+        "preserved_extra_column": "x_net_volume",
+        "extra_column_values_identical": true,
+        "src_row_is_1_to_n": true,
+        "first_last_session_date": "2026-10-29 .. 2026-10-30",
+        "quality_flags_nonzero_rows": 0,
+        "stored_dataset_path": "Cleaned_Data/TEST/F03/1m/5a8fd88378d9_ab62c573_FOUND_20261101_072513_02.parquet"
+      }
+    },
+    {
+      "no": 4,
+      "file": "csv noheaders iso.csv",
+      "profile": "csv_noheaders_iso_offset@1",
+      "request": {
+        "exchange": "TEST",
+        "symbol": "F04",
+        "timeframe": "5m"
+      },
+      "1_format": {
+        "kind": "delimited_text",
+        "extension": ".csv",
+        "extension_matches": true
+      },
+      "2_preview": "ok",
+      "3_check": {
+        "outcome": "would_be_accepted",
+        "rows_read": 210,
+        "errors": [],
+        "warnings": [
+          "Some trading days are incomplete: Sessions with fewer bars than the usual 71: 2026-10-27: 67/71 bars"
+        ],
+        "info": []
+      },
+      "4_ingest": {
+        "outcome": "accepted",
+        "label": "Accepted",
+        "message": "1 dataset(s) created",
+        "run_id": "FOUND_20261101_072513_03",
+        "datasets": [
+          8
+        ],
+        "issues_report": null
+      },
+      "5_verification": {
+        "identity": "TEST:F04 timeframe 5m",
+        "raw_copy_identical_to_source": true,
+        "row_count": "stored 210 vs source 210",
+        "row_count_equal": true,
+        "rows_identical_time_ohlc_volume": true,
+        "first_mismatches": [],
+        "preserved_extra_columns": [
+          "x_col5",
+          "x_col6"
+        ],
+        "preserved_volume_copy_identical": true,
+        "preserved_extra_column": "x_col6",
+        "extra_column_values_identical": true,
+        "src_row_is_1_to_n": true,
+        "first_last_session_date": "2026-10-23 .. 2026-10-27",
+        "quality_flags_nonzero_rows": 0,
+        "stored_dataset_path": "Cleaned_Data/TEST/F04/5m/657385dfd6c5_4ef15a12_FOUND_20261101_072513_03.parquet"
+      }
+    },
+    {
+      "no": 5,
+      "file": "csv noheaders unix.csv",
+      "profile": "csv_noheaders_unix_seconds@1",
+      "request": {
+        "exchange": "TEST",
+        "symbol": "F05",
+        "timeframe": "1D"
+      },
+      "1_format": {
+        "kind": "delimited_text",
+        "extension": ".csv",
+        "extension_matches": true
+      },
+      "2_preview": "ok",
+      "3_check": {
+        "outcome": "would_be_accepted",
+        "rows_read": 144,
+        "errors": [],
+        "warnings": [],
+        "info": []
+      },
+      "4_ingest": {
+        "outcome": "accepted",
+        "label": "Accepted",
+        "message": "1 dataset(s) created",
+        "run_id": "FOUND_20261101_072513_04",
+        "datasets": [
+          10
+        ],
+        "issues_report": null
+      },
+      "5_verification": {
+        "identity": "TEST:F05 timeframe 1D",
+        "raw_copy_identical_to_source": true,
+        "row_count": "stored 144 vs source 144",
+        "row_count_equal": true,
+        "rows_identical_time_ohlc_volume": true,
+        "first_mismatches": [],
+        "preserved_extra_columns": [
+          "x_col5",
+          "x_col6"
+        ],
+        "preserved_volume_copy_identical": true,
+        "preserved_extra_column": "x_col6",
+        "extra_column_values_identical": true,
+        "src_row_is_1_to_n": true,
+        "first_last_session_date": "2025-02-01 .. 2025-09-02",
+        "quality_flags_nonzero_rows": 0,
+        "stored_dataset_path": "Cleaned_Data/TEST/F05/1D/dbed05743b25_61248c4b_FOUND_20261101_072513_04.parquet"
+      }
+    },
+    {
+      "no": 6,
+      "file": "ONESOURCE.parquet",
+      "profile": "example_parquet_naive_timestamp@1",
+      "request": {
+        "exchange": "TEST",
+        "symbol": "F06",
+        "timeframe": ""
+      },
+      "1_format": {
+        "kind": "parquet",
+        "extension": ".parquet",
+        "extension_matches": true
+      },
+      "2_preview": "ok",
+      "3_check": {
+        "outcome": "would_be_rejected",
+        "rows_read": 39903,
+        "errors": [
+          "Low price is higher than Open or Close: 3 row(s): source rows 34187, 34188, 34191",
+          "Two or more rows have the same date/time: 1500 row(s) share a timestamp: source rows 28501, 28502, 28503, 28504, 28505, 28506, 28507, 28508, 28509, 28510 (+1490 more)"
+        ],
+        "warnings": [
+          "Rows were not in date order: 2 out-of-order step(s) in the source",
+          "Some trading days are incomplete: Sessions with fewer bars than the usual 375: 2025-10-21: 61/375 bars; 2025-11-08: 92/375 bars"
+        ],
+        "info": [
+          "Some bars have zero volume: 922 bar(s) with zero volume"
+        ]
+      },
+      "4_ingest": "not attempted (check did not pass)"
+    },
+    {
+      "no": 7,
+      "file": "text headers ymd.txt",
+      "profile": "example_text_headered_iso_date@1",
+      "request": {
+        "exchange": "TEST",
+        "symbol": "F07",
+        "timeframe": ""
+      },
+      "1_format": {
+        "kind": "delimited_text",
+        "extension": ".txt",
+        "extension_matches": true
+      },
+      "2_preview": "ok",
+      "3_check": {
+        "outcome": "would_be_accepted",
+        "rows_read": 10,
+        "errors": [],
+        "warnings": [],
+        "info": []
+      },
+      "4_ingest": {
+        "outcome": "accepted",
+        "label": "Accepted",
+        "message": "1 dataset(s) created",
+        "run_id": "FOUND_20261101_072514",
+        "datasets": [
+          12
+        ],
+        "issues_report": null
+      },
+      "5_verification": {
+        "identity": "TEST:F07 timeframe 1D",
+        "raw_copy_identical_to_source": true,
+        "row_count": "stored 10 vs source 10",
+        "row_count_equal": true,
+        "rows_identical_time_ohlc_volume": true,
+        "first_mismatches": [],
+        "preserved_extra_columns": [
+          "x_volume"
+        ],
+        "preserved_volume_copy_identical": true,
+        "src_row_is_1_to_n": true,
+        "first_last_session_date": "2026-10-16 .. 2026-10-30",
+        "quality_flags_nonzero_rows": 0,
+        "stored_dataset_path": "Cleaned_Data/TEST/F07/1D/1eed29b99b3f_688b6fc5_FOUND_20261101_072514.parquet"
+      }
+    },
+    {
+      "no": 8,
+      "file": "text no headers ymd.txt",
+      "profile": "example_text_headerless_seven_columns@1",
+      "request": {
+        "exchange": "TEST",
+        "symbol": "F08",
+        "timeframe": ""
+      },
+      "1_format": {
+        "kind": "delimited_text",
+        "extension": ".txt",
+        "extension_matches": true
+      },
+      "2_preview": "ok",
+      "3_check": {
+        "outcome": "would_be_accepted",
+        "rows_read": 10,
+        "errors": [],
+        "warnings": [
+          "Volume is the same number on every row: Volume is 3.89482e+07 in every row, which looks like a placeholder."
+        ],
+        "info": []
+      },
+      "4_ingest": {
+        "outcome": "accepted",
+        "label": "Accepted",
+        "message": "1 dataset(s) created",
+        "run_id": "FOUND_20261101_072514_02",
+        "datasets": [
+          14
+        ],
+        "issues_report": "qmap_sample_test_final/OUTPUT/Ingestion/FOUND_20261101_072514_02/issues_event7.csv"
+      },
+      "5_verification": {
+        "identity": "TEST:F08 timeframe 1D",
+        "raw_copy_identical_to_source": true,
+        "row_count": "stored 10 vs source 10",
+        "row_count_equal": true,
+        "rows_identical_time_ohlc_volume": true,
+        "first_mismatches": [],
+        "preserved_extra_columns": [
+          "x_col5",
+          "x_col6"
+        ],
+        "preserved_volume_copy_identical": true,
+        "preserved_extra_column": "x_col6",
+        "extra_column_values_identical": true,
+        "src_row_is_1_to_n": true,
+        "first_last_session_date": "1995-11-03 .. 1995-11-16",
+        "quality_flags_nonzero_rows": 0,
+        "stored_dataset_path": "Cleaned_Data/TEST/F08/1D/0c40caf091ca_b4c46ff2_FOUND_20261101_072514_02.parquet"
+      }
+    },
+    {
+      "no": 9,
+      "file": "xls headers iso.csv",
+      "profile": "csv_headers_iso_offset@1",
+      "request": {
+        "exchange": "TEST",
+        "symbol": "F09",
+        "timeframe": "5m"
+      },
+      "1_format": {
+        "kind": "delimited_text",
+        "extension": ".csv",
+        "extension_matches": true
+      },
+      "2_preview": "ok",
+      "3_check": {
+        "outcome": "would_be_accepted",
+        "rows_read": 210,
+        "errors": [],
+        "warnings": [
+          "Some trading days are incomplete: Sessions with fewer bars than the usual 71: 2026-10-27: 67/71 bars"
+        ],
+        "info": []
+      },
+      "4_ingest": {
+        "outcome": "accepted",
+        "label": "Accepted",
+        "message": "1 dataset(s) created",
+        "run_id": "FOUND_20261101_072514_03",
+        "datasets": [
+          16
+        ],
+        "issues_report": null
+      },
+      "5_verification": {
+        "identity": "TEST:F09 timeframe 5m",
+        "raw_copy_identical_to_source": true,
+        "row_count": "stored 210 vs source 210",
+        "row_count_equal": true,
+        "rows_identical_time_ohlc_volume": true,
+        "first_mismatches": [],
+        "preserved_extra_columns": [
+          "x_volume",
+          "x_net_volume"
+        ],
+        "preserved_volume_copy_identical": true,
+        "preserved_extra_column": "x_net_volume",
+        "extra_column_values_identical": true,
+        "src_row_is_1_to_n": true,
+        "first_last_session_date": "2026-10-23 .. 2026-10-27",
+        "quality_flags_nonzero_rows": 0,
+        "stored_dataset_path": "Cleaned_Data/TEST/F09/5m/8d2eed2580db_f70a3679_FOUND_20261101_072514_03.parquet"
+      }
+    },
+    {
+      "no": 10,
+      "file": "xls headers std.xlsx",
+      "profile": "xlsx_headers_native_date@1",
+      "request": {
+        "exchange": "TEST",
+        "symbol": "F10",
+        "timeframe": "1D"
+      },
+      "1_format": {
+        "kind": "xlsx",
+        "extension": ".xlsx",
+        "extension_matches": true
+      },
+      "2_preview": "ok",
+      "3_check": {
+        "outcome": "would_be_accepted",
+        "rows_read": 24,
+        "errors": [],
+        "warnings": [],
+        "info": []
+      },
+      "4_ingest": {
+        "outcome": "accepted",
+        "label": "Accepted",
+        "message": "1 dataset(s) created",
+        "run_id": "FOUND_20261101_072514_04",
+        "datasets": [
+          18
+        ],
+        "issues_report": null
+      },
+      "5_verification": {
+        "identity": "TEST:F10 timeframe 1D",
+        "raw_copy_identical_to_source": true,
+        "row_count": "stored 24 vs source 24",
+        "row_count_equal": true,
+        "rows_identical_time_ohlc_volume": true,
+        "first_mismatches": [],
+        "preserved_extra_columns": [
+          "x_volume",
+          "x_net_volume"
+        ],
+        "preserved_volume_copy_identical": true,
+        "preserved_extra_column": "x_net_volume",
+        "extra_column_values_identical": true,
+        "src_row_is_1_to_n": true,
+        "first_last_session_date": "2026-09-25 .. 2026-10-30",
+        "quality_flags_nonzero_rows": 0,
+        "stored_dataset_path": "Cleaned_Data/TEST/F10/1D/b72a45a708bd_70025588_FOUND_20261101_072514_04.parquet"
+      }
+    },
+    {
+      "no": 11,
+      "file": "xls noheaders iso.xlsx",
+      "profile": "xlsx_noheaders_iso_offset@1",
+      "request": {
+        "exchange": "TEST",
+        "symbol": "F11",
+        "timeframe": "5m"
+      },
+      "1_format": {
+        "kind": "xlsx",
+        "extension": ".xlsx",
+        "extension_matches": true
+      },
+      "2_preview": "ok",
+      "3_check": {
+        "outcome": "would_be_accepted",
+        "rows_read": 210,
+        "errors": [],
+        "warnings": [
+          "Some trading days are incomplete: Sessions with fewer bars than the usual 71: 2026-10-27: 67/71 bars"
+        ],
+        "info": []
+      },
+      "4_ingest": {
+        "outcome": "accepted",
+        "label": "Accepted",
+        "message": "1 dataset(s) created",
+        "run_id": "FOUND_20261101_072514_05",
+        "datasets": [
+          20
+        ],
+        "issues_report": null
+      },
+      "5_verification": {
+        "identity": "TEST:F11 timeframe 5m",
+        "raw_copy_identical_to_source": true,
+        "row_count": "stored 210 vs source 210",
+        "row_count_equal": true,
+        "rows_identical_time_ohlc_volume": true,
+        "first_mismatches": [],
+        "preserved_extra_columns": [
+          "x_col5",
+          "x_col6"
+        ],
+        "preserved_volume_copy_identical": true,
+        "preserved_extra_column": "x_col6",
+        "extra_column_values_identical": true,
+        "src_row_is_1_to_n": true,
+        "first_last_session_date": "2026-10-23 .. 2026-10-27",
+        "quality_flags_nonzero_rows": 0,
+        "stored_dataset_path": "Cleaned_Data/TEST/F11/5m/9bc6c8f36cbf_4250a2d6_FOUND_20261101_072514_05.parquet"
+      }
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+PREVIEW (nothing is registered or written): csv headers std.csv
+Detected format: delimited_text
+Suggested delimiter: ','
+The first row looks like a header (text above numbers). Confirm with [file] header = true.
+Rows: 24   Columns: 7   Reader: csv python-stdlib
+Columns (position: name [source type]):
+  0: 'time' [str]
+  1: 'open' [str]
+  2: 'high' [str]
+  3: 'low' [str]
+  4: 'close' [str]
+  5: 'Volume' [str]
+  6: 'Net Volume' [str]
+Volume-like columns: ['Volume', 'Net Volume']. Decide in [volume] which one is volume; nothing is merged for you.
+First 8 row(s):
+  25-09-26 | 23035 | 23162.7 | 23020.95 | 23140.5 | 242720711 | 4218396
+  28-09-26 | 23064.9 | 23080.25 | 22762.2 | 22780.25 | 261457054 | -70408846
+  29-09-26 | 22732.45 | 22753.25 | 22569.65 | 22716.2 | 603190549 | -43374174
+  30-09-26 | 22665 | 22809.35 | 22595.2 | 22620.45 | 378961167 | -8340697
+  01-10-26 | 22543.7 | 22610.6 | 22217.3 | 22421.95 | 463551691 | -67142281
+  05-10-26 | 22532.4 | 22621.8 | 22397.1 | 22555.75 | 412554239 | 19509722
+  06-10-26 | 22603.25 | 22776.1 | 22561.6 | 22776.1 | 328807304 | 54230194
+  07-10-26 | 22690.45 | 22717.65 | 22546.3 | 22603.05 | 359028710 | -56731314
+Date/time suggestions for column 0 (suggestions only, never applied automatically):
+  - day/month/year-style text: day-first vs month-first (and the century of two-digit years) must be declared by you; it is never guessed
+With profile csv_headers_dd_mm_yy v1: WOULD BE ACCEPTED

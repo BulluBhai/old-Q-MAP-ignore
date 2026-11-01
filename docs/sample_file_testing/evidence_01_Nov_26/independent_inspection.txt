@@ -1,0 +1,179 @@
+====================================================================================================
+csv headers iso.xlsx | signature format: xlsx (sheets=['csv headers iso']) | size 22046
+  row widths: {7: 211} | total rows incl any header: 211
+  first row: ['time', 'open', 'high', 'low', 'close', 'Volume', 'Net Volume'] => header
+  time column kinds: {'ISO timestamp with offset': 210}
+  first/last: 2026-10-23 09:20:00+05:30 | 2026-10-27 14:45:00+05:30 | offsets: {'5:30:00': 210}
+  duplicates: 0 [] | backward steps: 0 | step minutes (top 6): [(5, 207), (3965, 1), (1085, 1)]
+  distinct dates: 3 | bars per date (top 4): [(71, 1), (72, 1), (67, 1)]
+  [2] open         missing=    0 numeric=  210 min 22393.6 max 22820.5
+  [3] high         missing=    0 numeric=  210 min 22402.8 max 22829.8
+  [4] low          missing=    0 numeric=  210 min 22372 max 22792.2
+  [5] close        missing=    0 numeric=  210 min 22393.5 max 22819
+  [6] Volume       missing=    0 numeric=  210 min 2.06872e+06 max 1.74797e+07
+  [7] Net Volume   missing=    0 numeric=  210 min -9.42911e+06 max 1.09379e+07
+  OHLC inconsistent rows: 0
+  col6 vs col7: identical in 7/210 rows; equal in magnitude in 18/210
+====================================================================================================
+csv headers std.csv | signature format: delimited text | size 1553
+  row widths: {7: 25} | total rows incl any header: 25
+  first row: ['time', 'open', 'high', 'low', 'close', 'Volume', 'Net Volume'] => header
+  time column kinds: {'DD-MM-YY (assumed day-first for inspection)': 24}
+  first/last: 2026-09-25 00:00:00 | 2026-10-30 00:00:00 | offsets: none (naive/date-only)
+  duplicates: 0 [] | backward steps: 0 | step minutes (top 6): [(1440, 17), (4320, 4), (5760, 1), (2880, 1)]
+  distinct dates: 24 | bars per date (top 4): [(1, 24)]
+  [2] open         missing=    0 numeric=   24 min 22315 max 23150.8
+  [3] high         missing=    0 numeric=   24 min 22580.8 max 23175.2
+  [4] low          missing=    0 numeric=   24 min 22179.9 max 23021
+  [5] close        missing=    0 numeric=   24 min 22231.8 max 23146.2
+  [6] Volume       missing=    0 numeric=   24 min 2.42721e+08 max 6.03191e+08
+  [7] Net Volume   missing=    0 numeric=   24 min -8.79266e+07 max 9.09515e+07
+  OHLC inconsistent rows: 0
+  col6 vs col7: identical in 0/24 rows; equal in magnitude in 0/24
+====================================================================================================
+csv headers unix.csv | signature format: delimited text | size 26220
+  row widths: {7: 432} | total rows incl any header: 432
+  first row: ['time', 'open', 'high', 'low', 'close', 'Volume', 'Net Volume'] => header
+  time column kinds: {'unix seconds': 431}
+  first/last: 2026-10-29 08:34:00+00:00 | 2026-10-30 09:44:00+00:00 | offsets: {'0:00:00': 431}
+  unix first/last as UTC: 2026-10-29 08:34:00+00:00 2026-10-30 09:44:00+00:00 | as IST: 2026-10-29 14:04:00+05:30 2026-10-30 15:14:00+05:30
+  IST time-of-day set (first 8): ['09:15', '09:16', '09:17', '09:18', '09:19', '09:20', '09:21', '09:22'] count distinct: 360
+  duplicates: 0 [] | backward steps: 0 | step minutes (top 6): [(1, 429), (1081, 1)]
+  distinct dates: 2 | bars per date (top 4): [(71, 1), (360, 1)]
+  [2] open         missing=    0 numeric=  431 min 22882.3 max 23110
+  [3] high         missing=    0 numeric=  431 min 22892.2 max 23118.1
+  [4] low          missing=    0 numeric=  431 min 22880.2 max 23107
+  [5] close        missing=    0 numeric=  431 min 22882.5 max 23110.8
+  [6] Volume       missing=    0 numeric=  431 min 314243 max 5.36104e+06
+  [7] Net Volume   missing=    0 numeric=  431 min -5.36104e+06 max 3.60076e+06
+  OHLC inconsistent rows: 0
+  col6 vs col7: identical in 209/431 rows; equal in magnitude in 431/431
+====================================================================================================
+csv noheaders iso.csv | signature format: delimited text | size 16100
+  row widths: {7: 210} | total rows incl any header: 210
+  first row: ['2026-10-23T09:20:00+05:30', '22726.25', '22747.65', '22699.7', '22712.1', '7428682', '-1100468'] => data
+  time column kinds: {'ISO timestamp with offset': 210}
+  first/last: 2026-10-23 09:20:00+05:30 | 2026-10-27 14:45:00+05:30 | offsets: {'5:30:00': 210}
+  duplicates: 0 [] | backward steps: 0 | step minutes (top 6): [(5, 207), (3965, 1), (1085, 1)]
+  distinct dates: 3 | bars per date (top 4): [(71, 1), (72, 1), (67, 1)]
+  [2] col2         missing=    0 numeric=  210 min 22393.6 max 22820.5
+  [3] col3         missing=    0 numeric=  210 min 22402.8 max 22829.8
+  [4] col4         missing=    0 numeric=  210 min 22372 max 22792.2
+  [5] col5         missing=    0 numeric=  210 min 22393.5 max 22819
+  [6] col6         missing=    0 numeric=  210 min 2.06872e+06 max 1.74797e+07
+  [7] col7         missing=    0 numeric=  210 min -9.42911e+06 max 1.09379e+07
+  OHLC inconsistent rows: 0
+  col6 vs col7: identical in 7/210 rows; equal in magnitude in 18/210
+====================================================================================================
+csv noheaders unix.csv | signature format: delimited text | size 9364
+  row widths: {7: 144} | total rows incl any header: 144
+  first row: ['1738381500', '23528.6', '23632.45', '23318.3', '23482.15', '287703637', '-7575497'] => data
+  time column kinds: {'unix seconds': 144}
+  first/last: 2025-02-01 03:45:00+00:00 | 2025-09-02 03:45:00+00:00 | offsets: {'0:00:00': 144}
+  unix first/last as UTC: 2025-02-01 03:45:00+00:00 2025-09-02 03:45:00+00:00 | as IST: 2025-02-01 09:15:00+05:30 2025-09-02 09:15:00+05:30
+  IST time-of-day set (first 8): ['09:15'] count distinct: 1
+  duplicates: 0 [] | backward steps: 0 | step minutes (top 6): [(1440, 108), (4320, 25), (2880, 5), (5760, 5)]
+  distinct dates: 144 | bars per date (top 4): [(1, 144)]
+  [2] col2         missing=    0 numeric=  144 min 21758.4 max 25661.7
+  [3] col3         missing=    0 numeric=  144 min 22105 max 25669.3
+  [4] col4         missing=    0 numeric=  144 min 21743.7 max 25523.5
+  [5] col5         missing=    0 numeric=  144 min 22082.7 max 25637.8
+  [6] col6         missing=    0 numeric=  144 min 1.93512e+08 max 8.53891e+08
+  [7] col7         missing=    0 numeric=  144 min -4.12248e+08 max 1.20795e+08
+  OHLC inconsistent rows: 0
+  col6 vs col7: identical in 0/144 rows; equal in magnitude in 0/144
+====================================================================================================
+ONESOURCE.parquet | signature format: parquet | size 782271
+  parquet schema: {'Date': 'timestamp[ns]', 'Open': 'double', 'High': 'double', 'Low': 'double', 'Close': 'double', 'Volume': 'int64', 'index': 'double'}
+  row widths: {7: 39904} | total rows incl any header: 39904
+  first row: ['Date', 'Open', 'High', 'Low', 'Close', 'Volume', 'index'] => header
+  time column kinds: {'native datetime (naive)': 39903}
+  first/last: 2025-06-30 09:15:00 | 2025-11-28 15:29:00 | offsets: none (naive/date-only)
+  duplicates: 750 [datetime.datetime(2025, 10, 17, 9, 15), datetime.datetime(2025, 10, 17, 9, 16), datetime.datetime(2025, 10, 17, 9, 17)] | backward steps: 2 | step minutes (top 6): [(1, 39795), (1066, 78), (3946, 19), (2506, 3), (-374, 2), (5386, 1)]
+  distinct dates: 106 | bars per date (top 4): [(375, 102), (750, 2), (61, 1), (92, 1)]
+  [2] Open         missing=    0 numeric=39903 min 1425 max 2201.3
+  [3] High         missing=    0 numeric=39903 min 1527.8 max 2231.9
+  [4] Low          missing=    0 numeric=39903 min 1494.7 max 2200
+  [5] Close        missing=    0 numeric=39903 min 1511 max 2200.1
+  [6] Volume       missing=    0 numeric=39903 min 0 max 272654
+  [7] index        missing=25125 numeric=14778 min 0 max 2249
+  OHLC inconsistent rows: 3
+  col6 vs col7: identical in 0/39903 rows; equal in magnitude in 3/39903
+====================================================================================================
+text headers ymd.txt | signature format: delimited text | size 583
+  row widths: {6: 11} | total rows incl any header: 11
+  first row: ['date', 'open', 'high', 'low', 'close', 'Volume'] => header
+  time column kinds: {'ISO date': 10}
+  first/last: 2026-10-16 00:00:00 | 2026-10-30 00:00:00 | offsets: none (naive/date-only)
+  duplicates: 0 [] | backward steps: 0 | step minutes (top 6): [(1440, 6), (4320, 2), (2880, 1)]
+  distinct dates: 10 | bars per date (top 4): [(1, 10)]
+  [2] open         missing=    0 numeric=   10 min 22524.4 max 23150.8
+  [3] high         missing=    0 numeric=   10 min 22753.2 max 23175.2
+  [4] low          missing=    0 numeric=   10 min 22372 max 22913.8
+  [5] close        missing=    0 numeric=   10 min 22600 max 23146.2
+  [6] Volume       missing=    0 numeric=   10 min 2.85859e+08 max 4.00951e+08
+  OHLC inconsistent rows: 0
+====================================================================================================
+text no headers ymd.txt | signature format: delimited text | size 575
+  row widths: {7: 10} | total rows incl any header: 10
+  first row: ['1995-11-03', '994.2', '1000.91', '992.69', '1000', '38948210', '38948210'] => data
+  time column kinds: {'ISO date': 10}
+  first/last: 1995-11-03 00:00:00 | 1995-11-16 00:00:00 | offsets: none (naive/date-only)
+  duplicates: 0 [] | backward steps: 0 | step minutes (top 6): [(1440, 7), (4320, 2)]
+  distinct dates: 10 | bars per date (top 4): [(1, 10)]
+  [2] col2         missing=    0 numeric=   10 min 901.33 max 1001.53
+  [3] col3         missing=    0 numeric=   10 min 913.54 max 1001.53
+  [4] col4         missing=    0 numeric=   10 min 897.52 max 992.69
+  [5] col5         missing=    0 numeric=   10 min 902.56 max 1000
+  [6] col6         missing=    0 numeric=   10 min 3.89482e+07 max 3.89482e+07
+  [7] col7         missing=    0 numeric=   10 min 3.89482e+07 max 3.89482e+07
+  OHLC inconsistent rows: 0
+  col6 vs col7: identical in 10/10 rows; equal in magnitude in 10/10
+====================================================================================================
+xls headers iso.csv | signature format: delimited text | size 16144
+  row widths: {7: 211} | total rows incl any header: 211
+  first row: ['time', 'open', 'high', 'low', 'close', 'Volume', 'Net Volume'] => header
+  time column kinds: {'ISO timestamp with offset': 210}
+  first/last: 2026-10-23 09:20:00+05:30 | 2026-10-27 14:45:00+05:30 | offsets: {'5:30:00': 210}
+  duplicates: 0 [] | backward steps: 0 | step minutes (top 6): [(5, 207), (3965, 1), (1085, 1)]
+  distinct dates: 3 | bars per date (top 4): [(71, 1), (72, 1), (67, 1)]
+  [2] open         missing=    0 numeric=  210 min 22393.6 max 22820.5
+  [3] high         missing=    0 numeric=  210 min 22402.8 max 22829.8
+  [4] low          missing=    0 numeric=  210 min 22372 max 22792.2
+  [5] close        missing=    0 numeric=  210 min 22393.5 max 22819
+  [6] Volume       missing=    0 numeric=  210 min 2.06872e+06 max 1.74797e+07
+  [7] Net Volume   missing=    0 numeric=  210 min -9.42911e+06 max 1.09379e+07
+  OHLC inconsistent rows: 0
+  col6 vs col7: identical in 7/210 rows; equal in magnitude in 18/210
+====================================================================================================
+xls headers std.xlsx | signature format: xlsx (sheets=['csv headers std']) | size 11515
+  row widths: {7: 25} | total rows incl any header: 25
+  first row: ['time', 'open', 'high', 'low', 'close', 'Volume', 'Net Volume'] => header
+  time column kinds: {'native datetime (naive)': 24}
+  first/last: 2026-09-25 00:00:00 | 2026-10-30 00:00:00 | offsets: none (naive/date-only)
+  duplicates: 0 [] | backward steps: 0 | step minutes (top 6): [(1440, 17), (4320, 4), (5760, 1), (2880, 1)]
+  distinct dates: 24 | bars per date (top 4): [(1, 24)]
+  [2] open         missing=    0 numeric=   24 min 22315 max 23150.8
+  [3] high         missing=    0 numeric=   24 min 22580.8 max 23175.2
+  [4] low          missing=    0 numeric=   24 min 22179.9 max 23021
+  [5] close        missing=    0 numeric=   24 min 22231.8 max 23146.2
+  [6] Volume       missing=    0 numeric=   24 min 2.42721e+08 max 6.03191e+08
+  [7] Net Volume   missing=    0 numeric=   24 min -8.79266e+07 max 9.09515e+07
+  OHLC inconsistent rows: 0
+  col6 vs col7: identical in 0/24 rows; equal in magnitude in 0/24
+====================================================================================================
+xls noheaders iso.xlsx | signature format: xlsx (sheets=['csv noheaders iso']) | size 21986
+  row widths: {7: 210} | total rows incl any header: 210
+  first row: ['2026-10-23T09:20:00+05:30', 22726.25, 22747.65, 22699.7, 22712.1, 7428682, -1100468] => data
+  time column kinds: {'ISO timestamp with offset': 210}
+  first/last: 2026-10-23 09:20:00+05:30 | 2026-10-27 14:45:00+05:30 | offsets: {'5:30:00': 210}
+  duplicates: 0 [] | backward steps: 0 | step minutes (top 6): [(5, 207), (3965, 1), (1085, 1)]
+  distinct dates: 3 | bars per date (top 4): [(71, 1), (72, 1), (67, 1)]
+  [2] col2         missing=    0 numeric=  210 min 22393.6 max 22820.5
+  [3] col3         missing=    0 numeric=  210 min 22402.8 max 22829.8
+  [4] col4         missing=    0 numeric=  210 min 22372 max 22792.2
+  [5] col5         missing=    0 numeric=  210 min 22393.5 max 22819
+  [6] col6         missing=    0 numeric=  210 min 2.06872e+06 max 1.74797e+07
+  [7] col7         missing=    0 numeric=  210 min -9.42911e+06 max 1.09379e+07
+  OHLC inconsistent rows: 0
+  col6 vs col7: identical in 7/210 rows; equal in magnitude in 18/210

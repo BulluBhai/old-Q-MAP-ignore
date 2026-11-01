@@ -1,0 +1,26 @@
+PREVIEW (nothing is registered or written): csv headers unix.csv
+Detected format: delimited_text
+Suggested delimiter: ','
+The first row looks like a header (text above numbers). Confirm with [file] header = true.
+Rows: 431   Columns: 7   Reader: csv python-stdlib
+Columns (position: name [source type]):
+  0: 'time' [str]
+  1: 'open' [str]
+  2: 'high' [str]
+  3: 'low' [str]
+  4: 'close' [str]
+  5: 'Volume' [str]
+  6: 'Net Volume' [str]
+Volume-like columns: ['Volume', 'Net Volume']. Decide in [volume] which one is volume; nothing is merged for you.
+First 8 row(s):
+  1793262840 | 22903.4 | 22908.75 | 22901.3 | 22902.05 | 979435 | -979435
+  1793262900 | 22903.55 | 22903.55 | 22889.85 | 22890.9 | 833074 | -833074
+  1793262960 | 22891.15 | 22893.2 | 22888.7 | 22891.9 | 722883 | 722883
+  1793263020 | 22891.5 | 22894.8 | 22890.95 | 22892.55 | 627191 | 627191
+  1793263080 | 22892.75 | 22893.9 | 22883.15 | 22884.45 | 717733 | -717733
+  1793263140 | 22884.5 | 22893.6 | 22884 | 22890.1 | 810466 | 810466
+  1793263200 | 22890 | 22893.1 | 22886.3 | 22890.95 | 767668 | 767668
+  1793263260 | 22890.9 | 22892.25 | 22880.15 | 22882.5 | 721829 | -721829
+Date/time suggestions for column 0 (suggestions only, never applied automatically):
+  - 10-digit integers: could be Unix seconds (declare kind = "unix_s")
+With profile csv_headers_unix_seconds v1: WOULD BE ACCEPTED

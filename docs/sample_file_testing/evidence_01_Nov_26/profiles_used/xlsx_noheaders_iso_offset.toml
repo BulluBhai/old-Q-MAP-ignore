@@ -1,0 +1,26 @@
+# Sample-test profile for "xls noheaders iso.xlsx": XLSX, NO header row, columns by position.
+profile_id      = "xlsx_noheaders_iso_offset"
+profile_version = 1
+source_label    = "XLSX, no header row, ISO timestamps with offset"
+description     = "0 time (ISO +HH:MM), 1 open, 2 high, 3 low, 4 close, 5 Volume, 6 Net Volume"
+[file]
+expected_format = "xlsx"
+header = false
+[instrument]
+exchange_from = "ingest"
+symbol_from   = "ingest"
+timeframe     = "ingest"
+[columns]
+date  = { position = 0 }
+open  = { position = 1 }
+high  = { position = 2 }
+low   = { position = 3 }
+close = { position = 4 }
+[datetime]
+kind = "iso"
+exchange_timezone = "Asia/Kolkata"
+[volume]
+rule = "use_column"
+column = { position = 5 }
+preserved_not_volume = [{ position = 6 }]
+requirement_set = "price_only"
