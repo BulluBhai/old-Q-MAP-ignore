@@ -1,0 +1,28 @@
+# EXAMPLE source profile (layout only, no data): CSV, NO header row, columns by position.
+# Check every setting against YOUR file before using it. Q-MAP never guesses any of these.
+# Exchange, symbol and timeframe are typed in the window for each load (never inferred).
+profile_id      = "example_csv_noheaders_iso_offset"
+profile_version = 1
+source_label    = "CSV, no header row, ISO timestamps with offset"
+description     = "0 time (ISO +HH:MM), 1 open, 2 high, 3 low, 4 close, 5 Volume, 6 Net Volume"
+[file]
+expected_format = "delimited_text"
+header = false
+[instrument]
+exchange_from = "ingest"
+symbol_from   = "ingest"
+timeframe     = "ingest"
+[columns]
+date  = { position = 0 }
+open  = { position = 1 }
+high  = { position = 2 }
+low   = { position = 3 }
+close = { position = 4 }
+[datetime]
+kind = "iso"
+exchange_timezone = "Asia/Kolkata"   # CONFIRM: used to derive each bar's trading date
+[volume]
+rule = "use_column"
+column = { position = 5 }
+preserved_not_volume = [{ position = 6 }]
+requirement_set = "price_only"
