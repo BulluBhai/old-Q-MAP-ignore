@@ -86,7 +86,7 @@ def test_a_genuinely_missing_column_keeps_the_ordinary_message(src, run):
 
 def test_a_headerless_profile_on_a_headered_file_warns_that_row_1_looks_like_names(src, run):
     p = write_delimited(src / "with_header.csv", NET_HEADER, iso_rows())
-    prof = load_profile(EXAMPLES / "example_csv_noheaders_iso_offset.toml")
+    prof = load_profile(EXAMPLES / "csv_nohdr_isodt.toml")
     res = do_ingest(run, p, prof, exchange="NSE", symbol="X", timeframe="5m")
     assert res.outcome == "rejected"  # row 1 is still data, as declared, and fails its own checks
     hint = [c for c in res.checks if c.name == "first_row_looks_like_header"][0]
@@ -96,7 +96,7 @@ def test_a_headerless_profile_on_a_headered_file_warns_that_row_1_looks_like_nam
 def test_a_correct_headerless_file_keeps_its_first_row_as_data(src, run, settings, db):
     rows = iso_rows()
     p = write_delimited(src / "noheader.csv", None, rows)
-    prof = load_profile(EXAMPLES / "example_csv_noheaders_iso_offset.toml")
+    prof = load_profile(EXAMPLES / "csv_nohdr_isodt.toml")
     res = do_ingest(run, p, prof, exchange="NSE", symbol="X", timeframe="5m")
     assert res.outcome == "accepted", res.message
     assert [c for c in res.checks if c.name == "first_row_looks_like_header"][0].passed
@@ -158,9 +158,9 @@ def test_date_only_daily_data_is_left_to_the_duplicate_check(src, run):
 
 # ---- New example profiles: synthetic files in each layout load and keep every row --------------------------
 @pytest.mark.parametrize("example, writer, header", [
-    ("example_xlsx_headers_iso_offset", "xlsx", True),
-    ("example_xlsx_noheaders_iso_offset", "xlsx", False),
-    ("example_csv_noheaders_iso_offset", "csv", False),
+    ("xlsx_hdr_isodt", "xlsx", True),
+    ("xlsx_nohdr_isodt", "xlsx", False),
+    ("csv_nohdr_isodt", "csv", False),
 ])
 def test_new_intraday_examples_load_synthetic_files_in_their_layout(src, run, settings, db, example, writer, header):
     rows = iso_rows(n=20)
@@ -178,7 +178,7 @@ def test_new_daily_unix_example_loads_a_headerless_file(src, run, settings, db):
     times = [datetime(2026, 1, d, 3, 45, tzinfo=timezone.utc) for d in (5, 6, 7, 8, 9)]
     rows = [[int(t.timestamp())] + r + [-r[4]] for t, r in zip(times, ohlcv(5))]
     p = write_delimited(src / "daily.csv", None, rows)
-    res = do_ingest(run, p, load_profile(EXAMPLES / "example_csv_noheaders_unix_seconds.toml"),
+    res = do_ingest(run, p, load_profile(EXAMPLES / "csv_nohdr_unixs.toml"),
                     exchange="NSE", symbol="X", timeframe="1D")
     assert res.outcome == "accepted", res.message
     g = read_group(settings, db, res.dataset_ids[0])
@@ -189,7 +189,7 @@ def test_new_daily_unix_example_loads_a_headerless_file(src, run, settings, db):
 def test_new_excel_date_example_loads_real_date_cells(src, run, settings, db):
     rows = [[datetime(2026, 1, d)] + r + [r[4] // 2] for d, r in zip((5, 6, 7, 8), ohlcv(4))]
     p = write_xlsx(src / "daily.xlsx", NET_HEADER, rows)
-    res = do_ingest(run, p, load_profile(EXAMPLES / "example_xlsx_headers_native_date.toml"),
+    res = do_ingest(run, p, load_profile(EXAMPLES / "xlsx_hdr_xldate.toml"),
                     exchange="NSE", symbol="X", timeframe="1D")
     assert res.outcome == "accepted", res.message
     g = read_group(settings, db, res.dataset_ids[0])

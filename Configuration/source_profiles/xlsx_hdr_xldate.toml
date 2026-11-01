@@ -1,0 +1,33 @@
+# STANDARD Q-MAP source profile: recommended for routine use. Its reading rules were verified row by row against
+# the Project Owner's sample files (docs/sample_file_testing). Check the time-zone and two-digit-year settings
+# against your own data before relying on it.
+# Naming standard: docs/standards/Q-MAP_Naming_and_Reference_Conventions.md, section C.
+profile_id      = "xlsx_hdr_xldate"
+profile_version = 1
+status          = "standard"
+display_name    = "Headered XLSX: time (Excel date cells), open, high, low, close, Volume, Net Volume"
+source_label    = "XLSX, headered, Excel date cells"
+description     = "Excel workbook (.xlsx) with a header row. Column 'time' holds real Excel date cells (dates without a time of day). Prices from open, high, low, close; volume from 'Volume'; 'Net Volume' is kept separately and never used as volume. You type the exchange, symbol and timeframe when loading."
+legacy_ids      = ["example_xlsx_headers_native_date", "xlsx_headers_native_date"]   # earlier names of this layout (still recognised)
+
+[file]
+expected_format = "xlsx"
+header = true
+[instrument]
+exchange_from = "ingest"
+symbol_from   = "ingest"
+timeframe     = "ingest"
+[columns]
+date  = { name = "time" }
+open  = { name = "open" }
+high  = { name = "high" }
+low   = { name = "low" }
+close = { name = "close" }
+[datetime]
+kind = "native"
+precision = "date"
+[volume]
+rule = "use_column"
+column = "Volume"
+preserved_not_volume = ["Net Volume"]
+requirement_set = "price_only"

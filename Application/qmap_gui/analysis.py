@@ -15,8 +15,9 @@ from tkinter import font as tkfont
 from tkinter import ttk
 
 from . import workbench_services as ws
-from .common import fmt_clock, fmt_duration, open_in_file_manager
-from .widgets import ERROR_COLOR, MUTED_COLOR, OK_COLOR, WARN_COLOR, LogText, ReadOnlyText, combobox_index, section
+from .common import fmt_clock, fmt_duration, open_folder
+from .widgets import (ERROR_COLOR, MUTED_COLOR, OK_COLOR, WARN_COLOR, DateEntry, LogText, ReadOnlyText, combobox_index,
+                      section)
 
 COLUMNS = (("id", "Dataset", 60), ("instrument", "Instrument", 150), ("tf", "Timeframe", 90), ("bars", "Bars", 60),
            ("from", "From", 80), ("to", "To", 80), ("validation", "Validation", 150), ("storage", "Storage", 85),
@@ -31,8 +32,10 @@ class AnalysisFrame(tk.Frame):
         self.choices = ws.analyses()
         self.rows: dict[str, int] = {}
         self.param_vars: dict[str, tk.StringVar] = {}
+        self.date_entries: dict[str, DateEntry] = {}
         self.running = False
-        self.last_run_dir: Path | None = None
+        self.last_run_dir: Path | None = None  # folder of the latest COMPLETED run, as recorded for that run
+        self.last_run_id: str | None = None
         self.last_result = None
         self.last_readiness = None
         self._last_selection: tuple = ()
@@ -96,9 +99,12 @@ class AnalysisFrame(tk.Frame):
         row = tk.Frame(box)
         row.pack(fill="x", pady=(4, 0))
         tk.Label(row, text="Last run folder:", width=18, anchor="w").pack(side="left")
-        self.run_folder_var = tk.StringVar(self, value="(none yet)")
-        tk.Label(row, textvariable=self.run_folder_var, anchor="w", fg=MUTED_COLOR).pack(side="left", fill="x", expand=True)
-        self.open_run_button = tk.Button(row, text="Open run folder", state="disabled", command=self.open_run_folder)
+        self.run_folder_var = tk.StringVar(self, value="(no completed run yet)")
+        # read-only Entry, not a Label: the path can be selected and copied (Ctrl+C)
+        self.run_folder_entry = tk.Entry(row, textvariable=self.run_folder_var, state="readonly", relief="flat",
+                                         readonlybackground=self.cget("background"))
+        self.run_folder_entry.pack(side="left", fill="x", expand=True)
+        self.open_run_button = tk.Button(row, text="Open Output Folder", state="disabled", command=self.open_run_folder)
         self.open_run_button.pack(side="right")
 
         box = section(self, "3. Options - parameters")
@@ -155,12 +161,20 @@ class AnalysisFrame(tk.Frame):
             self.about.configure(text="")
             return
         self.about.configure(text=f"{c.description}\nResult type: {c.kind_note}.")
+        self.date_entries.clear()
         for r, p in enumerate(c.parameters):
-            tk.Label(self.params_frame, text=p.label + ":", width=14, anchor="w").grid(row=r, column=0, sticky="w")
+            tk.Label(self.params_frame, text=p.label + ":", width=14, anchor="w").grid(row=r * 2, column=0, sticky="w")
             var = tk.StringVar(self)
             var.trace_add("write", lambda *_a: self._invalidate())
-            tk.Entry(self.params_frame, textvariable=var, width=14).grid(row=r, column=1, sticky="w")
-            tk.Label(self.params_frame, text=p.help, fg=MUTED_COLOR, anchor="w").grid(row=r, column=2, sticky="w", padx=6)
+            if p.kind == "date":
+                empty = p.help.split("Empty = ", 1)[1].rstrip(".") if "Empty = " in p.help else "not used"
+                field = DateEntry(self.params_frame, var, parse=ws.parse_date_input, to_text=ws.date_to_entry_text,
+                                  confirm=ws.date_confirmation, empty_note=f"(empty = {empty})")
+                field.grid(row=r * 2, column=1, sticky="w")
+                self.date_entries[p.key] = field
+            else:
+                tk.Entry(self.params_frame, textvariable=var, width=14).grid(row=r * 2, column=1, sticky="w")
+            tk.Label(self.params_frame, text=p.help, fg=MUTED_COLOR, anchor="w").grid(row=r * 2 + 1, column=1, sticky="w")
             self.param_vars[p.key] = var
         self._invalidate()
 
@@ -181,6 +195,12 @@ class AnalysisFrame(tk.Frame):
             return
         self.output_var.set(f"Each run gets its own folder (named by its Run ID) in {ws.output_folder(settings)}. "
                             "An earlier run is never overwritten.")
+        if not self.running:
+            try:
+                latest = ws.last_completed_run(settings)
+            except Exception:  # an unreadable registry is reported below by the dataset list
+                latest = None
+            self._show_last_run(*(latest or (None, None)))
         try:
             infos = ws.ready_datasets(settings, include_superseded=self.superseded_var.get(), timeframe=self.tf_var.get())
         except Exception as exc:
@@ -257,7 +277,9 @@ class AnalysisFrame(tk.Frame):
             return
         self.check()  # always show the current readiness; the engine checks again itself before it starts
         if self.last_readiness is not None and not self.last_readiness.ready:
-            self.final_label.configure(text="Not started: the data are not ready (see the readiness box).", fg=ERROR_COLOR)
+            why = {ws.INVALID_INPUT: "the dates are not valid", ws.NO_ELIGIBLE_DATA: "there are no bars in the chosen period"
+                   }.get(self.last_readiness.state, "the data are not ready")
+            self.final_label.configure(text=f"Not started: {why} (see the readiness box).", fg=ERROR_COLOR)
             return
         job = ws.AnalysisJob(settings, c.analysis_id, ids, self.params())
         self.running, self._t0 = True, time.monotonic()
@@ -303,10 +325,8 @@ class AnalysisFrame(tk.Frame):
         self.stage_var.set("Finished")
         if result.run_id:
             self.run_id_var.set(result.run_id)
-        if result.run_dir:
-            self.last_run_dir = Path(result.run_dir)
-            self.run_folder_var.set(str(self.last_run_dir))
-            self.open_run_button.configure(state="normal")
+        if result.ok and result.run_dir:  # only a COMPLETED run becomes "the last run"; its own recorded folder
+            self._show_last_run(result.run_id, Path(result.run_dir))
         color = {"completed": OK_COLOR, "blocked": WARN_COLOR}.get(result.outcome, ERROR_COLOR)
         text = result.message
         if result.ok:
@@ -324,8 +344,13 @@ class AnalysisFrame(tk.Frame):
             self.elapsed_var.set(fmt_duration(time.monotonic() - self._t0))
         self.after(500, self._tick)
 
+    def _show_last_run(self, run_id: str | None, folder: Path | None) -> None:
+        self.last_run_id, self.last_run_dir = run_id, folder
+        self.run_folder_var.set(str(folder) if folder else "(no completed run yet)")
+        self.open_run_button.configure(state="normal" if folder else "disabled")
+
     def open_run_folder(self) -> None:
-        if self.last_run_dir is not None:
-            ok, msg = open_in_file_manager(self.last_run_dir)
-            if not ok:
-                self.app.dialogs.warn("Q-MAP", msg)
+        """Open the latest completed run's own folder. Only opens it; nothing is changed."""
+        ok, msg = open_folder(self.last_run_dir, f"run {self.last_run_id}" if self.last_run_id else "this run")
+        if not ok:
+            self.app.dialogs.warn("Open Output Folder", msg)

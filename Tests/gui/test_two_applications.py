@@ -20,7 +20,7 @@ def _prepare(world):
     from qmap_gui.services import build_core_settings, list_profiles
 
     settings = build_core_settings(str(world.data), str(world.output), REPO)
-    profile = next(p.profile for p in list_profiles(settings) if p.profile and p.profile.profile_id == "example_csv_dd_mm_yy")
+    profile = next(p.profile for p in list_profiles(settings) if p.profile and p.profile.profile_id == "csv_hdr_ddmmyy_idfromname")
     db = open_database(settings.db_path)
     try:
         with run_context(settings, db, "FOUND", area="Ingestion") as run:
@@ -178,7 +178,10 @@ def test_workbench_blocks_an_unreliable_run_and_explains_why(gui, world):
     an.start_run()
     assert not an.running and an.last_result is None
     assert "Not started" in an.final_label.cget("text")
-    assert "NOT READY" in an.readiness_box.get() and "Database Manager" in an.readiness_box.get()
+    # Requirement 2.4 (enhancement, 01-Nov-26): a valid period with no bars is reported as such, not as a generic
+    # "not ready" and never as a date error
+    assert "NO DATA IN THIS PERIOD" in an.readiness_box.get() and "Database Manager" in an.readiness_box.get()
+    assert "no bars between" in an.final_label.cget("text") or "no bars in the chosen period" in an.final_label.cget("text")
     assert not (world.output / "Research_Reports").exists() or not any((world.output / "Research_Reports").iterdir())
 
 
@@ -213,7 +216,7 @@ def test_a_late_selection_event_does_not_wipe_the_readiness_result(gui, world):
     an.param_vars["date_from"].set("01-Jan-35")
     an.start_run()
     gui.pump(0.3)  # now the queued selection event arrives
-    assert "NOT READY" in an.readiness_box.get() and an.last_readiness is not None
+    assert "NO DATA IN THIS PERIOD" in an.readiness_box.get() and an.last_readiness is not None
     # Refresh DOES ask for a new check on purpose: the data may have changed in Database Manager meanwhile.
     an.refresh()
     gui.pump(0.3)

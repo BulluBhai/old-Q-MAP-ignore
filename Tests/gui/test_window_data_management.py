@@ -51,7 +51,7 @@ def test_end_to_end_select_preview_check_and_load(dm, world):
     gui.dialogs.files.append([str(world.good), str(world.bad)])
     dm.add_files()
     assert dm.count_label.cget("text") == "[2 files selected]"
-    choose_profile(dm, "example_csv_dd_mm_yy")
+    choose_profile(dm, "csv_hdr_ddmmyy_idfromname")
     assert "Ready" in dm.hint.cget("text") and str(dm.run_button.cget("state")) == "normal"
 
     # preview: shows the file, saves nothing
@@ -101,7 +101,7 @@ def test_the_open_buttons_use_the_systems_file_manager(dm, world, monkeypatch):
     opened = []
     monkeypatch.setattr(services, "open_in_file_manager", lambda p: (opened.append(p), (True, "Opened."))[1])
     dm.add_paths([world.good, world.bad])
-    choose_profile(dm, "example_csv_dd_mm_yy")
+    choose_profile(dm, "csv_hdr_ddmmyy_idfromname")
     run_and_wait(dm, dm.start_ingest)
     dm.open_run_button.invoke()
     assert opened[-1] == dm.last_run_dir
@@ -117,7 +117,7 @@ def test_the_open_buttons_use_the_systems_file_manager(dm, world, monkeypatch):
 
 def test_loading_the_same_files_again_says_nothing_new_was_loaded(dm, world):
     dm.add_paths([world.good])
-    choose_profile(dm, "example_csv_dd_mm_yy")
+    choose_profile(dm, "csv_hdr_ddmmyy_idfromname")
     run_and_wait(dm, dm.start_ingest)
     run_and_wait(dm, dm.start_ingest)
     assert rows(dm)[0][1] == "Already loaded (nothing new)"
@@ -126,7 +126,7 @@ def test_loading_the_same_files_again_says_nothing_new_was_loaded(dm, world):
 
 def test_rejected_files_cannot_be_retried_unchanged_without_a_reason(dm, world):
     dm.add_paths([world.bad])
-    choose_profile(dm, "example_csv_dd_mm_yy")
+    choose_profile(dm, "csv_hdr_ddmmyy_idfromname")
     run_and_wait(dm, dm.start_ingest)
     run_and_wait(dm, dm.start_ingest)
     assert rows(dm)[0][1] == "Not retried (already rejected)"
@@ -144,7 +144,7 @@ def test_a_file_rejected_only_for_future_dates_is_shown_as_waiting_not_as_reject
         row[0] = (today + timedelta(days=i - 4)).strftime("%d-%m-%y")
     f = write_delimited(world.src / "NSE_FUTURE_1D.csv", NET_HEADER, data)
     dm.add_paths([f])
-    choose_profile(dm, "example_csv_dd_mm_yy")
+    choose_profile(dm, "csv_hdr_ddmmyy_idfromname")
     run_and_wait(dm, dm.start_ingest)
     assert rows(dm)[0][1] == "Rejected - see problems"
     run_and_wait(dm, dm.start_ingest)
@@ -157,7 +157,7 @@ def test_a_profile_that_cannot_read_the_instrument_asks_for_it(dm, world):
     f = write_delimited(world.src / "weird_name.txt", ["date", "open", "high", "low", "close", "Volume"],
                         [r[:6] for r in daily_rows(8)])
     dm.add_paths([f])
-    choose_profile(dm, "example_text_headered_iso_date")
+    choose_profile(dm, "txt_hdr_isodate")
     assert str(dm.run_button.cget("state")) == "disabled"
     assert "exchange" in dm.hint.cget("text").lower()
     assert str(dm.exchange_entry.cget("state")) == "normal"
@@ -174,17 +174,17 @@ def test_a_profile_that_cannot_read_the_instrument_asks_for_it(dm, world):
 
 
 def test_fields_the_profile_reads_itself_are_not_editable(dm):
-    choose_profile(dm, "example_csv_dd_mm_yy")
+    choose_profile(dm, "csv_hdr_ddmmyy_idfromname")
     for w in (dm.exchange_entry, dm.symbol_entry, dm.timeframe_combo):
         assert str(w.cget("state")) == "disabled"
-    choose_profile(dm, "example_csv_unix_seconds")
+    choose_profile(dm, "csv_hdr_unixs_idfromname")
     assert str(dm.timeframe_combo.cget("state")) == "readonly" and str(dm.exchange_entry.cget("state")) == "disabled"
 
 
 def test_a_switched_off_box_does_not_keep_showing_an_earlier_value(dm):
-    choose_profile(dm, "example_csv_unix_seconds")
+    choose_profile(dm, "csv_hdr_unixs_idfromname")
     dm.timeframe_var.set("5m")
-    choose_profile(dm, "example_parquet_naive_timestamp")  # timeframe fixed in the profile (1m)
+    choose_profile(dm, "parquet_hdr_naivedt")  # timeframe fixed in the profile (1m)
     assert str(dm.timeframe_combo.cget("state")) == "disabled" and dm.timeframe_var.get() == ""
     assert "Timeframe: fixed in the profile (1m)" in dm.identity_note.cget("text")
 
@@ -194,7 +194,7 @@ def test_typing_the_exchange_and_symbol_enables_check_and_load_at_once(dm, world
     f = write_delimited(world.src / "weird_name.txt", ["date", "open", "high", "low", "close", "Volume"],
                         [r[:6] for r in daily_rows(8)])
     dm.add_paths([f])
-    choose_profile(dm, "example_text_headered_iso_date")
+    choose_profile(dm, "txt_hdr_isodate")
     assert str(dm.run_button.cget("state")) == "disabled"
     dm.exchange_entry.insert("end", "NSE")  # what a key press does: the box's text changes, nothing else is called
     dm.symbol_entry.insert("end", "NIFTY")
@@ -209,7 +209,7 @@ def test_typing_the_exchange_and_symbol_enables_check_and_load_at_once(dm, world
 def test_a_file_name_profile_explains_its_switched_off_boxes_and_can_be_copied_to_ask_for_them(dm, world):
     f = write_delimited(world.src / "csv headers std.csv", NET_HEADER, dd_mm_yy_rows())
     dm.add_paths([f])
-    choose_profile(dm, "example_csv_dd_mm_yy")
+    choose_profile(dm, "csv_hdr_ddmmyy_idfromname")
     assert str(dm.exchange_entry.cget("state")) == "disabled"
     assert "read from the file name" in dm.identity_note.cget("text")
     assert dm.hint.cget("text").startswith("Note (1 file(s)):") and "does not fit" in dm.hint.cget("text")
@@ -235,7 +235,7 @@ def test_a_file_name_profile_explains_its_switched_off_boxes_and_can_be_copied_t
 def test_a_problem_in_a_column_name_is_explained_without_codes(dm, world):
     f = write_delimited(world.src / "NSE_X_1D.csv", ["time", "open", "high", "low", "Volume"], [r[:4] + [r[5]] for r in dm_rows()])
     dm.add_paths([f])
-    choose_profile(dm, "example_csv_dd_mm_yy")
+    choose_profile(dm, "csv_hdr_ddmmyy_idfromname")
     run_and_wait(dm, dm.start_ingest)
     dm.tree.selection_set(dm.tree.get_children()[0])
     dm.gui.pump(0.1)
@@ -250,7 +250,7 @@ def dm_rows():
 def test_a_vanished_file_is_reported_not_a_crash(dm, world):
     gone = write_delimited(world.src / "NSE_GONE_1D.csv", NET_HEADER, dm_rows_net())
     dm.add_paths([gone, world.good])
-    choose_profile(dm, "example_csv_dd_mm_yy")
+    choose_profile(dm, "csv_hdr_ddmmyy_idfromname")
     gone.unlink()
     run_and_wait(dm, dm.start_ingest)
     out = rows(dm)
@@ -265,7 +265,7 @@ def test_unsupported_files_are_reported_with_the_reason(dm, world):
     j = world.src / "data.json"
     j.write_text("{}")
     dm.add_paths([j])
-    choose_profile(dm, "example_csv_dd_mm_yy")
+    choose_profile(dm, "csv_hdr_ddmmyy_idfromname")
     run_and_wait(dm, dm.start_ingest)
     assert rows(dm)[0][1] == "File type not supported" and "JSON" in rows(dm)[0][3]
 
@@ -303,7 +303,7 @@ def slow_ingest(monkeypatch, delay=0.25):
 def test_buttons_are_locked_while_running_and_free_afterwards(dm, world, monkeypatch):
     slow_ingest(monkeypatch)
     dm.add_paths([world.good, world.bad])
-    choose_profile(dm, "example_csv_dd_mm_yy")
+    choose_profile(dm, "csv_hdr_ddmmyy_idfromname")
     dm.start_ingest()
     dm.gui.pump(0.1)
     assert dm.running and str(dm.run_button.cget("state")) == "disabled"
@@ -316,7 +316,7 @@ def test_buttons_are_locked_while_running_and_free_afterwards(dm, world, monkeyp
 def test_progress_is_shown_while_files_are_processed(dm, world, monkeypatch):
     slow_ingest(monkeypatch, 0.3)
     dm.add_paths([world.good, world.bad])
-    choose_profile(dm, "example_csv_dd_mm_yy")
+    choose_profile(dm, "csv_hdr_ddmmyy_idfromname")
     dm.start_ingest()
     dm.gui.wait(lambda: dm.files_var.get().startswith("1 / 2"))
     assert 0 < float(dm.progress["value"]) < 100
@@ -330,7 +330,7 @@ def test_stop_after_this_file(dm, world, monkeypatch):
     slow_ingest(monkeypatch, 0.3)
     files = [write_delimited(world.src / f"NSE_F{i}_1D.csv", NET_HEADER, dd_mm_yy_rows(6, i)) for i in range(1, 6)]
     dm.add_paths(files)
-    choose_profile(dm, "example_csv_dd_mm_yy")
+    choose_profile(dm, "csv_hdr_ddmmyy_idfromname")
     dm.start_ingest()
     dm.gui.wait(lambda: dm._done >= 1)
     dm.cancel()
@@ -350,7 +350,7 @@ def test_the_screen_is_only_ever_updated_from_the_main_thread(dm, world, monkeyp
 
     dm.on_job_event = spy
     dm.add_paths([world.good, world.bad])
-    choose_profile(dm, "example_csv_dd_mm_yy")
+    choose_profile(dm, "csv_hdr_ddmmyy_idfromname")
     run_and_wait(dm, dm.start_ingest)
     assert seen and all(seen)
     workers = [t for t in threading.enumerate() if t.name == "qmap-worker" and t.is_alive()]
@@ -359,7 +359,7 @@ def test_the_screen_is_only_ever_updated_from_the_main_thread(dm, world, monkeyp
 
 def test_the_live_log_shows_the_foundations_messages(dm, world):
     dm.add_paths([world.good, world.bad])
-    choose_profile(dm, "example_csv_dd_mm_yy")
+    choose_profile(dm, "csv_hdr_ddmmyy_idfromname")
     run_and_wait(dm, dm.start_ingest)
     log = dm.log.get()
     assert "Receipt" in log and "Ingest accepted" in log and "Ingest REJECTED" in log and "started" in log
@@ -371,21 +371,21 @@ def test_an_unexpected_failure_in_the_worker_is_shown_not_swallowed(dm, world, m
 
     monkeypatch.setattr(jobs.IngestJob, "run", boom)
     dm.add_paths([world.good])
-    choose_profile(dm, "example_csv_dd_mm_yy")
+    choose_profile(dm, "csv_hdr_ddmmyy_idfromname")
     run_and_wait(dm, dm.start_ingest)
     assert not dm.running and "worker exploded" in dm.final_label.cget("text") and "worker exploded" in dm.log.get()
 
 
 # ---- profiles -----------------------------------------------------------------------------------------------------
 def test_profile_details_are_shown_in_plain_english(dm):
-    choose_profile(dm, "example_csv_unix_seconds")
+    choose_profile(dm, "csv_hdr_unixs_idfromname")
     text = dm.profile_details.get()
     assert "Unix timestamps in SECONDS" in text and "First row is a header: Yes" in text and "Net Volume" in text
 
 
 def test_browse_for_a_valid_and_an_invalid_profile(dm, world):
     good = world.src / "elsewhere.toml"
-    good.write_text((REPO / "Configuration/source_profiles/example_csv_iso_offset.toml").read_text().replace("example_csv_iso_offset", "elsewhere"))
+    good.write_text((REPO / "Configuration/source_profiles/csv_hdr_isodt_idfromname.toml").read_text().replace("csv_hdr_isodt_idfromname", "elsewhere"))
     dm.gui.dialogs.file.append(str(good))
     dm.browse_profile()
     assert dm.current_info.profile.profile_id == "elsewhere" and dm.current_info.where == "file"
@@ -399,7 +399,7 @@ def test_browse_for_a_valid_and_an_invalid_profile(dm, world):
 
 def test_new_profile_from_an_example_lands_in_my_profiles_not_the_repository(dm, world):
     before = repo_snapshot()
-    choose_profile(dm, "example_csv_dd_mm_yy")
+    choose_profile(dm, "csv_hdr_ddmmyy_idfromname")
     dm.gui.dialogs.strings.append("my_daily")
     dm.copy_profile()
     assert dm.current_info.where == "mine" and dm.current_info.profile.profile_id == "my_daily"
@@ -411,27 +411,28 @@ def test_new_profile_from_an_example_lands_in_my_profiles_not_the_repository(dm,
 
 
 def test_the_profile_choice_is_remembered(dm, gui, world):
-    choose_profile(dm, "example_csv_iso_offset")
+    choose_profile(dm, "csv_hdr_isodt_idfromname")
     gui.close()
     dm2 = gui.start().screens["data"]
-    assert dm2.current_info is not None and dm2.current_info.profile.profile_id == "example_csv_iso_offset"
+    assert dm2.current_info is not None and dm2.current_info.profile.profile_id == "csv_hdr_isodt_idfromname"
 
 
 def test_profile_editor_checks_saves_and_protects_examples(dm, world):
     from qmap_gui.profile_editor import ProfileEditor
 
-    choose_profile(dm, "example_csv_dd_mm_yy")
+    choose_profile(dm, "csv_hdr_ddmmyy_idfromname")
     dm.edit_profile()
     editor = next(w for w in dm.app.winfo_children() if isinstance(w, ProfileEditor))
-    assert "Editing a COPY of the example" in editor.message.master.winfo_children()[0].cget("text")
-    assert not editor.check() and "example profile" in editor.message.cget("text")  # keep your own name
+    assert "Editing a COPY of the Q-MAP library profile" in editor.message.master.winfo_children()[0].cget("text")
+    assert 'status          = "custom"' in editor.text.get("1.0", "end")  # the copy is labelled as yours
+    assert not editor.check() and "Q-MAP library profile" in editor.message.cget("text")  # keep your own name
     editor.text.delete("1.0", "end")
-    editor.text.insert("1.0", (REPO / "Configuration/source_profiles/example_csv_dd_mm_yy.toml").read_text()
-                       .replace("example_csv_dd_mm_yy", "edited_daily").replace("two_digit_year_pivot = 69", ""))
+    editor.text.insert("1.0", (REPO / "Configuration/source_profiles/csv_hdr_ddmmyy_idfromname.toml").read_text()
+                       .replace("csv_hdr_ddmmyy_idfromname", "edited_daily").replace("two_digit_year_pivot = 69", ""))
     assert not editor.check() and "two-digit year" in editor.message.cget("text")
     editor.text.delete("1.0", "end")
-    editor.text.insert("1.0", (REPO / "Configuration/source_profiles/example_csv_dd_mm_yy.toml").read_text()
-                       .replace("example_csv_dd_mm_yy", "edited_daily"))
+    editor.text.insert("1.0", (REPO / "Configuration/source_profiles/csv_hdr_ddmmyy_idfromname.toml").read_text()
+                       .replace("csv_hdr_ddmmyy_idfromname", "edited_daily"))
     editor.save()
     assert (world.settings / "profiles" / "edited_daily.toml").is_file() and "Saved" in editor.message.cget("text")
     assert dm.current_info.profile.profile_id == "edited_daily"
@@ -449,7 +450,7 @@ def test_profile_editor_checks_saves_and_protects_examples(dm, world):
 def test_nothing_is_added_to_the_repository_during_the_whole_workflow(dm, world):
     before = repo_snapshot()
     dm.add_paths([world.good, world.bad])
-    choose_profile(dm, "example_csv_dd_mm_yy")
+    choose_profile(dm, "csv_hdr_ddmmyy_idfromname")
     run_and_wait(dm, dm.check_files)
     run_and_wait(dm, dm.start_ingest)
     dm.preview_selected()
@@ -460,7 +461,7 @@ def test_nothing_is_added_to_the_repository_during_the_whole_workflow(dm, world)
 
 def test_a_file_deleted_between_two_runs_does_not_affect_the_stored_original(dm, world):
     dm.add_paths([world.good])
-    choose_profile(dm, "example_csv_dd_mm_yy")
+    choose_profile(dm, "csv_hdr_ddmmyy_idfromname")
     run_and_wait(dm, dm.start_ingest)
     shutil.copy(world.good, world.src / "backup.csv")
     world.good.unlink()

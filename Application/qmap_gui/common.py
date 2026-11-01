@@ -56,3 +56,27 @@ class EmitHandler(logging.Handler):
             self.emit_event({"type": "log", "text": self.format(record)})
         except Exception:  # never let logging break a run
             pass
+
+
+def open_folder(path: str | Path | None, what: str = "this run") -> tuple[bool, str]:
+    """Open an existing folder in the file manager. Only opens: never creates, moves, renames or deletes anything.
+
+    Returns (opened, plain-English message). Every failure is a message, never an exception, so the window keeps
+    working. Opening is handed to the operating system (os.startfile / a separate process), so the window does not
+    wait for File Explorer.
+    """
+    if path is None or str(path).strip() == "":
+        return False, "No analysis run has completed yet, so there is no output folder to open."
+    p = Path(path)
+    try:
+        exists, is_dir = p.exists(), p.is_dir()
+    except OSError as exc:
+        return False, f"The output folder of {what} cannot be checked ({exc}):\n{p}"
+    if not exists:
+        return False, (f"The output folder of {what} no longer exists:\n{p}\n\nIt may have been moved, renamed or "
+                       "deleted, or your Q-MAP_OUTPUT folder setting now points somewhere else.")
+    if not is_dir:
+        return False, f"This is not a folder, so it cannot be opened:\n{p}"
+    if not os.access(p, os.R_OK):
+        return False, f"Windows does not allow this folder to be opened (no permission to read it):\n{p}"
+    return open_in_file_manager(p)

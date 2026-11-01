@@ -279,7 +279,7 @@ class DataManagementFrame(tk.Frame):
             self.profile_details.set(f"This profile cannot be used yet:\n{info.problem}\n\nUse 'Edit / check profile...' to fix it.", "error")
         else:
             lines = [f"{k}: {v}" for k, v in services.describe_profile(info.profile)]
-            self.profile_details.set(f"{info.profile.description or info.profile.source_label}\n" + "\n".join(lines))
+            self.profile_details.set(f"{info.profile.title}\n{info.profile.description}\n" + "\n".join(lines))
             self.app.remember(last_profile=str(info.path))
         needs = services.profile_needs(info.profile) if info and info.profile else services.ProfileNeeds(False, False, False)
         self.exchange_entry.configure(state="normal" if needs.exchange else "disabled")
@@ -316,7 +316,9 @@ class DataManagementFrame(tk.Frame):
             self.app.dialogs.info("Q-MAP", "Choose a source profile first.")
             return None
         text = info.path.read_text(encoding="utf-8")
-        note = (f"Editing a COPY of the example '{info.path.name}'." if info.where == "example"
+        if info.where == "example":
+            text = services.as_user_copy_text(text)
+        note = (f"Editing a COPY of the Q-MAP library profile '{info.path.name}'." if info.where == "example"
                 else f"Editing {info.path}.")
         return text, note
 

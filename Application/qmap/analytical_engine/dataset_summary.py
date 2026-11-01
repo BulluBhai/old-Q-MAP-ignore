@@ -84,8 +84,11 @@ SPEC = AnalysisSpec(
     run_prefix="DSUM",
     requirement=DataRequirement(timeframes=TIMEFRAME_ORDER, min_rows=2),
     execute=execute,
-    parameters=(Parameter("date_from", "Start date", "date", help="Optional, e.g. 01-Jan-24. Empty = from the first bar."),
-                Parameter("date_to", "End date", "date", help="Optional. Empty = to the last bar.")),
+    parameters=(Parameter("date_from", "Start date", "date",
+                          help="Optional. Type 25/02/26, 25-02-26, 25-Feb-26 or 250226, or use Calendar. "
+                               "Empty = from the first bar."),
+                Parameter("date_to", "End date", "date",
+                          help="Optional, same formats. Empty = to the last bar.")),
     min_datasets=1, max_datasets=50,
     kind_note="descriptive statistics only - no signals, rankings or methodology",
 )

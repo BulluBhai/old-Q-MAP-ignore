@@ -119,7 +119,7 @@ def test_closing_while_a_load_is_running_stops_it_after_the_current_file(gui, wo
     gui.choose_folders(app)
     dm = app.screens["data"]
     dm.add_paths(files)
-    idx = next(i for i, p in enumerate(dm.profile_infos) if p.profile and p.profile.profile_id == "example_csv_dd_mm_yy")
+    idx = next(i for i, p in enumerate(dm.profile_infos) if p.profile and p.profile.profile_id == "csv_hdr_ddmmyy_idfromname")
     dm.select_profile_index(idx)
     dm.start_ingest()
     gui.wait(lambda: started)

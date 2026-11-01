@@ -1,0 +1,36 @@
+# EXAMPLE Q-MAP source profile: for learning and testing, NOT recommended for routine use (see its description).
+# Naming standard: docs/standards/Q-MAP_Naming_and_Reference_Conventions.md, section C.
+profile_id      = "csv_hdr_isodt_idfromname"
+profile_version = 1
+status          = "example"
+display_name    = "Example - Headered CSV: time (ISO date-time with UTC offset), open, high, low, close, Volume, Net Volume; exchange and symbol from the file name"
+source_label    = "CSV, headered, ISO date-times with UTC offset, identity from file name"
+description     = "EXAMPLE for learning and testing: the same layout as the standard profile csv_hdr_isodt, except that exchange and symbol are read from the file name (for example NSE_NIFTY_1D.csv), never guessed from the data. You type the timeframe. For routine use choose csv_hdr_isodt."
+legacy_ids      = ["example_csv_iso_offset"]   # earlier names of this layout (still recognised)
+
+[file]
+expected_format = "delimited_text"
+header = true
+
+[instrument]
+exchange_from = "filename_pattern"
+symbol_from   = "filename_pattern"
+filename_pattern = "^(?P<exchange>[A-Za-z]+)_(?P<symbol>[A-Za-z0-9&]+)_"
+timeframe = "ingest"
+
+[columns]
+date  = { name = "time" }
+open  = { name = "open" }
+high  = { name = "high" }
+low   = { name = "low" }
+close = { name = "close" }
+
+[datetime]
+kind = "iso"                    # the offset in each value is used; no zone is assumed
+exchange_timezone = "Asia/Kolkata"   # CONFIRM: used to derive each bar's trading date
+
+[volume]
+rule = "use_column"
+column = "Volume"
+preserved_not_volume = ["Net Volume"]
+requirement_set = "price_only"

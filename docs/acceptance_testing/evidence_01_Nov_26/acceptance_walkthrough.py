@@ -89,14 +89,14 @@ def choose(profile_id):
 
 
 # ---- 3: import and preview -------------------------------------------------------------------------------------
-dm.add_paths([SRC]); choose("example_csv_dd_mm_yy")
+dm.add_paths([SRC]); choose("csv_hdr_ddmmyy_idfromname")
 dm.listbox.selection_set(0); dm.preview_selected(); pump(dbm, 1.5)
 preview = dm.preview_box.get()
 record(3, "Import and preview a supported sample file", "PASSED" if "time" in preview and "Net Volume" in preview else "FAILED",
        preview.splitlines()[:6])
 
 # ---- 5: incompatible profile is flagged (Unix-seconds profile on a dd-mm-yy file) -----------------------------
-choose("example_csv_unix_seconds"); dm.timeframe_var.set("1D"); pump(dbm)
+choose("csv_hdr_unixs_idfromname"); dm.timeframe_var.set("1D"); pump(dbm)
 dm.finished_event.clear(); dm.check_files(); wait(dbm, dm.finished_event.is_set)
 row = [str(x) for x in dm.tree.item(dm.tree.get_children()[0])["values"]]
 dm.tree.selection_set(dm.tree.get_children()[0]); pump(dbm)
@@ -106,7 +106,7 @@ record(5, "Reject or flag an incompatible profile", "PASSED" if "accepted" not i
 shot("02_incompatible_profile_flagged")
 
 # ---- 4 + 6: compatible profile, standardise and validate -------------------------------------------------------
-dm.timeframe_var.set(""); choose("example_csv_dd_mm_yy")
+dm.timeframe_var.set(""); choose("csv_hdr_ddmmyy_idfromname")
 dm.finished_event.clear(); dm.check_files(); wait(dbm, dm.finished_event.is_set)
 check_row = [str(x) for x in dm.tree.item(dm.tree.get_children()[0])["values"]]
 record(4, "Apply a compatible source profile", "PASSED" if check_row[1] == "Would be accepted" else "FAILED", check_row[:3])
@@ -183,7 +183,7 @@ an.param_vars["date_from"].set("01-Jan-30"); an.start_run(); pump(awb)
 blocked_text = an.readiness_box.get()
 runs_after_block = db.one("SELECT COUNT(*) FROM runs WHERE module_code = 'DSUM'")[0]
 record(11, "Analysis blocked with a clear explanation when data are unsuitable",
-       "PASSED" if "NOT READY" in blocked_text and an.last_result is None and runs_after_block == 0 else "FAILED",
+       "PASSED" if ("NOT READY" in blocked_text or "NO DATA IN THIS PERIOD" in blocked_text) and an.last_result is None and runs_after_block == 0 else "FAILED",
        {"readiness": blocked_text.splitlines()[:6], "final": an.final_label.cget("text"), "runs_created": runs_after_block})
 shot("05_workbench_blocked")
 an.param_vars["date_from"].set("")

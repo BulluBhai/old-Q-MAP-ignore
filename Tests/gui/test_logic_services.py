@@ -96,8 +96,8 @@ def test_core_settings_refuse_unsafe_folders_in_plain_words(world):
 def test_example_profiles_are_listed_and_described_in_plain_english(settings):
     infos = services.list_profiles(settings)
     ids = {i.profile.profile_id for i in infos if i.profile}
-    assert {"example_csv_unix_seconds", "example_csv_iso_offset", "example_csv_dd_mm_yy", "example_text_headered_iso_date",
-            "example_text_headerless_seven_columns", "example_parquet_naive_timestamp"} <= ids
+    assert {"csv_hdr_unixs_idfromname", "csv_hdr_isodt_idfromname", "csv_hdr_ddmmyy_idfromname", "txt_hdr_isodate",
+            "txt_nohdr_isodate_dupvol", "parquet_hdr_naivedt"} <= ids
     assert all(i.where == "example" and not i.problem for i in infos)
     for info in infos:
         rows = dict(services.describe_profile(info.profile))
@@ -117,23 +117,23 @@ def test_a_broken_profile_is_listed_with_its_problem_not_hidden(settings, world)
 
 def test_profile_needs_reflect_what_the_file_cannot_provide(settings):
     by_id = {i.profile.profile_id: i.profile for i in services.list_profiles(settings)}
-    n = services.profile_needs(by_id["example_text_headered_iso_date"])
+    n = services.profile_needs(by_id["txt_hdr_isodate"])
     assert (n.exchange, n.symbol, n.timeframe) == (True, True, False)
-    n = services.profile_needs(by_id["example_csv_unix_seconds"])
+    n = services.profile_needs(by_id["csv_hdr_unixs_idfromname"])
     assert (n.exchange, n.symbol, n.timeframe) == (False, False, True)
-    n = services.profile_needs(by_id["example_csv_dd_mm_yy"])
+    n = services.profile_needs(by_id["csv_hdr_ddmmyy_idfromname"])
     assert (n.exchange, n.symbol, n.timeframe) == (False, False, False)
 
 
 def test_request_problems_are_plain(settings):
-    p = {i.profile.profile_id: i.profile for i in services.list_profiles(settings)}["example_text_headered_iso_date"]
+    p = {i.profile.profile_id: i.profile for i in services.list_profiles(settings)}["txt_hdr_isodate"]
     problems = services.request_problems(p, "", "", "")
     assert len(problems) == 2 and "exchange" in problems[0] and "symbol" in problems[1]
     assert services.request_problems(p, "NSE", "NIFTY", "") == []
 
 
 def test_profile_text_validation_gives_plain_messages(settings):
-    good = (REPO / "Configuration/source_profiles/example_csv_dd_mm_yy.toml").read_text()
+    good = (REPO / "Configuration/source_profiles/csv_hdr_ddmmyy_idfromname.toml").read_text()
     profile, msg = services.validate_profile_text(good, settings)
     assert profile and msg == "This profile is valid."
     profile, msg = services.validate_profile_text(good.replace('format = "%d-%m-%y"', 'format = "%d-%m-%y"\nbogus'), settings)
@@ -145,7 +145,7 @@ def test_profile_text_validation_gives_plain_messages(settings):
 
 
 def test_copy_example_creates_an_independent_profile_outside_the_repository(settings, world):
-    example = REPO / "Configuration/source_profiles/example_csv_dd_mm_yy.toml"
+    example = REPO / "Configuration/source_profiles/csv_hdr_ddmmyy_idfromname.toml"
     before = example.read_text()
     path = services.copy_example_as(example, "my_daily", world.settings / "profiles")
     text = path.read_text()
@@ -159,13 +159,13 @@ def test_copy_example_creates_an_independent_profile_outside_the_repository(sett
 
 
 def test_save_user_profile_validates_and_writes_atomically(world):
-    text = (REPO / "Configuration/source_profiles/example_csv_dd_mm_yy.toml").read_text().replace("example_csv_dd_mm_yy", "saved_one")
+    text = (REPO / "Configuration/source_profiles/csv_hdr_ddmmyy_idfromname.toml").read_text().replace("csv_hdr_ddmmyy_idfromname", "saved_one")
     path = services.save_user_profile(text, world.settings / "profiles")
     assert path.name == "saved_one.toml" and not [p for p in path.parent.iterdir() if p.name.endswith(".tmp")]
 
 
 def test_profile_version_conflict_is_caught_before_ingest(settings, world):
-    example = REPO / "Configuration/source_profiles/example_csv_dd_mm_yy.toml"
+    example = REPO / "Configuration/source_profiles/csv_hdr_ddmmyy_idfromname.toml"
     mine = services.copy_example_as(example, "used_profile", world.settings / "profiles")
     profile = services.load_profile_file(mine, settings).profile
     assert services.profile_version_conflict(settings, profile) is None  # no database yet
@@ -174,7 +174,7 @@ def test_profile_version_conflict_is_caught_before_ingest(settings, world):
         assert ingest_file(run, world.good, profile).outcome == "accepted"
     db.close()
     assert services.profile_version_conflict(settings, profile) is None  # same content: fine
-    edited = mine.read_text().replace("CSV, DD-MM-YY dates", "CSV, edited")
+    edited = mine.read_text().replace("DD-MM-YY dates", "edited label")  # any content change, same version
     p2, _ = services.validate_profile_text(edited, settings)
     assert p2 is not None
     msg = services.profile_version_conflict(settings, p2)
@@ -182,7 +182,7 @@ def test_profile_version_conflict_is_caught_before_ingest(settings, world):
 
 
 # ---- check (dry run) and preview: nothing is saved --------------------------------------------------------
-def profile(settings, name="example_csv_dd_mm_yy"):
+def profile(settings, name="csv_hdr_ddmmyy_idfromname"):
     return next(i.profile for i in services.list_profiles(settings) if i.profile and i.profile.profile_id == name)
 
 

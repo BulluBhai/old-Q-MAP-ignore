@@ -142,19 +142,22 @@ You never need to "activate" the environment. Use its own `python.exe` as shown.
 
 Every file needs a **source profile**: a small settings file that states, for one file layout, everything that
 could otherwise be guessed (header or not, date format and unit, time zone, volume columns, instrument,
-timeframe). Q-MAP never guesses. Examples are in `Configuration/source_profiles/`; copy one and edit it.
-Check every example setting against your own file before use (time zones and two-digit-year rules especially).
+timeframe). Q-MAP never guesses. Q-MAP's own profiles are in `Configuration/source_profiles/`: **Standard** profiles are
+recommended for routine use, **Example** profiles are for learning and testing (naming standard:
+[docs/standards/Q-MAP_Naming_and_Reference_Conventions.md](docs/standards/Q-MAP_Naming_and_Reference_Conventions.md)).
+Copy one to adapt it. Check every setting against your own file before use (time zones and two-digit-year rules
+especially). Profiles renamed under the standard are still found by their earlier names.
 
 Look at a file first. This registers nothing and writes nothing:
 
 ```bash
-"<ENV_FOLDER>\Scripts\python.exe" -m qmap --config "<CONFIG_FILE>" preview --profile example_csv_unix_seconds --timeframe 1D "<FILE>"
+"<ENV_FOLDER>\Scripts\python.exe" -m qmap --config "<CONFIG_FILE>" preview --profile csv_hdr_unixs --exchange NSE --symbol NIFTY --timeframe 1D "<FILE>"
 ```
 
 Ingest one or more files:
 
 ```bash
-"<ENV_FOLDER>\Scripts\python.exe" -m qmap --config "<CONFIG_FILE>" ingest --profile example_csv_unix_seconds --timeframe 1D "<FILE>"
+"<ENV_FOLDER>\Scripts\python.exe" -m qmap --config "<CONFIG_FILE>" ingest --profile csv_hdr_unixs --exchange NSE --symbol NIFTY --timeframe 1D "<FILE>"
 ```
 
 The result is `ACCEPTED`, `REUSED` (already processed the same way, with the same validation settings), `REJECTED` (see the issues report named in

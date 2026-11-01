@@ -1,0 +1,36 @@
+# STANDARD Q-MAP source profile: recommended for routine use. Its reading rules were verified row by row against
+# the Project Owner's sample files (docs/sample_file_testing). Check the time-zone and two-digit-year settings
+# against your own data before relying on it.
+# Naming standard: docs/standards/Q-MAP_Naming_and_Reference_Conventions.md, section C.
+profile_id      = "txt_nohdr_isodate_dupvol"
+profile_version = 1
+status          = "standard"
+display_name    = "Headerless TXT: date (YYYY-MM-DD), open, high, low, close, Volume, Volume copy - daily"
+source_label    = "TXT, headerless, ISO dates, duplicated volume"
+description     = "Comma-separated text file WITHOUT a header row; columns by position: 0 date (YYYY-MM-DD), 1 open, 2 high, 3 low, 4 close, 5 Volume, 6 a second copy of Volume that must be identical on every row (loading stops otherwise). Daily bars: the timeframe is fixed at 1D. You type the exchange and symbol when loading."
+legacy_ids      = ["example_text_headerless_seven_columns"]   # earlier names of this layout (still recognised)
+
+[file]
+header = false                  # must be stated: Q-MAP does not guess whether a header exists
+delimiter = ","
+
+[instrument]
+exchange_from = "ingest"
+symbol_from   = "ingest"
+timeframe = "1D"
+
+[columns]
+date  = { position = 0 }
+open  = { position = 1 }
+high  = { position = 2 }
+low   = { position = 3 }
+close = { position = 4 }
+
+[datetime]
+kind = "iso"
+
+[volume]
+rule = "use_column"
+column = { position = 5 }
+verify_identical = [{ position = 6 }]   # the duplicate must match, otherwise ingest stops
+requirement_set = "price_only"

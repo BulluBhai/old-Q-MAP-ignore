@@ -1,0 +1,38 @@
+# STANDARD Q-MAP source profile: recommended for routine use. Its reading rules were verified row by row against
+# the Project Owner's sample files (docs/sample_file_testing). Check the time-zone and two-digit-year settings
+# against your own data before relying on it.
+# Naming standard: docs/standards/Q-MAP_Naming_and_Reference_Conventions.md, section C.
+profile_id      = "parquet_hdr_naivedt"
+profile_version = 1
+status          = "standard"
+display_name    = "Parquet: Date (date-time, no time zone), Open, High, Low, Close, Volume - 1-minute"
+source_label    = "Parquet, named columns, date-times without time zone"
+description     = "Parquet file with named columns: Date (date-time values stored without a time zone, read as Asia/Kolkata local time - confirm for your data), Open, High, Low, Close, Volume; any extra columns are kept. One-minute bars: the timeframe is fixed at 1m. You type the exchange and symbol when loading."
+legacy_ids      = ["example_parquet_naive_timestamp"]   # earlier names of this layout (still recognised)
+
+[file]
+expected_format = "parquet"
+header = true
+
+[instrument]
+exchange_from = "ingest"
+symbol_from   = "ingest"
+timeframe = "1m"
+
+[columns]
+date  = { name = "Date" }
+open  = { name = "Open" }
+high  = { name = "High" }
+low   = { name = "Low" }
+close = { name = "Close" }
+
+[datetime]
+kind = "native"
+precision = "datetime"
+timezone = "Asia/Kolkata"            # CONFIRM: the file's timestamps carry no zone, so you must declare it
+exchange_timezone = "Asia/Kolkata"
+
+[volume]
+rule = "use_column"
+column = "Volume"
+requirement_set = "price_only"

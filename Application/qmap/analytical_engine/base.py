@@ -26,6 +26,7 @@ from typing import Callable
 from .. import CLEANING_CODE_VERSION, __version__
 from ..catalog import DataRequirement, ReadinessReport, check_readiness, get_dataset, provenance
 from ..core.config import Settings
+from ..core.dates import DateInputError, format_long, parse_user_date
 from ..core.runs import run_context
 from ..storage.db import Database
 from ..storage.files import atomic_write_bytes
@@ -82,16 +83,42 @@ class AnalysisSpec:
     kind_note: str = ""  # what kind of result this is, shown to the user (e.g. "descriptive statistics only")
 
 
+INVALID_INPUT, NO_ELIGIBLE_DATA, NOT_READY, READY = "invalid_input", "no_eligible_data", "not_ready", "ready"
+
+
 @dataclass
 class AnalysisReadiness:
+    """Result of checking one request before anything runs.
+
+    `state` keeps three different situations apart (Workbench requirement 2.4):
+      invalid_input     - a date (or other parameter) cannot be understood, or the start is after the end;
+      no_eligible_data  - every input is valid, but the selected data have no bars in the chosen period;
+      not_ready         - anything else that stops the run (wrong timeframe, too little history, damaged file ...);
+      ready             - the analysis may run.
+    """
+
     ready: bool
-    problems: list[str] = field(default_factory=list)  # parameter / selection problems
+    problems: list[str] = field(default_factory=list)  # every input and selection problem (kept for callers)
     reports: list[ReadinessReport] = field(default_factory=list)
     params: dict = field(default_factory=dict)  # cleaned parameter values
+    input_problems: list[str] = field(default_factory=list)  # dates / parameters
+    selection_problems: list[str] = field(default_factory=list)  # number of datasets
 
     @property
     def warnings(self) -> list[str]:
         return [f"{r.label}: {w.detail}" for r in self.reports for w in r.warnings]
+
+    @property
+    def state(self) -> str:
+        if self.input_problems:
+            return INVALID_INPUT
+        if self.ready:
+            return READY
+        failing = [r for r in self.reports if not r.ready]
+        if not self.selection_problems and failing and all(
+                r.no_eligible_bars and all(f.name == "history" for f in r.failures) for r in failing):
+            return NO_ELIGIBLE_DATA
+        return NOT_READY
 
 
 @dataclass
@@ -116,14 +143,10 @@ def _parse_param(p: Parameter, raw) -> tuple[object, str | None]:
             return None, f"{p.label} is required."
         return p.default, None
     if p.kind == "date":
-        if isinstance(raw, date):
-            return raw, None
-        for fmt in ("%d-%b-%y", "%d-%b-%Y", "%d %b %y", "%d %b %Y", "%Y-%m-%d"):
-            try:
-                return datetime.strptime(text, fmt).date(), None
-            except ValueError:
-                continue
-        return None, f"{p.label}: '{text}' is not a date such as 01-Jan-24."
+        try:
+            return parse_user_date(raw), None
+        except DateInputError as exc:
+            return None, f"{p.label}: {exc}"
     if p.kind == "int":
         try:
             value = int(text)
@@ -143,15 +166,18 @@ def check_analysis(settings: Settings, db: Database, spec: AnalysisSpec, dataset
         value, problem = _parse_param(p, raw_params.get(p.key))
         res.params[p.key] = value
         if problem:
-            res.problems.append(problem)
+            res.input_problems.append(problem)
     start, end = res.params.get("date_from"), res.params.get("date_to")
     if start and end and start > end:
-        res.problems.append("The start date is after the end date.")
+        res.input_problems.append(f"The start date ({format_long(start)}) is after the end date ({format_long(end)}).")
     ids = list(dict.fromkeys(int(i) for i in dataset_ids))
     if len(ids) < spec.min_datasets:
-        res.problems.append(f"Select at least {spec.min_datasets} dataset(s).")
+        res.selection_problems.append(f"Select at least {spec.min_datasets} dataset(s).")
     if len(ids) > spec.max_datasets:
-        res.problems.append(f"Select at most {spec.max_datasets} datasets.")
+        res.selection_problems.append(f"Select at most {spec.max_datasets} datasets.")
+    res.problems = res.input_problems + res.selection_problems
+    if res.input_problems:  # the period is unknown, so no dataset can be checked against it
+        return res
     req = spec.requirement
     if start or end:
         req = DataRequirement(**{**asdict(req), "date_from": start, "date_to": end})
@@ -178,8 +204,11 @@ def run_analysis(settings: Settings, db: Database, spec: AnalysisSpec, dataset_i
     readiness = check_analysis(settings, db, spec, dataset_ids, raw_params)
     if not readiness.ready:
         reasons = readiness.problems + [f"{r.label}: {f.detail}" for r in readiness.reports for f in r.failures]
+        lead = {INVALID_INPUT: "The dates entered are not valid, so nothing was run:",
+                NO_ELIGIBLE_DATA: "The dates are valid, but the selected data have no bars in that period, so nothing "
+                                  "was run:"}.get(readiness.state, "The analysis cannot run reliably:")
         say("Not started: " + " | ".join(reasons))
-        return AnalysisRunResult("blocked", "The analysis cannot run reliably: " + " ".join(reasons), readiness=readiness)
+        return AnalysisRunResult("blocked", lead + " " + " ".join(reasons), readiness=readiness)
     for w in readiness.warnings:
         say(f"Warning: {w}")
     ids = [r.dataset_id for r in readiness.reports]

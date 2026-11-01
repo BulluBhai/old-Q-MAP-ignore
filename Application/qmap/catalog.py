@@ -235,6 +235,7 @@ class ReadinessReport:
     label: str
     items: list[ReadinessItem] = field(default_factory=list)
     rows_in_window: int | None = None
+    no_eligible_bars: bool = False  # valid period, but not a single bar of this dataset falls inside it
 
     @property
     def ready(self) -> bool:
@@ -344,7 +345,14 @@ def check_readiness(settings: Settings, db: Database, dataset_id: int, req: Data
             rep.add("coverage_end", WARN, f"The data end on {fmt_date(last)}, before the requested end "
                                           f"{fmt_date(req.date_to)}.")
     rep.rows_in_window = window
-    if window < req.min_rows:
+    if window == 0 and (req.date_from or req.date_to):
+        rep.no_eligible_bars = True
+        period = f"{fmt_date(req.date_from) if req.date_from else 'the first bar'} to " \
+                 f"{fmt_date(req.date_to) if req.date_to else 'the last bar'}"
+        rep.add("history", FAIL, f"The dates are valid, but this dataset has no bars from {period}. Its data cover "
+                                 f"{fmt_date(info.date_from)} to {fmt_date(info.date_to)}. This analysis needs at least "
+                                 f"{req.min_rows} bar(s).")
+    elif window < req.min_rows:
         rep.add("history", FAIL, f"Only {window} bar(s) in the chosen period; this analysis needs at least {req.min_rows}.")
     else:
         rep.add("history", PASS, f"{window} bar(s) available "

@@ -25,6 +25,11 @@ VOLUME_RULES = ("none", "use_column", "sum_columns")
 FROM_KINDS = ("fixed", "column", "filename_pattern", "ingest")
 EXPECTED_FORMATS = ("delimited_text", "xlsx", "xls", "parquet")
 _ID = re.compile(r"^[A-Za-z0-9_.-]+$")
+# What a profile is for (docs/standards/Q-MAP_Naming_and_Reference_Conventions.md, section C). Descriptive only:
+# the status never changes how a file is read. A profile without a status (e.g. your own) is "custom".
+PROFILE_STATUSES = ("standard", "example", "template", "legacy", "custom")
+STATUS_LABELS = {"standard": "Standard", "example": "Example", "template": "Template", "legacy": "Legacy",
+                 "custom": "My profile"}
 _TIME_DIRECTIVES = ("%H", "%I", "%M", "%S", "%f")
 
 
@@ -104,6 +109,13 @@ class SourceProfile:
     content_sha256: str
     content_text: str = field(repr=False, default="")
     path: str | None = None
+    display_name: str = ""  # what people see; falls back to the description / source label
+    status: str = "custom"
+    legacy_ids: tuple[str, ...] = ()  # earlier profile_ids of this same layout (compatibility aliases)
+
+    @property
+    def title(self) -> str:
+        return self.display_name or self.description or self.source_label or self.profile_id
 
 
 # ---------------------------------------------------------------------------
@@ -299,12 +311,25 @@ def parse_profile(text: str, path: str | None = None) -> SourceProfile:
                                                    for c in vol.get("preserved_not_volume", ())))
     requirement_set = str(_require(vol, "requirement_set", "[volume]"))
 
+    # descriptive metadata (never affects parsing) -----------------------------
+    display_name = str(raw.get("display_name", "")).strip()
+    status = str(raw.get("status", "custom")).strip()
+    if status not in PROFILE_STATUSES:
+        raise ProfileError(f"status must be one of {PROFILE_STATUSES}, got {status!r}.")
+    legacy_raw = raw.get("legacy_ids", [])
+    if not isinstance(legacy_raw, list) or not all(isinstance(x, str) and _ID.match(x) for x in legacy_raw):
+        raise ProfileError("legacy_ids must be a list of earlier profile names (letters, digits, '_', '.', '-').")
+    legacy_ids = tuple(legacy_raw)
+    if profile_id in legacy_ids:
+        raise ProfileError("legacy_ids must not contain the profile's own profile_id.")
+
     order = raw.get("order", {})
     on_unsorted = order.get("on_unsorted", "sort_and_warn")
     if on_unsorted not in ("sort_and_warn", "error"):
         raise ProfileError("[order] on_unsorted must be 'sort_and_warn' or 'error'.")
 
     return SourceProfile(
+        display_name=display_name, status=status, legacy_ids=legacy_ids,
         profile_id=profile_id, profile_version=version, source_label=str(raw.get("source_label", profile_id)),
         description=str(raw.get("description", "")), file=file_spec, instrument=instrument, columns=columns,
         datetime=datetime_spec, volume=volume, requirement_set=requirement_set, on_unsorted=on_unsorted,
@@ -319,6 +344,8 @@ def load_profile(path: str | Path) -> SourceProfile:
 
 
 def find_profile(settings: Settings, id_or_path: str) -> SourceProfile:
+    """A profile by file path, by its name (profile_id = file name), or by an EARLIER name listed in a profile's
+    legacy_ids (profiles renamed under the naming standard keep working when asked for by their old name)."""
     candidate = Path(id_or_path)
     if candidate.suffix == ".toml" and candidate.is_file():
         return load_profile(candidate)
@@ -326,8 +353,26 @@ def find_profile(settings: Settings, id_or_path: str) -> SourceProfile:
         p = folder / f"{id_or_path}.toml"
         if p.is_file():
             return load_profile(p)
+    renamed = resolve_legacy_id(settings, id_or_path)
+    if renamed is not None:
+        return renamed
     raise ProfileError(f"Profile '{id_or_path}' was not found.",
                        action="Check the name, or give the full path of a .toml profile.")
+
+
+def resolve_legacy_id(settings: Settings, old_id: str) -> SourceProfile | None:
+    """The current profile that lists `old_id` among its legacy_ids, or None. Unreadable files are skipped."""
+    for folder in settings.profile_dirs:
+        if not Path(folder).is_dir():
+            continue
+        for p in sorted(Path(folder).glob("*.toml")):
+            try:
+                prof = load_profile(p)
+            except ProfileError:
+                continue
+            if old_id in prof.legacy_ids:
+                return prof
+    return None
 
 
 def check_profile_against_settings(profile: SourceProfile, settings: Settings) -> None:

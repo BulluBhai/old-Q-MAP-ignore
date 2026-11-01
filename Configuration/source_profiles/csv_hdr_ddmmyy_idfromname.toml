@@ -1,0 +1,37 @@
+# EXAMPLE Q-MAP source profile: for learning and testing, NOT recommended for routine use (see its description).
+# Naming standard: docs/standards/Q-MAP_Naming_and_Reference_Conventions.md, section C.
+profile_id      = "csv_hdr_ddmmyy_idfromname"
+profile_version = 1
+status          = "example"
+display_name    = "Example - Headered CSV: time (DD-MM-YY), open, high, low, close, Volume, Net Volume; exchange and symbol from the file name - daily"
+source_label    = "CSV, headered, DD-MM-YY dates, identity from file name"
+description     = "EXAMPLE for learning and testing: the same layout as the standard profile csv_hdr_ddmmyy, except that exchange and symbol are read from the file name (for example NSE_NIFTY_1D.csv), never guessed from the data. The timeframe is fixed at daily (1D). For routine use choose csv_hdr_ddmmyy."
+legacy_ids      = ["example_csv_dd_mm_yy"]   # earlier names of this layout (still recognised)
+
+[file]
+expected_format = "delimited_text"
+header = true
+
+[instrument]
+exchange_from = "filename_pattern"
+symbol_from   = "filename_pattern"
+filename_pattern = "^(?P<exchange>[A-Za-z]+)_(?P<symbol>[A-Za-z0-9&]+)_"
+timeframe = "1D"
+
+[columns]
+date  = { name = "time" }
+open  = { name = "open" }
+high  = { name = "high" }
+low   = { name = "low" }
+close = { name = "close" }
+
+[datetime]
+kind = "format"
+format = "%d-%m-%y"             # DAY first. Q-MAP warns when the data cannot prove this.
+two_digit_year_pivot = 69       # 69-99 = 1969-1999, 00-68 = 2000-2068. CONFIRM for your data.
+
+[volume]
+rule = "use_column"
+column = "Volume"
+preserved_not_volume = ["Net Volume"]
+requirement_set = "price_only"

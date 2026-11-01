@@ -16,14 +16,14 @@ def ex(name):
 
 
 def test_invalid_typed_codes_are_reported_before_anything_runs():
-    p = ex("example_text_headered_iso_date")
+    p = ex("txt_hdr_isodate")
     problems = services.request_problems(p, "NSE 1", "NIFTY 50", "")
     assert any("'NSE 1' is not valid" in x for x in problems) and any("'NIFTY 50' is not valid" in x for x in problems)
     assert services.request_problems(p, "nse", "nifty", "") == []  # lower case is normalised by the Foundation
 
 
 def test_a_file_name_that_does_not_fit_the_profile_pattern_is_noted_before_anything_runs():
-    p = ex("example_csv_dd_mm_yy")
+    p = ex("csv_hdr_ddmmyy_idfromname")
     notes = services.file_name_notes(p, [Path("D:/x/NSE_NIFTY, 1(1).csv"), Path("D:/x/NSE_NIFTY_1D.csv")])
     assert len(notes) == 1 and "'NSE_NIFTY, 1(1).csv' does not fit" in notes[0] and "Copy so it asks me" in notes[0]
     assert services.file_name_notes(p, [Path("D:/x/NSE_NIFTY_1D.csv")]) == []
@@ -31,15 +31,15 @@ def test_a_file_name_that_does_not_fit_the_profile_pattern_is_noted_before_anyth
 
 
 def test_the_note_says_where_the_profile_takes_the_identity_from():
-    note = services.identity_note(ex("example_csv_dd_mm_yy"))
+    note = services.identity_note(ex("csv_hdr_ddmmyy_idfromname"))
     assert "Exchange: read from the file name (pattern ^(?P<exchange>" in note and "Timeframe: fixed in the profile (1D)" in note
     assert "Copy so it asks me for exchange and symbol" in note
-    note = services.identity_note(ex("example_parquet_naive_timestamp"))
+    note = services.identity_note(ex("parquet_hdr_naivedt"))
     assert "Exchange: typed by you below" in note and "Copy so it asks me" not in note
 
 
 def test_a_copy_that_asks_for_exchange_and_symbol_changes_only_that(tmp_path):
-    src = EXAMPLES / "example_csv_iso_offset.toml"
+    src = EXAMPLES / "csv_hdr_isodt_idfromname.toml"
     before = src.read_bytes()
     path = services.copy_profile_asking_for_identity(src, "my_iso_csv", tmp_path)
     new, old = load_profile(path), load_profile(src)
@@ -55,15 +55,15 @@ def test_a_copy_that_asks_for_exchange_and_symbol_changes_only_that(tmp_path):
 def test_the_copy_loads_a_file_whose_name_the_original_cannot_read(tmp_path, world):
     settings = services.build_core_settings(str(world.data), str(world.output), REPO, world.settings)
     f = write_delimited(world.src / "csv headers std.csv", NET_HEADER, dd_mm_yy_rows())
-    original = ex("example_csv_dd_mm_yy")
+    original = ex("csv_hdr_ddmmyy_idfromname")
     assert services.check_file(f, original, settings).outcome == "would_be_rejected"
-    copy = load_profile(services.copy_profile_asking_for_identity(EXAMPLES / "example_csv_dd_mm_yy.toml", "mine", tmp_path))
+    copy = load_profile(services.copy_profile_asking_for_identity(EXAMPLES / "csv_hdr_ddmmyy_idfromname.toml", "mine", tmp_path))
     report = services.check_file(f, copy, settings, {"exchange": "NSE", "symbol": "NIFTY"})
     assert report.outcome == "would_be_accepted", [x.text() for x in report.errors]
 
 
 def test_a_copy_name_that_is_taken_or_invalid_is_refused(tmp_path):
-    src = EXAMPLES / "example_csv_iso_offset.toml"
+    src = EXAMPLES / "csv_hdr_isodt_idfromname.toml"
     services.copy_profile_asking_for_identity(src, "taken", tmp_path)
     for name in ("taken", "has space"):
         try:
