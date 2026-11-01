@@ -38,18 +38,18 @@ explicitly maps it.
 There is one file per dataset and no database per instrument. File names end with the Run ID that created them, so two
 runs can never overwrite each other.
 
-## Registry tables (schema version 5)
+## Registry tables (schema version 6)
 
 | Table | Holds | Protection |
 |---|---|---|
-| `datasets` | Every raw, standardised and derived dataset: layer, instrument, timeframe, path, SHA-256, rows, dates, parent, processing version, canonical schema version, volume status, requirement set, settings fingerprint, status (active/superseded), **storage_class**, **file_deleted_at** | Never deleted. Identity is immutable. The path can change only together with the storage class. Raw is always permanent. Only temporary files can be deleted, and a deletion is final. |
+| `datasets` | Every raw, standardised and derived dataset: layer, instrument, timeframe, path, SHA-256, rows, dates, parent, processing version, canonical schema version, volume status, requirement set, settings fingerprint, status (active/superseded), **storage_class**, **file_deleted_at** | Never deleted. Identity is immutable. Storage class and path always agree (Temporary ⇔ `Temporary_Data/...`), and change only together, under a matching recorded `move` action. `file_deleted_at` is set only under a recorded `delete_file` action. Raw is always permanent. Only temporary files can be deleted, and a deletion is final. |
 | `instruments` | Exchange + symbol | Never deleted; identity immutable |
 | `ingest_events` | Every file received (name, path, time, checksum) | Never deleted |
 | `ingest_attempts` | Every processing attempt and its full interpretation (profile, mapping, date rules, settings) | Append-only |
 | `quality_checks` | Every check result (error, warning, info) for an attempt or a dataset | Append-only |
 | `source_profiles` | A snapshot of every profile version used | Immutable |
 | `runs`, `run_outputs`, `run_inputs` | Every run (Run ID, module, status, parameters, code version), its outputs and the datasets it used | Runs never deleted |
-| **`storage_actions`** (new) | Every move and deletion: dataset, from/to class and path, reason, Run ID, status | Append-only; finished once |
+| **`storage_actions`** (new) | Every move and deletion: dataset, from/to class and path, reason, Run ID, status | Inserted only as `started`; at most one open per dataset; finished once; `completed` only if the dataset shows the change, never `failed` if it does |
 | **`dataset_derivations`** (new) | For each derived dataset: method, method version, parameters, source dataset and checksum, Run ID | Append-only |
 | `research_records`, `modules` | Reserved for the Research Library | |
 
@@ -62,7 +62,7 @@ runs can never overwrite each other.
 | Processing version, standardised data | `<profile_id>@<profile_version>+<cleaning code version>` |
 | Processing version, derived data | `derive:ohlcv_period_aggregation@1` |
 | Settings fingerprint | `vs1:<16 hex>` |
-| Schema | `schema_version` table; currently 5 |
+| Schema | `schema_version` table; currently 6 |
 
 ## Three separate statuses
 

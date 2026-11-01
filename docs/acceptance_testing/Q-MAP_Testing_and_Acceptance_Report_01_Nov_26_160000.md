@@ -103,3 +103,28 @@ script was corrected; Q-MAP was right.
 - [ ] Set a start date after your data ends: the run must be refused with an explanation.
 - [ ] Confirm your original sample files are unchanged (compare file dates and sizes, or the checksums in
       `docs/sample_file_testing/`).
+
+
+## Addendum: storage-integrity fix from the PR #4 review (01-Nov-26)
+
+**Issue confirmed** before any change. On a real migrated database, six direct updates that bypass Q-MAP were all
+**allowed** by schema 5:
+
+1. class changed without its path;
+2. class changed with an arbitrary path;
+3. a correctly mapped move with no audit record;
+4. Temporary changed to Permanent by class only;
+5. `file_deleted_at` set with no delete action;
+6. a storage action inserted as already "completed".
+
+After migration 6 all six are **refused**.
+
+| Run | Environment | Result |
+|---|---|---|
+| New `Tests/integration/test_storage_integrity.py` | Python 3.12 | **16 passed** |
+| Same file with migration 6 withheld (to prove the tests detect the issue) | Python 3.12 | 10 failed, 6 passed. The 6 cover migration-5 safeguards and the normal workflow, as intended. |
+| Full suite, GUI tests required | Ubuntu, Python 3.12, Tk 8.6, Xvfb | **701 passed**, 0 failed, 0 skipped (175 GUI) |
+| Full suite, no tkinter | Python 3.11 | **613 passed, 62 skipped**, 0 failed |
+| Practical acceptance walkthrough, re-run | Same as section 3 | Unchanged: 13 passed, 1 not applicable |
+
+Changed test: `test_placement_and_migration.py` now expects schema 6 and pins migration 6.

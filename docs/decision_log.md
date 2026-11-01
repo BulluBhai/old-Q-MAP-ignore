@@ -137,3 +137,12 @@ changed.
 | D4-10 | Readiness is computed per analysis (`catalog.check_readiness`) and kept separate from the processing outcome and the validation status. The Workbench never offers deleted datasets, and never starts a run when a requirement fails | Instruction 4.4 and 5.1 | catalog, analytical_engine |
 | D4-11 | Analyses are described by `AnalysisSpec` and run by one pipeline: Run ID, `run_inputs`, outputs only in `Q-MAP_OUTPUT/Research_Reports/<Run ID>`, and `Run_Metadata_<dd_mmm_yy_hhmmss>.json` with full input provenance. The first analysis is Dataset Summary, a descriptive utility (not a methodology), because no MIQP or QLOPB code exists in the repository | Instruction 5 and 6 (reproducibility) without inventing methodology | analytical_engine |
 | D4-12 | The Workbench's screen, logic and engine must not load data-preparation code (enforced by a test); neutral helpers moved to `qmap_gui/common.py` | "The Workbench must not silently start an ingestion workflow" | qmap_gui |
+
+## Storage-integrity fix from the PR #4 review (01-Nov-26)
+
+Status: implemented on branch `claude/adoring-curie-5h2mx4` (PR #4); **awaiting Project Owner review**. Migrations 1-5
+are unchanged and still checksum-pinned.
+
+| Ref | Decision | Why | Affects |
+|---|---|---|---|
+| D4-13 | Schema **migration 6**. The database now refuses any change of `storage_class`, `relative_path` or `file_deleted_at` that is not covered by an unfinished storage action recorded for that dataset with exactly that change. Class and path must always agree: Temporary means the path starts with `Temporary_Data/`, and a move must follow that mapping. An action is always inserted as `started`. At most one action can be open per dataset. An action can be `completed` only if the dataset shows the change, and cannot be `failed` if it does. Existing raw-file, deletion-finality and Temporary-only-deletion rules from migration 5 are kept. Recovery and `verify` now REPORT (never repair) any dataset whose storage state is not explained by the audit trail (`storage_inconsistencies`), for rows changed before migration 6 | Reproduced: under migration 5, a direct database update could change the class without the path, give an arbitrary path, move without an audit record, mark a file deleted without a delete action, or insert an action already "completed" | schema, recovery |

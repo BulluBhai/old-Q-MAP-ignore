@@ -250,6 +250,57 @@ WHEN NEW.file_deleted_at IS NOT NULL OR (NEW.layer = 'raw' AND NEW.storage_class
 BEGIN SELECT RAISE(ABORT,'a new dataset must be stored, and a raw file is always permanent'); END;
 """
 
+# Review of PR #4 (01-Nov-26): migration 5 let storage_class, relative_path and file_deleted_at be changed directly in
+# the database without a recorded action, so the registry could disagree with the files on disk. Migration 5 is left
+# exactly as it was; these triggers close the gap:
+# * storage class and path always agree: TEMPORARY <=> the path starts with 'Temporary_Data/';
+# * a class/path change must follow the reversible mapping AND match an unfinished 'move' action exactly;
+# * file_deleted_at can only be set under an unfinished 'delete_file' action for that dataset and path;
+# * an action is always recorded as 'started' first, at most one is open per dataset, it can only be marked
+#   'completed' if the dataset really shows the change, and never 'failed' if it does.
+MIGRATION_6 = """
+CREATE UNIQUE INDEX ux_storage_actions_one_open ON storage_actions(dataset_id) WHERE status = 'started';
+
+CREATE TRIGGER trg_storage_actions_start_first BEFORE INSERT ON storage_actions
+WHEN NEW.status <> 'started' OR NEW.finished_at IS NOT NULL
+BEGIN SELECT RAISE(ABORT,'a storage action must be recorded as started before anything is changed'); END;
+
+CREATE TRIGGER trg_storage_actions_completed_matches BEFORE UPDATE ON storage_actions
+WHEN NEW.status = 'completed' AND NOT EXISTS (
+  SELECT 1 FROM datasets d WHERE d.dataset_id = OLD.dataset_id AND (
+    (OLD.action = 'move' AND d.relative_path = OLD.to_path AND d.storage_class = OLD.to_class)
+    OR (OLD.action = 'delete_file' AND d.file_deleted_at IS NOT NULL AND d.relative_path = OLD.from_path)))
+BEGIN SELECT RAISE(ABORT,'a storage action can only be completed when the dataset shows that change'); END;
+
+CREATE TRIGGER trg_storage_actions_failed_matches BEFORE UPDATE ON storage_actions
+WHEN NEW.status = 'failed' AND EXISTS (
+  SELECT 1 FROM datasets d WHERE d.dataset_id = OLD.dataset_id AND (
+    (OLD.action = 'move' AND d.relative_path = OLD.to_path AND d.storage_class = OLD.to_class)
+    OR (OLD.action = 'delete_file' AND d.file_deleted_at IS NOT NULL)))
+BEGIN SELECT RAISE(ABORT,'a storage action that took effect cannot be recorded as failed'); END;
+
+CREATE TRIGGER trg_datasets_class_path_insert BEFORE INSERT ON datasets
+WHEN (NEW.storage_class = 'temporary') <> (substr(NEW.relative_path, 1, 15) = 'Temporary_Data/')
+BEGIN SELECT RAISE(ABORT,'storage class and storage path disagree'); END;
+
+CREATE TRIGGER trg_datasets_move_audited BEFORE UPDATE ON datasets
+WHEN (NEW.storage_class IS NOT OLD.storage_class OR NEW.relative_path IS NOT OLD.relative_path) AND (
+  NEW.storage_class IS OLD.storage_class
+  OR (OLD.storage_class = 'temporary') <> (substr(OLD.relative_path, 1, 15) = 'Temporary_Data/')
+  OR NEW.relative_path IS NOT (CASE WHEN NEW.storage_class = 'temporary' THEN 'Temporary_Data/' || OLD.relative_path
+                                    ELSE substr(OLD.relative_path, 16) END)
+  OR NOT EXISTS (SELECT 1 FROM storage_actions a WHERE a.dataset_id = OLD.dataset_id AND a.action = 'move'
+                 AND a.status = 'started' AND a.from_class = OLD.storage_class AND a.to_class = NEW.storage_class
+                 AND a.from_path = OLD.relative_path AND a.to_path = NEW.relative_path))
+BEGIN SELECT RAISE(ABORT,'a storage class or path change must be a recorded move along the Temporary_Data mapping'); END;
+
+CREATE TRIGGER trg_datasets_delete_audited BEFORE UPDATE ON datasets
+WHEN OLD.file_deleted_at IS NULL AND NEW.file_deleted_at IS NOT NULL AND NOT EXISTS (
+  SELECT 1 FROM storage_actions a WHERE a.dataset_id = OLD.dataset_id AND a.action = 'delete_file'
+  AND a.status = 'started' AND a.from_path = OLD.relative_path)
+BEGIN SELECT RAISE(ABORT,'a dataset file can only be marked deleted under a recorded delete action'); END;
+"""
+
 # (version, description, sql)
 MIGRATIONS = [
     (1, "Stage 2 foundation: instruments, runs, registry, ingest provenance, quality checks", MIGRATION_1),
@@ -260,6 +311,7 @@ MIGRATIONS = [
     (4, "New derived datasets and attempts must record their configuration fingerprint", MIGRATION_4),
     (5, "Permanent/Temporary storage classification, storage-action audit trail and derived-timeframe provenance",
      MIGRATION_5),
+    (6, "Storage class, path and deletion change only under a matching recorded storage action", MIGRATION_6),
 ]
 
 LATEST_VERSION = MIGRATIONS[-1][0]

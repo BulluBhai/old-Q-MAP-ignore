@@ -57,12 +57,14 @@ class RecoveryReport:
     interrupted_runs: list[str] = field(default_factory=list)
     storage_actions_closed: list[int] = field(default_factory=list)
     unregistered_temporary_files: list[str] = field(default_factory=list)
+    storage_inconsistencies: list[str] = field(default_factory=list)
     problems: list[str] = field(default_factory=list)  # anything recovery could not do; nothing is hidden
 
     @property
     def needs_attention(self) -> bool:
         return bool(self.orphan_raw_files or self.missing_files or self.checksum_mismatches
-                    or self.unreadable_files or self.unregistered_temporary_files or self.problems)
+                    or self.unreadable_files or self.unregistered_temporary_files or self.storage_inconsistencies
+                    or self.problems)
 
     @property
     def has_actions(self) -> bool:
@@ -244,12 +246,44 @@ def recover_incomplete(settings: Settings, db: Database, *, stale_minutes: int |
             report.unregistered_temporary_files.append(rel)
             log.warning("Unregistered file in Temporary_Data (not deleted): %s", rel)
 
+    report.storage_inconsistencies = find_storage_inconsistencies(db)
+    for item in report.storage_inconsistencies:
+        log.error("Storage record inconsistent (reported, not changed): %s", item)
+
     # --- registered files that are missing (a file the user deleted on purpose is not missing) ----------
     for row in db.query("SELECT relative_path FROM datasets WHERE file_deleted_at IS NULL"):
         if not settings.data_path(row["relative_path"]).is_file():
             report.missing_files.append(row["relative_path"])
             log.error("Registered file is missing: %s", row["relative_path"])
     return report
+
+
+def find_storage_inconsistencies(db: Database) -> list[str]:
+    """Datasets whose storage class, path or deletion state is not explained by the storage-action audit trail.
+
+    Since schema migration 6 the database refuses such changes; this finds rows changed directly BEFORE that
+    migration was applied. Report only: nothing is repaired automatically.
+    """
+    out = []
+    for r in db.query("SELECT dataset_id, storage_class, relative_path FROM datasets "
+                      "WHERE (storage_class = 'temporary') <> (substr(relative_path, 1, 15) = 'Temporary_Data/')"):
+        out.append(f"dataset {r['dataset_id']}: storage class {r['storage_class']} does not match its path "
+                   f"{r['relative_path']}")
+    for r in db.query("SELECT d.dataset_id FROM datasets d WHERE d.file_deleted_at IS NOT NULL AND NOT EXISTS ("
+                      "SELECT 1 FROM storage_actions a WHERE a.dataset_id = d.dataset_id AND a.action = 'delete_file' "
+                      "AND a.status = 'completed' AND a.from_path = d.relative_path)"):
+        out.append(f"dataset {r['dataset_id']}: marked deleted without a recorded delete action")
+    for r in db.query(
+            "SELECT d.dataset_id, d.storage_class, d.relative_path, "
+            "(SELECT a.to_path FROM storage_actions a WHERE a.dataset_id = d.dataset_id AND a.action = 'move' "
+            " AND a.status = 'completed' ORDER BY a.action_id DESC LIMIT 1) AS last_move "
+            "FROM datasets d WHERE d.layer <> 'raw'"):
+        if r["last_move"] is None and r["storage_class"] == "temporary":
+            out.append(f"dataset {r['dataset_id']}: Temporary without a recorded move")
+        elif r["last_move"] is not None and r["last_move"] != r["relative_path"]:
+            out.append(f"dataset {r['dataset_id']}: path {r['relative_path']} differs from its last recorded move "
+                       f"({r['last_move']})")
+    return out
 
 
 def _cleaned_safe_to_delete(path: Path, live: _Liveness, cutoff_epoch: float) -> bool:

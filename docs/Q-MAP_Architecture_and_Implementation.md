@@ -144,8 +144,9 @@ and offers to install any missing package.
 
 ## 6. Migration and compatibility notes
 
-- **Existing databases** are upgraded automatically to schema version 5 the first time either application opens them.
-  Existing datasets become **Permanent**. No data file is moved or rewritten. A database upgraded to version 5 cannot
+- **Existing databases** are upgraded automatically to schema version 6 (5 adds storage classes; 6 makes every storage
+  change require a matching recorded action, decision D4-13) the first time either application opens them.
+  Existing datasets become **Permanent**. No data file is moved or rewritten. A database upgraded to version 6 cannot
   be opened by older code (the existing rule D2-28).
 - **Existing behaviour preserved**: every one of the 614 tests from PR #3 still passes. The changed tests are listed
   below. Loading, validation, reuse, retry, recovery and verify rules are unchanged, apart from the deleted-file note
