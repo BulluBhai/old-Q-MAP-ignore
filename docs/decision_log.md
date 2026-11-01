@@ -150,8 +150,9 @@ are unchanged and still checksum-pinned.
 
 Authority note (updated 01-Nov-26): Blueprint v1.2 is readable in PR #5. Its header, its "Version authority"
 section and §19.1 record its approval and adoption by the Project Owner on 1 November 2026, superseding v1.0 and v1.1;
-the handover confirms this. The earlier note about a conflict is resolved, except one stale line in the Markdown
-copy's version history (OD-11).
+the handover confirms this. The earlier note about a conflict is resolved. The one stale line in the Markdown copy's
+version history was corrected on PR #5's branch (commit `043a7f7`, owner-approved OD-11), which also moved the
+Blueprint and handover into `docs/`.
 
 ## Temporary folder decision (01-Nov-26)
 

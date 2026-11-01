@@ -42,7 +42,7 @@ reference, the test report and the outstanding-work register are separate docume
 | C6 | Blueprint 8.3: Parquet + DuckDB + SQLite | Parquet and SQLite are used. **DuckDB is not adopted yet**: nothing queries across datasets. The data catalogue (`qmap/catalog.py`) is the single place where it would be added. | Later |
 | C7 | Minute data for selected indices and hourly data for a selected stock universe | Storage already keeps each instrument and timeframe separate, and no instrument is assumed to have every timeframe. **The universes themselves are not defined**, so nothing enforces "minute only for indices X, Y". | **Yes**: name the universes and retention. |
 | C8 | A derived dataset must name a `created_by_attempt_id` (a migration-1 rule written before derived data existed). | A derived dataset carries its source's attempt as *inherited lineage*. The true derivation record (method, version, parameters, source checksum, Run ID) is in the new `dataset_derivations` table. Rebuilding the `datasets` table to relax the rule was judged riskier than the benefit. | No (recorded as technical debt OW-09) |
-| C10 | **Which Blueprint is authoritative.** Before v1.2 was readable, its approval status could not be confirmed. | **Resolved:** v1.2's header, its "Version authority" section and §19.1 state "Approved and adopted by the Project Owner ... 1 November 2026", and the handover confirms it. One stale line remains in the **Markdown** copy's version history (§19.2, "adoption pending"), and it differs from the HTML copy (section 8, B-1). | Correct PR #5 (B-1, B-2) |
+| C10 | **Which Blueprint is authoritative.** Before v1.2 was readable, its approval status could not be confirmed. | **Resolved:** v1.2's header, its "Version authority" section, §19.1 and (since PR #5 commit `043a7f7`) §19.2 state "Approved and adopted by the Project Owner" (1 November 2026); the handover confirms it. | No |
 | C9 | After a Temporary dataset's file is deleted, loading the same source file unchanged would "reuse" the deleted dataset (approved reuse rules D2-32). | The reuse rule is unchanged. The result now says clearly that the dataset's file was deleted and how to process it again. | **Yes**: decide whether re-loading should re-create it (decision OD-3) |
 
 ## 3. Architecture as implemented
@@ -225,8 +225,8 @@ The Datasets screen reads the setting and followed automatically.
 
 Blueprint §19.4 says differences are to be recorded as gaps first, not silently remediated.
 
-**Findings in PR #5 itself.** Documentation only. They are not corrected here, because PR #5's branch is outside this
-work's branch:
+**Findings in PR #5 itself.** Documentation only. **All three were corrected on PR #5's branch in commit `043a7f7`, with
+the Project Owner's approval (OD-11):**
 
 | Ref | Finding | Suggested correction |
 |---|---|---|

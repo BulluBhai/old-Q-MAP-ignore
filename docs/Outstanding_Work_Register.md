@@ -15,14 +15,16 @@ Updated 01-Nov-26, after reviewing Blueprint v1.2 (approved and adopted 1 Novemb
 | OD-6 | Should a load be able to go **straight to Temporary**? | Today every load is Permanent and must be moved afterwards | Yes: an option in Data Management |
 | OD-7 | Carry-over from PR #3: D3-15 (grey "Waiting" row) and the incomplete-day limitation | Unchanged by this work | As in PR #3 |
 | OD-10 | Align the **other §9.1 folder names** with v1.2's proposal? Data: `Permanent/` (today `Cleaned_Data/` + `Timeframe_Data/`), `Reference_Data/` (today `Reference_Files/`). Output: `Database_Reports/`, `Analytical_Results/` (today `Ingestion/`, `Data_Management/`; `Research_Reports/` already matches). | v1.2 calls them "proposals, not a demand" and asks for the smallest safe migration. A data-folder rename touches every stored path, recovery and the naming rule, but could reuse the OD-8 transition pattern. Output folders hold no registered data. | Keep the data folders as they are. Rename output folders for NEW runs only if you want strict alignment. |
-| OD-11 | Allow corrections to **PR #5** (findings B-1 to B-3 in the architecture document, section 8)? (a) The Markdown version history still says v1.2 "adoption pending" while the HTML says "Approved and adopted". (b) §19.1 names `docs/` as the canonical location, but the files are at the repository's top level. (c) The handover is a snapshot with outdated points (OD-8, `Q-MAP_CODE`). | The canonical copy should be exact. These changes do not alter any requirement. | Make the corrections on PR #5's branch (or allow Claude to push them there) before merging PR #5 |
 
 **Resolved:**
 
 - **OD-8** (Temporary folder): you adopted `Q-MAP_DATA/Temporary/`. Implemented with schema migration 7 and a
   no-data-movement transition (decision D4-15; architecture document, section 7).
 - **OD-9** (Blueprint authority): v1.2 states its own approval and adoption on 1 November 2026, and it supersedes
-  v1.0 and v1.1. The remaining wording mismatch is OD-11(a).
+  v1.0 and v1.1.
+- **OD-11** (PR #5 corrections, approved by the Project Owner): applied on PR #5's branch in commit `043a7f7`. The
+  Markdown version history and canonical-copy paragraph now match the HTML; all three files are in `docs/`; the
+  handover reflects the current state. PR #5 remains open for the owner's review.
 
 ## Open technical work and known limitations
 
@@ -49,7 +51,7 @@ Updated 01-Nov-26, after reviewing Blueprint v1.2 (approved and adopted 1 Novemb
 ## Roadmap (Blueprint v1.2 section 15)
 
 1. **Stages 3-4** (Database Manager and Analytical Workbench foundations, this PR): owner acceptance (OW-01) and
-   decisions OD-1, OD-3, OD-10, OD-11.
+   decisions OD-1, OD-3, OD-10; review and merge PR #5.
 2. **Stage 6**: QLOPB price-behaviour migration into `analytical_engine` as an `AnalysisSpec`, once the source is
    supplied (OD-2). v1.2 lists MIQP (Stage 5) first; the order of 5 and 6 can follow which material is available.
 3. **Stage 5**: MIQP Market Intelligence from approved specifications.
