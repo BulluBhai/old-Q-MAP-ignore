@@ -19,7 +19,7 @@ from qmap.core.errors import QmapError
 from qmap.core.runs import run_context
 from qmap.data_engine.derive import DERIVED_TIMEFRAMES, assess_derivation, derive_timeframe
 from qmap.storage.db import open_database
-from qmap.storage.storage_class import (LABELS, PERMANENT, TEMPORARY, StorageAssessment, assess_delete, assess_move,
+from qmap.storage.storage_class import (LABELS, is_legacy_temporary_path, PERMANENT, TEMPORARY, StorageAssessment, assess_delete, assess_move,
                                         delete_temporary_file, move_dataset)
 
 from .common import EmitHandler as _EmitHandler
@@ -72,6 +72,9 @@ def details(settings: Settings, dataset_id: int) -> list[tuple[str, str | None]]
                   f"Volume: {d.volume_status}\n", None),
                  (f"Storage: {d.storage_label}   State: {d.state_label}\n", "warning" if d.storage_class == TEMPORARY else None),
                  (f"Stored at: Q-MAP_DATA/{d.relative_path}\n", "muted"),
+                 *([("This Temporary dataset is in the OLD folder Temporary_Data (before the Temporary/ decision). It is "
+                     "valid and safe there. To move it to Q-MAP_DATA/Temporary, use Make Permanent, then Move to "
+                     "Temporary.\n", "warning")] if d.available and is_legacy_temporary_path(d.relative_path) else []),
                  (f"Processing: {d.processing_version}   Settings fingerprint: {d.config_fingerprint}\n", "muted")]
         if d.source_files:
             parts.append((f"Original file(s): {', '.join(d.source_files)} (preserved unchanged)\n", None))

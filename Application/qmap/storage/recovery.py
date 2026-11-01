@@ -20,7 +20,7 @@ second, independent safeguard for the moment a run is being created and for file
 | Registered file missing / unreadable / wrong checksum          | REPORT (verify re-hashes everything) |
 | Storage action (move / delete) left `started`                  | Finish or undo it (storage_class.py) |
 | Derived-timeframe file / temp file not registered              | Delete (reproducible from its source)|
-| Unregistered file in Temporary_Data                            | REPORT (never deleted)               |
+| Unregistered file in Temporary/ (or the legacy Temporary_Data/)| REPORT (never deleted)               |
 
 A dataset whose file the user deleted (Temporary data, `file_deleted_at`) is not reported as missing.
 """
@@ -58,6 +58,8 @@ class RecoveryReport:
     interrupted_runs: list[str] = field(default_factory=list)
     storage_actions_closed: list[int] = field(default_factory=list)
     unregistered_temporary_files: list[str] = field(default_factory=list)
+    # datasets still Temporary in the pre-OD-8 folder: valid and readable; an information notice, not a problem
+    legacy_temporary_datasets: list[str] = field(default_factory=list)
     storage_inconsistencies: list[str] = field(default_factory=list)
     problems: list[str] = field(default_factory=list)  # anything recovery could not do; nothing is hidden
 
@@ -203,7 +205,8 @@ def recover_incomplete(settings: Settings, db: Database, *, stale_minutes: int |
     recover_storage_actions(settings, db, live.is_live, report)
 
     # --- stray temporary managed files (names start with the Run ID of the run that owns them) ----------
-    for incoming in (settings.cleaned_incoming_dir, settings.timeframe_incoming_dir, settings.temporary_dir / "_incoming"):
+    for incoming in (settings.cleaned_incoming_dir, settings.timeframe_incoming_dir, settings.temporary_dir / "_incoming",
+                     settings.legacy_temporary_dir / "_incoming"):
         if not incoming.exists():
             continue
         for tmp in list(incoming.iterdir()):
@@ -241,11 +244,18 @@ def recover_incomplete(settings: Settings, db: Database, *, stale_minutes: int |
             report.problems.append(f"could not remove orphan managed file {rel}")
 
     # --- unregistered files in the Temporary area (report only: never deleted automatically) -------------
-    for path in _files_under(settings.temporary_dir):
+    for path in [*_files_under(settings.temporary_dir), *_files_under(settings.legacy_temporary_dir)]:
         rel = settings.to_relative(path)
         if rel not in registered and rel not in moving_to:
             report.unregistered_temporary_files.append(rel)
-            log.warning("Unregistered file in Temporary_Data (not deleted): %s", rel)
+            log.warning("Unregistered file in the Temporary area (not deleted): %s", rel)
+    report.legacy_temporary_datasets = [
+        f"dataset {r['dataset_id']}: {r['relative_path']}" for r in db.query(
+            "SELECT dataset_id, relative_path FROM datasets WHERE storage_class = 'temporary' AND file_deleted_at IS NULL "
+            "AND substr(relative_path, 1, 15) = 'Temporary_Data/' ORDER BY dataset_id")]
+    if report.legacy_temporary_datasets:
+        log.info("%d Temporary dataset(s) are still in the old Temporary_Data folder (valid; relocate with Make "
+                 "Permanent, then Move to Temporary, if wanted)", len(report.legacy_temporary_datasets))
 
     report.storage_inconsistencies = find_storage_inconsistencies(db)
     for item in report.storage_inconsistencies:
@@ -272,7 +282,8 @@ def find_storage_inconsistencies(db: Database) -> list[str]:
     """
     out = []
     for r in db.query("SELECT dataset_id, storage_class, relative_path FROM datasets "
-                      "WHERE (storage_class = 'temporary') <> (substr(relative_path, 1, 15) = 'Temporary_Data/')"):
+                      "WHERE (storage_class = 'temporary') <> (substr(relative_path, 1, 10) = 'Temporary/' "
+                      "OR substr(relative_path, 1, 15) = 'Temporary_Data/')"):
         out.append(f"dataset {r['dataset_id']}: storage class {r['storage_class']} does not match its path "
                    f"{r['relative_path']}")
     for r in db.query("SELECT d.dataset_id FROM datasets d WHERE d.file_deleted_at IS NOT NULL AND NOT EXISTS ("

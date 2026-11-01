@@ -41,7 +41,7 @@ def test_move_to_temporary_and_back_keeps_the_data_identical(settings, db, run, 
     after = _row(db, i)
     assert after["storage_class"] == "temporary"
     assert after["relative_path"] == temporary_path_for(before["relative_path"])
-    assert after["relative_path"].startswith("Temporary_Data/Cleaned_Data/")
+    assert after["relative_path"].startswith("Temporary/Cleaned_Data/")  # Blueprint v1.2, OD-8
     assert sha256_file(settings.data_path(after["relative_path"])) == before["sha256"]
     assert not settings.data_path(before["relative_path"]).exists()  # no duplicate left behind
     act = db.one("SELECT * FROM storage_actions WHERE action_id = ?", (res.action_id,))
@@ -204,5 +204,5 @@ def test_unregistered_files_in_temporary_area_are_reported_not_deleted(settings,
     stray.parent.mkdir(parents=True)
     stray.write_bytes(b"x")
     report = recover_incomplete(settings, db, stale_minutes=1)
-    assert "Temporary_Data/somewhere/stray.parquet" in report.unregistered_temporary_files
+    assert "Temporary/somewhere/stray.parquet" in report.unregistered_temporary_files
     assert stray.exists() and report.needs_attention

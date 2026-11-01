@@ -13,7 +13,8 @@ import pytest
 from fixtures.builders import HEADER, daily_rows, write_delimited
 from fixtures.profiles import do_ingest
 from qmap.storage.recovery import find_storage_inconsistencies, recover_incomplete, verify_registry
-from qmap.storage.storage_class import delete_temporary_file, move_dataset, temporary_path_for
+from qmap.storage.schema import LATEST_VERSION
+from qmap.storage.storage_class import delete_temporary_file, move_dataset, permanent_path_for, temporary_path_for
 
 
 @pytest.fixture
@@ -70,7 +71,7 @@ def test_a_recorded_move_does_not_allow_a_different_path(db, run, ids):
 
 
 def test_a_move_recorded_for_another_dataset_does_not_count(db, run, ids):
-    _open_action(db, run, ids["temp"], "move", "permanent", to_path=_path(db, ids["temp"])[len("Temporary_Data/"):])
+    _open_action(db, run, ids["temp"], "move", "permanent", to_path=permanent_path_for(_path(db, ids["temp"])))
     to = temporary_path_for(_path(db, ids["perm"]))
     _refused(db, "UPDATE datasets SET storage_class = 'temporary', relative_path = ? WHERE dataset_id = ?", (to, ids["perm"]))
 
@@ -88,7 +89,7 @@ def test_a_completed_deletion_cannot_be_reversed_or_moved(db, run, ids):
     assert delete_temporary_file(run, ids["temp"]).ok
     _refused(db, "UPDATE datasets SET file_deleted_at = NULL WHERE dataset_id = ?", (ids["temp"],))
     _refused(db, "UPDATE datasets SET file_deleted_at = '2030-01-01' WHERE dataset_id = ?", (ids["temp"],))
-    to = _path(db, ids["temp"])[len("Temporary_Data/"):]
+    to = permanent_path_for(_path(db, ids["temp"]))
     _open_action(db, run, ids["temp"], "move", "permanent", to_path=to)
     _refused(db, "UPDATE datasets SET storage_class = 'permanent', relative_path = ? WHERE dataset_id = ?", (to, ids["temp"]))
 
@@ -180,7 +181,7 @@ def test_tampering_done_before_migration_6_is_reported(settings, roots, src, mon
     old.close()
     monkeypatch.setattr(dbmod, "MIGRATIONS", MIGRATIONS)
     db = open_database(settings.db_path)
-    assert db.current_version() == 6
+    assert db.current_version() == LATEST_VERSION
     found = recover_incomplete(settings, db).storage_inconsistencies
     assert any(f"dataset {a}: storage class temporary does not match" in f for f in found)
     # class changed, path left at its original place: reported once, as a class/path mismatch (the path itself is

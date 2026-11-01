@@ -4,8 +4,10 @@ Rules (Database Manager, 01-Nov-26):
 
 * Only managed datasets (layers `cleaned` and `timeframe`) have a storage class. Raw files - the preserved originals -
   are always permanent and are never moved or deleted (database trigger `trg_datasets_storage`).
-* A TEMPORARY dataset lives under `Q-MAP_DATA/Temporary_Data/<its permanent relative path>`, so the mapping is
-  reversible and the file name (which carries its lineage) never changes. Temporary data never expires on its own.
+* A TEMPORARY dataset lives under `Q-MAP_DATA/Temporary/<its permanent relative path>` (Blueprint v1.2, OD-8), so
+  the mapping is reversible and the file name (which carries its lineage) never changes. Temporary data never expires
+  on its own. Datasets moved to Temporary before OD-8 stay under `Temporary_Data/` until the user relocates them
+  (Make Permanent, then Move to Temporary); nothing is moved automatically.
 * Moving never modifies the data: the file is copied, the copy's SHA-256 is checked against the registered checksum,
   the registry is switched to the new path in one transaction, and only then is the old copy removed.
 * Only a TEMPORARY dataset's file can be deleted, and only by the user. The registry record, its provenance and its
@@ -23,7 +25,7 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from ..core.config import TEMPORARY_FOLDER, Settings
+from ..core.config import LEGACY_TEMPORARY_FOLDER, TEMPORARY_FOLDER, Settings
 from ..core.runs import Run
 from .db import Database, utc_now_iso
 from .files import copy_durably, place_without_overwrite, safe_remove, sha256_file, unique_tmp_name
@@ -38,11 +40,19 @@ def temporary_path_for(permanent_rel: str) -> str:
     return f"{TEMPORARY_FOLDER}/{permanent_rel}"
 
 
+TEMPORARY_PREFIXES = (f"{TEMPORARY_FOLDER}/", f"{LEGACY_TEMPORARY_FOLDER}/")
+
+
+def is_legacy_temporary_path(rel: str) -> bool:
+    return rel.startswith(f"{LEGACY_TEMPORARY_FOLDER}/")
+
+
 def permanent_path_for(temporary_rel: str) -> str:
-    prefix = f"{TEMPORARY_FOLDER}/"
-    if not temporary_rel.startswith(prefix):
-        raise ValueError(f"not a temporary-area path: {temporary_rel!r}")
-    return temporary_rel[len(prefix):]
+    """Inverse of temporary_path_for; also accepts the pre-OD-8 `Temporary_Data/` location."""
+    for prefix in TEMPORARY_PREFIXES:
+        if temporary_rel.startswith(prefix):
+            return temporary_rel[len(prefix):]
+    raise ValueError(f"not a temporary-area path: {temporary_rel!r}")
 
 
 def incoming_dir_for(settings: Settings, rel: str) -> Path:

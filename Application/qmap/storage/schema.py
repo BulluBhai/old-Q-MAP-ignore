@@ -301,6 +301,36 @@ WHEN OLD.file_deleted_at IS NULL AND NEW.file_deleted_at IS NOT NULL AND NOT EXI
 BEGIN SELECT RAISE(ABORT,'a dataset file can only be marked deleted under a recorded delete action'); END;
 """
 
+# Project Owner decision OD-8 (01-Nov-26): the Temporary area is Q-MAP_DATA/Temporary/ (Blueprint v1.2 section 9.1).
+# Migration 6 (pinned, unchanged) wrote 'Temporary_Data/' into two rules. Migration 7 recreates exactly those two rules:
+# * NEW temporary paths must start with 'Temporary/' (a new dataset can never be inserted under the old prefix, and a
+#   move to Temporary always goes to 'Temporary/' + the permanent path);
+# * a dataset already stored under the legacy 'Temporary_Data/' prefix stays valid where it is, and a move back to
+#   Permanent strips whichever prefix it has. Nothing is moved or rewritten by this migration.
+# Every other migration-6 protection (recorded actions, one open action, completion checks) is untouched.
+MIGRATION_7 = """
+DROP TRIGGER trg_datasets_class_path_insert;
+CREATE TRIGGER trg_datasets_class_path_insert BEFORE INSERT ON datasets
+WHEN (NEW.storage_class = 'temporary') <> (substr(NEW.relative_path, 1, 10) = 'Temporary/')
+  OR substr(NEW.relative_path, 1, 15) = 'Temporary_Data/'
+BEGIN SELECT RAISE(ABORT,'storage class and storage path disagree'); END;
+
+DROP TRIGGER trg_datasets_move_audited;
+CREATE TRIGGER trg_datasets_move_audited BEFORE UPDATE ON datasets
+WHEN (NEW.storage_class IS NOT OLD.storage_class OR NEW.relative_path IS NOT OLD.relative_path) AND (
+  NEW.storage_class IS OLD.storage_class
+  OR (OLD.storage_class = 'temporary') <> (substr(OLD.relative_path, 1, 10) = 'Temporary/'
+                                           OR substr(OLD.relative_path, 1, 15) = 'Temporary_Data/')
+  OR NEW.relative_path IS NOT (CASE
+       WHEN NEW.storage_class = 'temporary' THEN 'Temporary/' || OLD.relative_path
+       WHEN substr(OLD.relative_path, 1, 10) = 'Temporary/' THEN substr(OLD.relative_path, 11)
+       ELSE substr(OLD.relative_path, 16) END)
+  OR NOT EXISTS (SELECT 1 FROM storage_actions a WHERE a.dataset_id = OLD.dataset_id AND a.action = 'move'
+                 AND a.status = 'started' AND a.from_class = OLD.storage_class AND a.to_class = NEW.storage_class
+                 AND a.from_path = OLD.relative_path AND a.to_path = NEW.relative_path))
+BEGIN SELECT RAISE(ABORT,'a storage class or path change must be a recorded move along the Temporary mapping'); END;
+"""
+
 # (version, description, sql)
 MIGRATIONS = [
     (1, "Stage 2 foundation: instruments, runs, registry, ingest provenance, quality checks", MIGRATION_1),
@@ -312,6 +342,8 @@ MIGRATIONS = [
     (5, "Permanent/Temporary storage classification, storage-action audit trail and derived-timeframe provenance",
      MIGRATION_5),
     (6, "Storage class, path and deletion change only under a matching recorded storage action", MIGRATION_6),
+    (7, "Temporary area is Q-MAP_DATA/Temporary/ (OD-8); datasets already under Temporary_Data/ stay valid",
+     MIGRATION_7),
 ]
 
 LATEST_VERSION = MIGRATIONS[-1][0]

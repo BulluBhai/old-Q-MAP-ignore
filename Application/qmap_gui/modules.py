@@ -1,4 +1,4 @@
-"""The planned Q-MAP modules, which application each belongs to, and their GENUINE readiness.
+"""The planned Q-MAP modules (roadmap stages as in Blueprint v1.2 section 15), which application each belongs to, and their GENUINE readiness.
 
 Only working functionality may be marked READY. Database Manager prepares data; Analytical Workbench analyses
 prepared data. A planned module stays COMING SOON until its rules, parameters, outputs and validation criteria are
@@ -58,44 +58,44 @@ MODULES: tuple[ModuleInfo, ...] = (
                "Available now", ANALYTICAL_WORKBENCH, "analysis"),
     # ---- Analytical Workbench: planned application windows ------------------------------------------------------
     ModuleInfo("dashboard", "Dashboard", "Daily starting point: market condition, sectors, saved screens.",
-               COMING_SOON, "Needs Market Intelligence first (roadmap Stage 3).", _W),
+               COMING_SOON, "Needs Market Intelligence first (Blueprint v1.2 roadmap Stage 5).", _W),
     ModuleInfo("market_overview", "Market Overview", "Index trend, breadth, volatility and market regime.",
-               COMING_SOON, "Roadmap Stage 3 (Market Intelligence).", _W),
+               COMING_SOON, "Roadmap Stage 5 (Market Intelligence).", _W),
     ModuleInfo("sector_explorer", "Sector Explorer", "Sector strength, rotation and constituents.",
-               COMING_SOON, "Roadmap Stage 3 (Market Intelligence).", _W),
+               COMING_SOON, "Roadmap Stage 5 (Market Intelligence).", _W),
     ModuleInfo("stock_explorer", "Stock Explorer", "A detailed profile of one instrument.",
-               COMING_SOON, "Roadmap Stage 3 (Market Intelligence).", _W),
+               COMING_SOON, "Roadmap Stage 5 (Market Intelligence).", _W),
     ModuleInfo("opportunity_scanner", "Opportunity Scanner",
                "Combine market, sector, stock and price-behaviour conditions to find candidates.",
-               COMING_SOON, "Roadmap Stage 6.", _W),
+               COMING_SOON, "Roadmap Stage 8 (historical Opportunity Scanner).", _W),
     ModuleInfo("price_behaviour_lab", "Price Behaviour Lab", "Test how price behaves around moving averages and other events.",
-               COMING_SOON, "Roadmap Stage 4 (QLOPB migration).", _W),
+               COMING_SOON, "Roadmap Stage 6 (Price Behaviour: QLOPB migration).", _W),
     ModuleInfo("strategy_lab", "Strategy Backtesting Lab", "Test complete trading rules on history.",
-               COMING_SOON, "Roadmap Stage 7.", _W),
+               COMING_SOON, "Roadmap Stage 9.", _W),
     ModuleInfo("portfolio_risk", "Portfolio and Risk", "Position sizing, exposure and drawdown.",
-               COMING_SOON, "Roadmap Stage 8.", _W),
+               COMING_SOON, "Roadmap Stage 10.", _W),
     ModuleInfo("research_library", "Research Library", "Saved findings, evidence and experiment history.",
                COMING_SOON, "The database tables and run records exist, but there is no screen or workflow yet.", _W),
     # ---- Analytical Workbench: planned research modules ---------------------------------------------------------
     ModuleInfo("market_intelligence", "Market Intelligence (MIQP)", "Market regime, breadth, sector and stock intelligence.",
-               COMING_SOON, "Roadmap Stage 3. MIQP is specified in documents outside this repository; no MIQP code "
+               COMING_SOON, "Roadmap Stage 5. MIQP is specified in documents outside this repository; no MIQP code "
                "exists yet.", _R),
     ModuleInfo("ma_research", "MA Research (QLOPB)", "Moving-average interactions and affinity.",
-               COMING_SOON, "Roadmap Stage 4. The QLOPB source code is not in this repository yet, so nothing has been "
+               COMING_SOON, "Roadmap Stage 6. The QLOPB source code is not in this repository yet, so nothing has been "
                "migrated.", _R),
     ModuleInfo("cpr_pivot", "CPR and Pivot Research", "Central Pivot Range and pivot-level behaviour.",
-               COMING_SOON, "Roadmap Stage 4.", _R),
+               COMING_SOON, "Roadmap Stage 6.", _R),
     ModuleInfo("stage_analysis", "Stage Analysis (Weinstein)", "Classify instruments into price stages.",
-               COMING_SOON, "Roadmap Stage 5. Needs explicit, approved rules, parameters and validation criteria "
+               COMING_SOON, "Roadmap Stage 7. Needs explicit, approved rules, parameters and validation criteria "
                "first.", _R),
     ModuleInfo("ichimoku", "Ichimoku Research", "Cloud and component behaviour.",
-               COMING_SOON, "Roadmap Stage 5.", _R),
+               COMING_SOON, "Roadmap Stage 7.", _R),
     ModuleInfo("candlesticks", "Candlestick Research", "Pattern behaviour and combinations.",
-               COMING_SOON, "Roadmap Stage 5.", _R),
+               COMING_SOON, "Roadmap Stage 7.", _R),
     ModuleInfo("volume_research", "Volume Research", "Volume and price relationships.",
-               COMING_SOON, "Roadmap Stage 5.", _R),
+               COMING_SOON, "Roadmap Stage 7.", _R),
     ModuleInfo("proprietary", "Proprietary Research", "Your own observations turned into testable rules.",
-               COMING_SOON, "Roadmap Stage 5.", _R),
+               COMING_SOON, "Roadmap Stage 7.", _R),
 )
 
 

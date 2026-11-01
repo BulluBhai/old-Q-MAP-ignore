@@ -162,7 +162,7 @@ from qmap.storage.recovery import verify_registry  # noqa: E402
 rep = verify_registry(settings, db)
 act = db.one("SELECT * FROM storage_actions ORDER BY action_id DESC LIMIT 1")
 record(9, "Permanent/Temporary classification and safe registry update",
-       "PASSED" if now.storage_class == "temporary" and now.relative_path.startswith("Temporary_Data/")
+       "PASSED" if now.storage_class == "temporary" and now.relative_path.startswith("Temporary/")
        and sha(settings.data_path(now.relative_path)) == daily.sha256 and not rep.missing_files
        and not rep.checksum_mismatches and act["status"] == "completed" else "FAILED",
        {"new_path": now.relative_path, "checksum_unchanged": sha(settings.data_path(now.relative_path)) == daily.sha256,

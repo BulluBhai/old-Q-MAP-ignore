@@ -95,7 +95,8 @@ def test_move_to_temporary_derive_and_delete_from_the_screen(gui, world):
     assert "All 1 done" in ds.final_label.cget("text")
     assert any("MOVE TO TEMPORARY" in m[2] for m in gui.dialogs.messages if m[0] == "yes_no")
     assert "Temporary" in ds.tree.item(ds.tree.get_children()[0])["values"]
-    assert (world.data / "Temporary_Data" / "Cleaned_Data").is_dir()
+    assert (world.data / "Temporary" / "Cleaned_Data").is_dir()  # Blueprint v1.2 folder (OD-8)
+    assert not (world.data / "Temporary_Data").exists()
 
     _select(ds, dataset_id)
     ds.derive_vars["1M"].set(True)  # weekly is ticked by default
