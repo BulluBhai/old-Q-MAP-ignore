@@ -74,6 +74,11 @@ CHECKS: dict[str, tuple[str, str, str]] = {
     "profile_version": ("The profile changed without a new version number",
                         "This profile version was used before with different settings.",
                         "Increase profile_version in the profile and save it again."),
+    "retry_after_date_limit": ("Retried automatically: the dates are now allowed",
+                               "An earlier attempt on this unchanged file was rejected only because some dates were later "
+                               "than the allowed limit (today plus the profile's allowed days ahead). Those dates are now "
+                               "within the limit, so Q-MAP processed the file again. The earlier rejection stays in the history.",
+                               "Nothing to do."),
     "raw_integrity": ("A stored original file is damaged", "The stored copy no longer matches its checksum.",
                       "Use the restore step with the original file (see the instructions in the message)."),
 }
