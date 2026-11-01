@@ -26,7 +26,6 @@ data needs exchange-session rules and incomplete-day detection, which do not exi
 
 from __future__ import annotations
 
-import hashlib
 import json
 from dataclasses import dataclass, field
 from datetime import date, timedelta
@@ -41,6 +40,7 @@ from ..core.runs import Run
 from ..storage.db import Database, utc_now_iso
 from ..storage.files import fsync_path, place_without_overwrite, safe_remove, sha256_file, unique_tmp_name
 from ..storage.parquet_io import read_canonical, read_canonical_metadata
+from ..storage.paths import derived_relative_path
 from . import canonical as C
 
 METHOD = "ohlcv_period_aggregation"
@@ -270,8 +270,7 @@ def derive_timeframe(run: Run, source_dataset_id: int, timeframe: str) -> Deriva
             "volume_status": src["volume_status"], "requirement_set": src["requirement_set"],
             "config_fingerprint": src["config_fingerprint"], "qmap_version": __version__,
             "source_field_provenance": src_meta.get("field_provenance"), "row_count": agg.row_count}
-    pv_hash = hashlib.sha256(PROCESSING_VERSION.encode()).hexdigest()[:8]
-    rel = f"Timeframe_Data/{src['exchange']}/{src['symbol']}/{timeframe}/{src['sha256'][:12]}_{pv_hash}_{run.run_id}.parquet"
+    rel = derived_relative_path(src["exchange"], src["symbol"], timeframe, src["sha256"], PROCESSING_VERSION, run.run_id)
     final = settings.data_path(rel)
     tmp = settings.timeframe_incoming_dir / f"{run.run_id}.{unique_tmp_name()}"
     tmp.parent.mkdir(parents=True, exist_ok=True)

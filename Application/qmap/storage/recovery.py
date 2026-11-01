@@ -39,6 +39,7 @@ from ..data_engine.format_detect import DetectedFormat
 from .db import Database
 from .files import make_read_only, safe_remove, sha256_file
 from .registry import EventAlreadyFinished, _commit_registration, _finish_event
+from .paths import cleaned_relative_path, derived_relative_path
 from .storage_class import is_open_destination, open_destinations, recover_storage_actions
 
 log = get_logger("recovery")
@@ -263,6 +264,11 @@ def find_storage_inconsistencies(db: Database) -> list[str]:
 
     Since schema migration 6 the database refuses such changes; this finds rows changed directly BEFORE that
     migration was applied. Report only: nothing is repaired automatically.
+
+    Limits (documented in Data_Registry_and_Schema.md): the original path is rebuilt with the naming rule in
+    storage/paths.py, so a dataset written by code that named files differently would be reported (a false alarm,
+    never a repair). The check proves the CURRENT path is unexplained; it cannot tell which intermediate paths or
+    classes a tampered row passed through, or when.
     """
     out = []
     for r in db.query("SELECT dataset_id, storage_class, relative_path FROM datasets "
@@ -273,16 +279,35 @@ def find_storage_inconsistencies(db: Database) -> list[str]:
                       "SELECT 1 FROM storage_actions a WHERE a.dataset_id = d.dataset_id AND a.action = 'delete_file' "
                       "AND a.status = 'completed' AND a.from_path = d.relative_path)"):
         out.append(f"dataset {r['dataset_id']}: marked deleted without a recorded delete action")
-    for r in db.query(
-            "SELECT d.dataset_id, d.storage_class, d.relative_path, "
-            "(SELECT a.to_path FROM storage_actions a WHERE a.dataset_id = d.dataset_id AND a.action = 'move' "
-            " AND a.status = 'completed' ORDER BY a.action_id DESC LIMIT 1) AS last_move "
-            "FROM datasets d WHERE d.layer <> 'raw'"):
-        if r["last_move"] is None and r["storage_class"] == "temporary":
-            out.append(f"dataset {r['dataset_id']}: Temporary without a recorded move")
-        elif r["last_move"] is not None and r["last_move"] != r["relative_path"]:
-            out.append(f"dataset {r['dataset_id']}: path {r['relative_path']} differs from its last recorded move "
-                       f"({r['last_move']})")
+    # Follow each managed dataset from its ORIGINAL path (rebuilt from immutable registry records, see storage/paths.py)
+    # through its completed moves; the result must be its current path. This also catches a class and path changed
+    # together without any recorded move, which ends Permanent at a different path (PR #4 review, finding 2).
+    for d in db.query(
+            "SELECT d.dataset_id, d.layer, d.timeframe, d.relative_path, d.processing_version, d.storage_class, "
+            "i.exchange, i.symbol, p.sha256 AS parent_sha, a.run_id AS attempt_run, "
+            "x.source_sha256, x.run_id AS derivation_run "
+            "FROM datasets d JOIN instruments i USING (instrument_id) "
+            "LEFT JOIN datasets p ON p.dataset_id = d.parent_dataset_id "
+            "LEFT JOIN ingest_attempts a ON a.attempt_id = d.created_by_attempt_id "
+            "LEFT JOIN dataset_derivations x ON x.dataset_id = d.dataset_id WHERE d.layer IN ('cleaned', 'timeframe')"):
+        if d["layer"] == "cleaned" and d["parent_sha"] and d["attempt_run"]:
+            expected = cleaned_relative_path(d["exchange"], d["symbol"], d["timeframe"], d["parent_sha"],
+                                             d["processing_version"], d["attempt_run"])
+        elif d["layer"] == "timeframe" and d["source_sha256"] and d["derivation_run"]:
+            expected = derived_relative_path(d["exchange"], d["symbol"], d["timeframe"], d["source_sha256"],
+                                             d["processing_version"], d["derivation_run"])
+        else:
+            out.append(f"dataset {d['dataset_id']}: its original path cannot be rebuilt (lineage records missing)")
+            continue
+        for m in db.query("SELECT action_id, from_path, to_path FROM storage_actions WHERE dataset_id = ? AND "
+                          "action = 'move' AND status = 'completed' ORDER BY action_id", (d["dataset_id"],)):
+            if m["from_path"] != expected:
+                out.append(f"dataset {d['dataset_id']}: recorded move {m['action_id']} starts at {m['from_path']}, "
+                           f"but the dataset was at {expected}")
+            expected = m["to_path"]
+        if d["relative_path"] != expected:
+            out.append(f"dataset {d['dataset_id']}: path {d['relative_path']} is not explained by its original path and "
+                       f"recorded moves (expected {expected}; storage class {d['storage_class']})")
     return out
 
 

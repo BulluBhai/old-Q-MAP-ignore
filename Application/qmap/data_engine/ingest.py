@@ -23,6 +23,7 @@ from ..storage.db import utc_now_iso
 from ..storage.faults import maybe_fail
 from ..storage.files import place_without_overwrite, safe_remove, sha256_file, unique_tmp_name
 from ..storage.parquet_io import write_canonical_parquet
+from ..storage.paths import cleaned_relative_path
 from ..storage.registry import Receipt, receive_file
 from . import canonical as C
 from .instruments import get_or_create_instrument
@@ -290,10 +291,8 @@ def _process_registered(run: Run, receipt: Receipt, src: Path, profile: SourcePr
     written: list[tuple] = []
     try:
         if accepted:
-            pv_hash = hashlib.sha256(pv.encode()).hexdigest()[:8]
             for g in result.groups:
-                rel = (f"Cleaned_Data/{g.exchange}/{g.symbol}/{g.timeframe}/"
-                       f"{raw['sha256'][:12]}_{pv_hash}_{run.run_id}.parquet")
+                rel = cleaned_relative_path(g.exchange, g.symbol, g.timeframe, raw["sha256"], pv, run.run_id)
                 final = settings.data_path(rel)
                 tmp = settings.cleaned_incoming_dir / f"{run.run_id}.{unique_tmp_name()}"  # owner visible to recovery
                 meta = {"run_id": run.run_id, "processing_version": pv, "profile_id": profile.profile_id,

@@ -183,7 +183,66 @@ def test_tampering_done_before_migration_6_is_reported(settings, roots, src, mon
     assert db.current_version() == 6
     found = recover_incomplete(settings, db).storage_inconsistencies
     assert any(f"dataset {a}: storage class temporary does not match" in f for f in found)
-    assert any(f"dataset {a}: Temporary without a recorded move" in f for f in found)
+    # class changed, path left at its original place: reported once, as a class/path mismatch (the path itself is
+    # explained by its original path, so the lineage walk rightly adds nothing)
+    assert [f for f in found if f.startswith(f"dataset {a}:")] == [
+        next(f for f in found if f"dataset {a}: storage class temporary does not match" in f)]
     assert any(f"dataset {b}: marked deleted without a recorded delete action" in f for f in found)
     assert db.one("SELECT storage_class FROM datasets WHERE dataset_id = ?", (a,))[0] == "temporary"  # reported only
     db.close()
+
+
+def test_class_and_path_tampering_that_ends_permanent_elsewhere_is_reported(settings, src, monkeypatch):
+    """PR #4 review, finding 2: at schema 5, class AND path changed together twice without any audit action, ending
+    Permanent at a different path. Class and path agree and no move exists, so only the ORIGINAL path - rebuilt from
+    immutable lineage records - shows that the current path is unexplained."""
+    import qmap.storage.db as dbmod
+    from qmap.core.runs import run_context
+    from qmap.storage.db import open_database
+    from qmap.storage.schema import MIGRATIONS
+
+    monkeypatch.setattr(dbmod, "MIGRATIONS", MIGRATIONS[:5])
+    old = open_database(settings.db_path)
+    with run_context(settings, old, "FOUND", area="Ingestion") as r:
+        i = do_ingest(r, write_delimited(src / "a.csv", HEADER, daily_rows(10))).dataset_ids[0]
+    original = _path(old, i)
+    with old.transaction() as conn:
+        conn.execute("UPDATE datasets SET storage_class = 'temporary', relative_path = 'Temporary_Data/x/y.parquet' "
+                     "WHERE dataset_id = ?", (i,))
+        conn.execute("UPDATE datasets SET storage_class = 'permanent', relative_path = 'Cleaned_Data/OTHER/z.parquet' "
+                     "WHERE dataset_id = ?", (i,))
+    old.close()
+    monkeypatch.setattr(dbmod, "MIGRATIONS", MIGRATIONS)
+    db = open_database(settings.db_path)
+    assert db.one("SELECT COUNT(*) FROM storage_actions")[0] == 0
+    found = find_storage_inconsistencies(db)
+    assert len(found) == 1 and f"dataset {i}: path Cleaned_Data/OTHER/z.parquet is not explained" in found[0]
+    assert original in found[0]  # the report names where the immutable records say the file was created
+    assert _path(db, i) == "Cleaned_Data/OTHER/z.parquet"  # report only, never repaired
+    db.close()
+
+
+def test_a_recorded_move_that_does_not_start_at_the_original_path_is_reported(db, run, ids):
+    """Rows faked at schema 5 together with a matching-looking move: the move's start must be the original path."""
+    i = ids["perm"]
+    with db.transaction() as conn:
+        conn.execute("DROP TRIGGER trg_datasets_move_audited")  # simulate the pre-migration-6 database
+        aid = conn.execute(
+            "INSERT INTO storage_actions(run_id, dataset_id, action, from_class, to_class, from_path, to_path, status, "
+            "started_at) VALUES (?, ?, 'move', 'permanent', 'temporary', 'Cleaned_Data/fake.parquet', "
+            "'Temporary_Data/Cleaned_Data/fake.parquet', 'started', 'x')", (run.run_id, i)).lastrowid
+        conn.execute("UPDATE datasets SET storage_class = 'temporary', relative_path = "
+                     "'Temporary_Data/Cleaned_Data/fake.parquet' WHERE dataset_id = ?", (i,))
+        conn.execute("UPDATE storage_actions SET status = 'completed' WHERE action_id = ?", (aid,))
+    found = find_storage_inconsistencies(db)
+    assert any(f"recorded move {aid} starts at Cleaned_Data/fake.parquet" in f for f in found)
+
+
+def test_no_false_alarm_for_normal_workflows_including_derived_data(settings, db, run, ids):
+    from qmap.data_engine.derive import derive_timeframe
+
+    weekly = derive_timeframe(run, ids["perm"], "1W").dataset_id
+    assert move_dataset(run, weekly, "temporary").ok and move_dataset(run, weekly, "permanent").ok
+    assert move_dataset(run, ids["temp"], "permanent").ok and move_dataset(run, ids["temp"], "temporary").ok
+    assert delete_temporary_file(run, ids["temp"]).ok
+    assert find_storage_inconsistencies(db) == []
