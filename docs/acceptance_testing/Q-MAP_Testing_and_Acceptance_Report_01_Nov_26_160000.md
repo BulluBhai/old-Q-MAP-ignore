@@ -9,7 +9,9 @@ Branch `claude/adoring-curie-5h2mx4` (PR #4).
 | `8ea0f4a` | Documentation |
 | `832b788` | **Code**: schema migration 6 (audited storage changes) and the recovery consistency report |
 | `330a9aa` | **Code**: original-path reconstruction for detecting earlier tampering (no schema change) |
-| later commits | Documentation only (this report, guides, decision log, register) |
+| `de624a6` | Documentation |
+| `1760b57` | **Code**: Temporary area moved to `Q-MAP_DATA/Temporary/` (OD-8), schema **migration 7**, safe transition; Workbench roadmap stage numbers per Blueprint v1.2 |
+| later commits | Documentation only (this report, guides, decision log, register, architecture) |
 
 **Four kinds of evidence, kept separate:**
 
@@ -31,17 +33,20 @@ Status words: **Passed**, **Failed**, **Skipped**, **Not run**, **Blocked**, **N
 | `1c55f07` | Python 3.11 / 3.13, no tkinter | `python3.11 -m pytest -p no:cacheprovider` | 597 passed, 62 skipped, 0 failed (each) |
 | `832b788` | Python 3.12, Tk, Xvfb | as above | 701 passed, 0 failed, 0 skipped |
 | `832b788` | Python 3.11, no tkinter | as above | 613 passed, 62 skipped, 0 failed |
-| **`330a9aa` (latest code)** | Python 3.12.3, Tk 8.6, Xvfb, GUI tests required | as above | **704 passed**, 0 failed, 0 skipped (175 GUI) |
-| **`330a9aa`** | Python 3.11, no tkinter | as above | **616 passed, 62 skipped** (window tests skip without tkinter, by design), 0 failed |
+| `330a9aa` | Python 3.12.3, Tk 8.6, Xvfb, GUI tests required | as above | 704 passed, 0 failed, 0 skipped |
+| `330a9aa` | Python 3.11, no tkinter | as above | 616 passed, 62 skipped, 0 failed |
+| **`1760b57` (latest code)** | Python 3.12.3, Tk 8.6, Xvfb, GUI tests required | as above | **712 passed**, 0 failed, 0 skipped (175 GUI) |
+| **`1760b57`** | Python 3.11, no tkinter | as above | **624 passed, 62 skipped** (window tests skip without tkinter, by design), 0 failed |
 
 New failures introduced: none. Pre-existing failures: none.
 
-**New tests in PR #4: 90.**
+**New tests in PR #4: 98.**
 
 | File | Tests | Covers |
 |---|---|---|
 | `test_storage_class.py` | 15 | Moves, deletion, raw protection, dependents, confirmation for runs, crash recovery during a move |
 | `test_storage_integrity.py` | 19 | Migration 6: every invalid direct update refused; the audit trail cannot be faked; normal workflows; earlier tampering reported, including a class and path changed together and ending Permanent elsewhere |
+| `test_temporary_transition.py` | 8 | OD-8 transition: fresh install creates only `Temporary/`; new moves go there; upgrading a database left by earlier PR #4 code moves and rewrites nothing; legacy datasets stay valid, readable and consistent; recovery in the old folder; audited relocation; the Datasets-screen notice; nothing new under the old prefix |
 | `test_derive.py` | 17 | Calendar periods, aggregation rules, look-ahead dating, edge flags, volume rule, refusals, provenance, reuse |
 | `test_catalog_and_analysis.py` | 17 | Catalogue, lineage, readiness, run pipeline, metadata, an independent statistics check, blocked and failed runs |
 | `test_two_applications.py` | 15 | Entry points, both apps together, shared folders, Datasets screen, Workbench, two regressions found in acceptance |
@@ -58,7 +63,9 @@ Tests changed because a requirement changed (none weakened or removed):
 
 | Test | Change |
 |---|---|
-| `test_placement_and_migration.py` | Expects schema **6**; migrations 5 and 6 pinned by SHA-256 |
+| `test_placement_and_migration.py` | Expects schema **7**; migrations 5, 6 and 7 pinned by SHA-256 |
+| `test_storage_class.py`, `test_two_applications.py` | Expect the new `Temporary/` folder (OD-8); the GUI test also checks that no `Temporary_Data` folder is created |
+| `test_storage_integrity.py` | Uses the real Temporary→Permanent mapping instead of slicing the old prefix length (two tests had kept passing for the wrong reason after the rename) |
 | `test_logic_modules_env_store.py` | Exact READY set updated |
 | `test_window_home_and_folders.py` | Each app's Home lists its own modules |
 | `Tests/gui/conftest.py` | The harness can start either app |
@@ -70,7 +77,8 @@ Tests changed because a requirement changed (none weakened or removed):
 |---|---|---|---|
 | `852247f` (base, PR #3) | from PR #3 | success | success |
 | `832b788` | 41325137464 and 41325143242 (push and pull-request triggers) | **success** (both) | **success** (both) |
-| `330a9aa` and later | see the PR #4 conversation and checks tab | reported in the PR description | reported in the PR description |
+| `de624a6` (same code as `330a9aa`) | 41328085918 and 41328091330 | **success** (both) | **success** (both) |
+| `1760b57` and later | see the PR #4 checks | reported in the PR description | reported in the PR description |
 
 ## 3. What is NOT covered by any of the above
 
@@ -85,7 +93,7 @@ on a virtual screen (Linux), clicking the same buttons a person would. Where pos
 Python, independently of Q-MAP code: rows against the source CSV, weekly bars, statistics. Results:
 `acceptance_results_01_Nov_26.json`; screenshots in `screenshots/`.
 
-Re-run unchanged on code commits `832b788` and `330a9aa`: same 13 passed, 1 not applicable.
+Re-run on code commits `832b788`, `330a9aa` and `1760b57`: same 13 passed, 1 not applicable. On `1760b57` the Temporary move landed in `Temporary/Cleaned_Data/...` and no `Temporary_Data` folder was created. The evidence files in `evidence_01_Nov_26/` are from the original run, so they still show `Temporary_Data/`; that was correct for the code at the time.
 
 **Limitations.**
 
@@ -104,7 +112,7 @@ Re-run unchanged on code commits `832b788` and `330a9aa`: same 13 passed, 1 not 
 | 6 | Standardise and validate | **Passed** | Loaded: "Accepted, 1 dataset(s) created" |
 | 7 | Register and access the dataset | **Passed** | All 60 stored rows identical to the source (dates, OHLC, volume); Net Volume kept separately, exactly as read |
 | 8 | Original source file unchanged | **Passed** | SHA-256 identical before and after the whole walkthrough |
-| 9 | Permanent/Temporary and safe registry update | **Passed** | Moved to `Temporary_Data/...` (folder name awaiting owner decision OD-8); checksum unchanged; `verify` found nothing missing or mismatched; audit row "completed" with its reason (screenshot 04) |
+| 9 | Permanent/Temporary and safe registry update | **Passed** | Moved to `Temporary_Data/...` in the original run (now `Temporary/...`, OD-8); checksum unchanged; `verify` found nothing missing or mismatched; audit row "completed" with its reason (screenshot 04) |
 | 9a | Derived timeframes (extra) | **Passed** | Weekly (12 bars) and monthly (3 bars) created; every weekly bar equals an independent re-calculation |
 | 10 | Workbench discovers and uses ready data | **Passed** | Offered daily, weekly and monthly; folders shared |
 | 11 | Analysis blocked with a clear explanation | **Passed** | A period without data: "NOT READY", with the reason and a pointer to Database Manager; no run created (screenshot 05) |
@@ -132,7 +140,7 @@ script was corrected; Q-MAP was right.
 - [ ] Check one file against a deliberately wrong profile: it must be rejected with an understandable reason.
 - [ ] In Datasets and Storage, click a dataset: the details show your original file name and the lineage.
 - [ ] Derive Weekly and Monthly from a daily dataset; compare a few weekly bars with your own calculation.
-- [ ] Move a dataset to Temporary and back; confirm the Temporary folder under `Q-MAP_DATA` is used (today `Temporary_Data`; see OD-8), and nothing else changed.
+- [ ] Move a dataset to Temporary and back; confirm `Q-MAP_DATA/Temporary` is used, and nothing else changed.
 - [ ] Try to delete a Permanent dataset (refused), then a Temporary one with derived data (refused, with the reason).
 - [ ] In the Workbench, run Dataset Summary on a daily dataset; open the run folder and read the CSV and the
       Run_Metadata file.

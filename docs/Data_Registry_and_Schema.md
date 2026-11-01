@@ -31,18 +31,19 @@ explicitly maps it.
 | `Raw_Data/<xx>/<sha256>.<ext>` | Preserved originals, stored by content, read-only | Always permanent; never moved or deleted |
 | `Cleaned_Data/<EXCHANGE>/<SYMBOL>/<TF>/...parquet` | Standardised datasets | Permanent |
 | `Timeframe_Data/<EXCHANGE>/<SYMBOL>/<TF>/...parquet` | Derived timeframes | Permanent |
-| `Temporary_Data/<the permanent path>` | Any standardised or derived dataset classified Temporary. **Folder name not yet approved:** Blueprint v1.2 and the handover are reported to specify `Temporary/` (owner decision OD-8) | Temporary |
+| `Temporary/<the permanent path>` | Any standardised or derived dataset classified Temporary (Blueprint v1.2 §9.1; owner decision OD-8; schema 7) | Temporary |
+| `Temporary_Data/<the permanent path>` | **Legacy:** datasets moved to Temporary by earlier PR #4 code, before OD-8. They stay valid where they are and are never moved automatically; relocate with Make Permanent, then Move to Temporary. Nothing new is ever written here. | Temporary |
 | `*/_incoming/` | Files being written; owned by a live run, cleaned by recovery | |
 | `Metadata/` | Registry database, run locks | |
 
 There is one file per dataset and no database per instrument. File names end with the Run ID that created them, so two
 runs can never overwrite each other.
 
-## Registry tables (schema version 6)
+## Registry tables (schema version 7)
 
 | Table | Holds | Protection |
 |---|---|---|
-| `datasets` | Every raw, standardised and derived dataset: layer, instrument, timeframe, path, SHA-256, rows, dates, parent, processing version, canonical schema version, volume status, requirement set, settings fingerprint, status (active/superseded), **storage_class**, **file_deleted_at** | Never deleted. Identity is immutable. Storage class and path always agree (Temporary ⇔ `Temporary_Data/...`), and change only together, under a matching recorded `move` action. `file_deleted_at` is set only under a recorded `delete_file` action. Raw is always permanent. Only temporary files can be deleted, and a deletion is final. |
+| `datasets` | Every raw, standardised and derived dataset: layer, instrument, timeframe, path, SHA-256, rows, dates, parent, processing version, canonical schema version, volume status, requirement set, settings fingerprint, status (active/superseded), **storage_class**, **file_deleted_at** | Never deleted. Identity is immutable. Storage class and path always agree (Temporary ⇔ `Temporary/...`, or the legacy `Temporary_Data/...` for rows already there), and change only together, under a matching recorded `move` action. `file_deleted_at` is set only under a recorded `delete_file` action. Raw is always permanent. Only temporary files can be deleted, and a deletion is final. |
 | `instruments` | Exchange + symbol | Never deleted; identity immutable |
 | `ingest_events` | Every file received (name, path, time, checksum) | Never deleted |
 | `ingest_attempts` | Every processing attempt and its full interpretation (profile, mapping, date rules, settings) | Append-only |
@@ -62,7 +63,7 @@ runs can never overwrite each other.
 | Processing version, standardised data | `<profile_id>@<profile_version>+<cleaning code version>` |
 | Processing version, derived data | `derive:ohlcv_period_aggregation@1` |
 | Settings fingerprint | `vs1:<16 hex>` |
-| Schema | `schema_version` table; currently 6 |
+| Schema | `schema_version` table; currently 7 (migration 7: Temporary area moved to `Temporary/`, OD-8) |
 
 ## Three separate statuses
 
@@ -80,7 +81,7 @@ changed directly **before** schema 6 cannot be prevented any more, only detected
 
 **What is detected:**
 
-1. Class and path disagree (Temporary but not under `Temporary_Data/`, or the reverse).
+1. Class and path disagree (Temporary but not under `Temporary/` or the legacy `Temporary_Data/`, or the reverse).
 2. A file marked deleted without a completed `delete_file` action for that path.
 3. A current path that its **original path plus its completed moves** do not explain. The original path is rebuilt
    with the naming rule in `storage/paths.py` (decision D2-19) from records that earlier migrations already make
