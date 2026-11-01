@@ -9,6 +9,16 @@ OK_COLOR, ERROR_COLOR, WARN_COLOR, MUTED_COLOR = "#1a7f37", "#b42318", "#b54708"
 _SELF_SCROLLING = ("Text", "Listbox", "Treeview", "TCombobox", "Combobox")
 
 
+def combobox_index(combo) -> int:
+    """Index of the chosen entry of a ttk.Combobox, or -1 when nothing is chosen.
+
+    Tk 9 answers "" (Tk 8.6: -1) when nothing is chosen; Python 3.11's ttk.Combobox.current() turns that "" into a
+    TclError ("expected integer but got"). This reads the answer the way Python 3.12+ does, on every version.
+    """
+    answer = combo.tk.call(combo._w, "current")
+    return -1 if answer == "" else combo.tk.getint(answer)
+
+
 class ScrollFrame(tk.Frame):
     """A frame that scrolls vertically. Put everything into `.inner`."""
 

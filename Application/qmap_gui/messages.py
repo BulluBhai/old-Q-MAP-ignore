@@ -88,6 +88,7 @@ OUTCOMES = {
     "reused": "Already loaded (nothing new)",
     "rejected": "Rejected - see problems",
     "blocked": "Not retried (already rejected)",
+    "waiting": "Waiting - its dates are not allowed yet",
     "unsupported": "File type not supported",
     "failed": "Failed",
     "would_be_accepted": "Would be accepted",

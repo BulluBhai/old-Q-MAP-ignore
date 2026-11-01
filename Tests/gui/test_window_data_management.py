@@ -135,6 +135,24 @@ def test_rejected_files_cannot_be_retried_unchanged_without_a_reason(dm, world):
     assert rows(dm)[0][1] == "Rejected - see problems"  # retried (and still rejected), not blocked
 
 
+def test_a_file_rejected_only_for_future_dates_is_shown_as_waiting_not_as_rejected(dm, world):
+    from datetime import datetime, timedelta, timezone
+
+    today = datetime.now(timezone.utc).date()  # the Foundation's "today" for the future-date limit is the UTC date
+    data = dd_mm_yy_rows(8)
+    for i, row in enumerate(data):  # 8 consecutive days ending 3 days after today: the last 2 are beyond today + 1
+        row[0] = (today + timedelta(days=i - 4)).strftime("%d-%m-%y")
+    f = write_delimited(world.src / "NSE_FUTURE_1D.csv", NET_HEADER, data)
+    dm.add_paths([f])
+    choose_profile(dm, "example_csv_dd_mm_yy")
+    run_and_wait(dm, dm.start_ingest)
+    assert rows(dm)[0][1] == "Rejected - see problems"
+    run_and_wait(dm, dm.start_ingest)
+    assert rows(dm)[0][1] == "Waiting - its dates are not allowed yet"
+    assert (today + timedelta(days=2)).strftime("%d-%b-%y") in rows(dm)[0][3]
+    assert "Open the problem report" not in dm.final_label.cget("text")
+
+
 def test_a_profile_that_cannot_read_the_instrument_asks_for_it(dm, world):
     f = write_delimited(world.src / "weird_name.txt", ["date", "open", "high", "low", "close", "Volume"],
                         [r[:6] for r in daily_rows(8)])

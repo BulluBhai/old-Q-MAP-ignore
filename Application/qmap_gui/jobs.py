@@ -82,10 +82,16 @@ def outcome_from_result(res: IngestResult, path: Path, db) -> FileOutcome:
             rows_read, rows_flagged = row["rows_read"], row["rows_flagged"]
     findings = findings_from_checks(res.checks)
     message = res.message
+    outcome = res.outcome
     if res.outcome == "rejected" and findings:
         errs = [f.title for f in findings if f.severity == "error"]
         message = "Not loaded. Problems: " + "; ".join(errs[:4]) + (" ..." if len(errs) > 4 else "")
-    return FileOutcome(path, res.outcome, OUTCOMES.get(res.outcome, res.outcome), message, rows_read, rows_flagged,
+    elif res.outcome == "blocked" and res.retry_on is not None:  # rejected only for future dates (D2-33): waiting
+        outcome = "waiting"
+        message = (f"Not loaded yet: it was rejected only because some dates were in the future. Load it again on or "
+                   f"after {res.retry_on.strftime('%d-%b-%y')} and Q-MAP will process it automatically. "
+                   "Nothing needs to change.")
+    return FileOutcome(path, outcome, OUTCOMES.get(outcome, outcome), message, rows_read, rows_flagged,
                        list(res.dataset_ids), res.issues_report, findings)
 
 

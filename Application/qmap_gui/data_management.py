@@ -18,7 +18,7 @@ from . import services
 from .jobs import FileOutcome, IngestJob, RunSummary
 from .locations import LocationsPanel
 from .messages import OUTCOMES
-from .widgets import ERROR_COLOR, MUTED_COLOR, OK_COLOR, WARN_COLOR, LogText, ReadOnlyText, section
+from .widgets import ERROR_COLOR, MUTED_COLOR, OK_COLOR, WARN_COLOR, LogText, ReadOnlyText, combobox_index, section
 
 TIMEFRAMES = ("", "1m", "5m", "15m", "30m", "1h", "4h", "1D", "1W", "1M")
 
@@ -277,7 +277,7 @@ class DataManagementFrame(tk.Frame):
         self.on_profile_selected()
 
     def on_profile_selected(self) -> None:
-        index = self.profile_combo.current()
+        index = combobox_index(self.profile_combo)
         self.current_info = self.profile_infos[index] if 0 <= index < len(self.profile_infos) else None
         info = self.current_info
         if info is None:
@@ -520,7 +520,7 @@ class DataManagementFrame(tk.Frame):
         self._done += 1
         if isinstance(obj, FileOutcome):
             label, rows, message, path = obj.label, obj.rows_read, obj.message, obj.path
-            tag = "ok" if obj.outcome == "accepted" else "muted" if obj.outcome == "reused" else "bad"
+            tag = "ok" if obj.outcome == "accepted" else "muted" if obj.outcome in ("reused", "waiting") else "bad"
             key = obj.outcome
         else:  # CheckReport
             label, rows, message, path = OUTCOMES.get(obj.outcome, obj.outcome), obj.rows_read, "", obj.file
@@ -550,7 +550,7 @@ class DataManagementFrame(tk.Frame):
         else:
             cancelled = summary is not None and summary.cancelled
             self.stage_var.set("Stopped (as you asked)" if cancelled else "Finished")
-            bad = sum(v for k, v in self._counts.items() if k not in ("accepted", "reused", "would_be_accepted"))
+            bad = sum(v for k, v in self._counts.items() if k not in ("accepted", "reused", "waiting", "would_be_accepted"))
             what = "Check" if self.mode == "check" else "Load"
             self.final_label.configure(
                 text=f"{what} finished: {self.counts_var.get()}." + (" Nothing was saved." if self.mode == "check" else
