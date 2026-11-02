@@ -271,7 +271,7 @@ class SourcesFrame(tk.Frame):
         self.ans_date_box.configure(values=[label for label, _ in opts])
         for var in (self.ans_exch, self.ans_sym, self.ans_tf, self.ans_date, self.ans_tz):
             var.set("")
-        states = {self.ans_exch_entry: "identity" in keys, self.ans_sym_entry: "identity" in keys,
+        states = {self.ans_exch_entry: bool(keys & {"identity", "exchange"}), self.ans_sym_entry: "identity" in keys,
                   self.ans_tf_box: "timeframe" in keys, self.ans_date_box: "date_format" in keys,
                   self.ans_tz_box: "market_timezone" in keys}
         for widget, on in states.items():
@@ -355,6 +355,7 @@ class SourcesFrame(tk.Frame):
                    "date_format": self._date_ids.get(self.ans_date.get(), ""), "market_timezone": self.ans_tz.get()}
         keys = ss.question_keys(f)
         missing = [name for key, name, given in (("identity", "exchange and symbol", answers["exchange"] and answers["symbol"]),
+                                                 ("exchange", "exchange", answers["exchange"]),
                                                  ("timeframe", "timeframe", answers["timeframe"]),
                                                  ("date_format", "date layout", answers["date_format"]),
                                                  ("market_timezone", "market time zone", answers["market_timezone"]))

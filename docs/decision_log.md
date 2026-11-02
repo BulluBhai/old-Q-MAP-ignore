@@ -196,3 +196,11 @@ storage rule or analytical methodology was changed.
 | D5-10 | Schema migration 8 adds four tables (`data_sources`, `source_scans`, `source_file_observations`, `source_answers`) with append-only/immutability triggers. Migrations 1-7 unchanged and pinned. A file's current state is its latest observation, so there is no second copy of that state | Avoid duplicate sources of truth (assignment §5.4) | schema |
 | D5-11 | Scheduled scanning is NOT built; scans run when the user presses the button | §8.5.6 makes it optional; no unrequested background service (assignment §6.3) | — |
 | D5-12 | Provider API adapters are NOT started in this session; recommended as a separate session after the owner names providers and supplies permitted access | §8.5.2 requires a feasibility and licensing review and owner priorities | — |
+
+### Owner decisions DQ-1 and DQ-2 (recorded on PR #9, 02-Nov-26)
+
+| Ref | Decision | Status |
+|---|---|---|
+| D5-13 | **DQ-1 (owner): conflicting overlapping bars are REPORTED ONLY.** Both datasets are kept unchanged; no automatic winner, merge or overwrite; the conflict stays visible. Confirms D5-09 as the approved policy (Blueprint v1.3 §8.3 requires an explicit approved policy and a report of what was left unresolved) | Approved. Code already met it (no change). Regression tests pass locally. Windows/IDLE acceptance: not done |
+| D5-14 | **DQ-2 (owner): headerless convention approved**: Date, Open, High, Low, Close; Volume only when the validation rules support it (D5-07: column 6, every value a whole number ≥ 0) | Approved. Code already met it (no change). Regression tests pass locally. Windows/IDLE acceptance: not done |
+| D5-15 | **DQ-2 (owner): file-name identity approved; explicit instrument information in the file is never silently overridden.** Implemented as precedence columns > recorded answer > `EXCHANGE_SYMBOL` file name > folder settings. A name that contradicts an exchange or symbol column is rejected. Automatic-interpretation rules version 1 → 2, because v1 let a file-name exchange replace an `exchange` column when the file had no `symbol` column. Also an exchange-only question in the Sources screen | Approved. **Code corrected** (`auto_interpret.py`, `sources.py`). Regression tests pass locally (they fail on the v1 code). Windows/IDLE acceptance: not done |

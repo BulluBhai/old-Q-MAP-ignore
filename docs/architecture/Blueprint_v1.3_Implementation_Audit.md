@@ -124,7 +124,7 @@ with the same answers always gives the same profile, so re-scans reuse earlier r
 | A-5 Headerless | Positions date, open, high, low, close [, volume] only if **every** row has a parseable date in column 1, numbers in columns 2-5, and high ≥ open, close, low and low ≤ open, close, high on every row. Column 6 is volume only if every value is a whole number ≥ 0. Columns 7+ are kept, never used as volume | Any row breaks the rule → rejected ("column order cannot be confirmed") |
 | A-6 Dates | Every non-empty value must fit exactly one candidate: ISO date/time (with or without offset), `DD-MM-YY[YY]`, `DD/MM/YY[YY]`, `MM/DD/YYYY`, `YYYYMMDD`, `DD-Mon-YY[YY]`, each optionally with ` HH:MM[:SS]`; Unix seconds / milliseconds (10 / 13 digits); native Excel/Parquet dates. Two-digit years use Q-MAP's existing fixed rule (00-68 → 2000-2068, 69-99 → 1969-1999). If several candidates fit (for example day-first and month-first), only those whose dates are in file order (all non-decreasing or all non-increasing) are kept | Still more than one candidate, or none → **question**: the user picks the format; the answer is recorded |
 | A-7 Time zone | Values with an offset, Unix times and date-only values need no assumption. The trading date of an instant uses the **source folder's market time zone**, which the user confirms when adding the folder | Naive date-times, or instants, with no confirmed market time zone → question |
-| A-8 Instrument | `exchange`/`symbol`/`ticker` columns; else a file name of the form `EXCHANGE_SYMBOL…` (letters, then `_`, then letters/digits/`&`/`-`), the same pattern as the existing Example profiles; else, only if the user enabled it for the folder, the file name as the symbol with the folder's default exchange | Nothing applies → question (exchange and symbol) |
+| A-8 Instrument | Precedence (owner decision DQ-2, rules v2): `exchange`/`symbol`/`ticker` columns in the file; then the user's recorded answer; then a file name of the form `EXCHANGE_SYMBOL…` (recognised exchange code, then `_`, then letters/digits/`&`/`-`), the same pattern as the existing Example profiles; then, only if the user enabled it for the folder, the file name as the symbol, with the folder's default exchange. A file name that contradicts an exchange or symbol column is **rejected**, never used | Exchange and symbol both unknown → question; only the exchange unknown → exchange-only question |
 | A-9 Timeframe | From the data: date-only (or one bar per date) with a typical gap of 1-4 days → `1D`, 5-9 → `1W`, 27-33 → `1M`; intraday from the most common step if it is 1, 5, 15, 30, 60 or 240 minutes and covers ≥ 60 % of steps. A file-name token (`, 1D`, `_5m`, `, 60` …) is evidence only | Too few bars, irregular steps, or a file-name token that contradicts the data → question |
 
 Volume (A-4/A-5): one recognised volume column → used. "Net volume", "delivery", "open interest" and every other
@@ -165,8 +165,8 @@ contract and mocked tests; (3) live tests only with permitted access, reported s
 
 | Ref | Question | Why it matters | Options | Recommendation | If delayed |
 |---|---|---|---|---|---|
-| DQ-1 | **Update conflict policy** (Blueprint §17 open decision): when a new file overlaps an existing dataset of the same instrument and timeframe with *different* values, what happens? | Two active datasets with different prices for the same bars; analyses use whichever the user selects | (a) report only, user chooses (implemented); (b) newer file wins for overlapping bars, older kept; (c) block the newer dataset from readiness until resolved | (a) now; decide (b)/(c) before any merge feature | Safe: conflicts are visible as warnings; nothing is overwritten |
-| DQ-2 | Confirm the automatic rules A-5 (headerless order date, O, H, L, C, volume) and A-8 (file names `EXCHANGE_SYMBOL…`) as approved conventions | They are interpretations, not proofs | Approve / require a one-time confirmation per folder | Approve: both already matched every owner sample | Rules stay active and visible in every import record |
+| DQ-1 | Update conflict policy (Blueprint §17 open decision) | — | — | **Decided by the Project Owner 02-Nov-26 (PR #9 discussion): REPORT ONLY.** Both datasets are kept unchanged; no winner, merge or overwrite; the conflict stays visible. See section 12 for implementation and test status | — |
+| DQ-2 | Rules A-5 (headerless) and A-8 (file-name identity) | — | — | **Approved by the Project Owner 02-Nov-26 (PR #9 discussion)**, with the condition that explicit instrument information in a file is never silently overridden by its name. See section 12 | — |
 | DQ-3 | First API providers (two of Zerodha, Dhan, Angel One, FYERS, NSE, Yahoo) and permitted credentials | §8.5.2 requires an owner priority and licensing review | — | Start with one broker API you already hold an account for | Adapters stay unbuilt |
 | DQ-4 | Carry-over: OD-2 (QLOPB source, MIQP specs), OD-3, OD-4, OD-5, OD-10, OD-12-14 | See `Outstanding_Work_Register.md` | — | — | MIQP/QLOPB integration cannot start without OD-2 |
 | DQ-5 | Should scanning offer an optional schedule? | §8.5.6 makes it optional | On-demand only (implemented) / add an in-app schedule | On-demand until daily use shows a need | None |
@@ -192,8 +192,28 @@ figure separately from the file's own text; all match. The data was synthetic.
 **What was not checked.** Windows/IDLE with your real files (please use the checklist in
 `docs/acceptance_testing/`), a real OneDrive or Google Drive client, and any provider API (none was built).
 
-**What is still to do.** Provider APIs (after you choose providers, DQ-3), the conflict policy (DQ-1), MIQP and QLOPB
+**What is still to do.** Provider APIs (after you choose providers, DQ-3), MIQP and QLOPB
 (the code and specifications are needed, OD-2), DuckDB, Research Library, result reuse.
 
-**Recommended next milestone.** First, your Windows/IDLE acceptance of PR #4 and this PR. Then decide DQ-1 and DQ-2,
-and the merge order #1 → #2 → #3 → #4 → this PR. Then a separate session for the first API adapter.
+**Recommended next milestone.** First, your Windows/IDLE acceptance of PR #4 and this PR. DQ-1 and DQ-2 were decided on 02-Nov-26 (section 12). Then agree
+the merge order #1 → #2 → #3 → #4 → this PR. Then a separate session for the first API adapter.
+
+## 12. Owner decisions DQ-1 and DQ-2: implementation and test status (02-Nov-26)
+
+Decisions recorded by the Project Owner in the PR #9 discussion on 02-Nov-26. Each line separates four things: the
+decision, the code, the automated tests, and the owner's Windows/IDLE acceptance.
+
+| Decision | Approved | Code | Automated tests (Linux container, Python 3.12, Tk under Xvfb) | Windows/IDLE acceptance |
+|---|---|---|---|---|
+| **DQ-1** Conflicting overlapping bars: report only; keep both datasets unchanged; no winner, merge or overwrite; conflict visible | Yes, 02-Nov-26 | **Already met; no code change.** `data_engine/overlap.py` records a warning on the new dataset (counts, field, both values, the other dataset's ID); nothing else is written | Passing. `test_owner_decisions_dq1_dq2.py`: the earlier dataset's registry row, file bytes and checks are identical before and after; both stay active, nothing superseded; each holds only its own file's values; the conflict shows in the dataset's warnings, in readiness and in the scan result, survives later scans, and is not recorded twice. Identical overlap is info only; other instruments are not compared | **Not done** (owner) |
+| **DQ-2** Headerless files: Date, Open, High, Low, Close; Volume only when the rules support it | Yes, 02-Nov-26 | **Already met; no code change.** Rule A-5: column 6 is volume only if every value is a whole number ≥ 0; otherwise (negative, fraction, blank, text) it is kept as `x_col5` and never used; columns 7+ are never volume | Passing. Positions checked against stored values; each failing volume case; column 7 never volume; files whose columns do not behave like OHLC, with too few columns, or whose first column is not a date are rejected | **Not done** (owner) |
+| **DQ-2** File-name identity (`NSE_NIFTY, 1D.csv`); file contents never silently overridden | Yes, 02-Nov-26 | **Corrected (smallest change, `auto_interpret.py`, rules version 1 → 2).** Before: a file with an `exchange` column but no `symbol` column took the exchange from its NAME, and the column was silently ignored. A name that contradicted an exchange column, or a multi-symbol column, was not reported. Now: columns always win; a contradicting name is rejected with the reason. A file lacking only its exchange gets an exchange-only question (the Sources screen now enables just that box) | Passing. Name supplies identity when the file has none (recorded in the evidence); agreeing columns are used; four contradiction cases rejected (each failed on the old code); exchange column + symbol from name; exchange-only question answered and loaded (also a real-window test) | **Not done** (owner) |
+
+**Remaining limitations (not marked complete):**
+- Overlap and conflict checks run for datasets registered by a **folder scan**. A file loaded through the older
+  Data Management screen is not itself checked when loaded, although a later scanned file is compared with it.
+- Which of two conflicting datasets to analyse is the user's choice in the Workbench; Q-MAP shows the warning but
+  does not mark either as preferred (by decision).
+- The rules-version change means a file already loaded by rules v1 is re-read on the next scan and registered under
+  the new processing version. For a dataset from the same original file, the earlier one is marked superseded by the
+  existing ingestion rule (one active dataset per original file, instrument and timeframe); nothing is deleted. No owner data was loaded with rules v1 (acceptance has not started).

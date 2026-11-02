@@ -40,7 +40,9 @@ from .profiles import ALLOWED_TIMEFRAMES, DatetimeSpec, FileSpec, SourceProfile,
 from .readers import read_source
 from .results import Collector
 
-RULES_VERSION = 1  # bump when any rule below changes the profile it would generate for the same file
+RULES_VERSION = 2  # bump when any rule below changes the profile it would generate for the same file
+# 2 (02-Nov-26, owner decision DQ-2): an exchange column is always used, and a file name that contradicts an exchange
+#   or symbol column is rejected (v1 let a file-name exchange replace an exchange column when there was no symbol column)
 
 READY, NEEDS_ANSWER, REJECTED = "ready", "needs_answer", "rejected"
 
@@ -542,44 +544,63 @@ def _interpret(path, settings, market_tz, default_exchange, symbol_from_filename
                                                        "What is the timeframe?", ALLOWED_TIMEFRAMES))
 
     # ---- A-8 identity ----------------------------------------------------------------------------------------
+    # Precedence (owner decision DQ-2, 02-Nov-26): explicit columns in the file > the user's recorded answer > the
+    # file name pattern EXCHANGE_SYMBOL > the source's settings. A file name that CONTRADICTS a column is never used
+    # silently: the file is rejected with the reason.
     overrides: dict = {}
     instrument: dict = {}
     name_id = identity_from_name(stem)
     exch_ans, sym_ans = answers.get("exchange"), answers.get("symbol")
+    col_values = {}
+    for f in ("exchange", "symbol"):
+        if f in mapping:
+            norm = normalise_exchange if f == "exchange" else normalise_symbol
+            col_values[f] = {norm(v) for v in columns[mapping[f]] if not _is_blank(v)}
+    if name_id:
+        for f, from_name in (("exchange", name_id[0]), ("symbol", name_id[1])):
+            if f in col_values and from_name not in col_values[f]:
+                found = ", ".join(sorted(col_values[f])[:5])
+                raise _Reject(f"The file name says {f} {from_name}, but the file's {f} column says {found}. File "
+                              "contents are never overridden by a file name; rename the file or correct the data.")
+    # exchange
+    if "exchange" in mapping:
+        instrument.update(exchange_from="column", exchange_column=mapping["exchange"])
+        evidence.append(f"A-8 exchange from the column {names[mapping['exchange']]!r}.")
+    else:
+        exch = exch_ans or (name_id[0] if name_id else None) or default_exchange
+        if exch:
+            instrument["exchange_from"] = "ingest"
+            overrides["exchange"] = normalise_exchange(exch)
+            evidence.append(f"A-8 exchange {overrides['exchange']}: " + (
+                "given by the user." if exch_ans else "from the file name." if name_id
+                else "the source's default exchange."))
+    # symbol
     if "symbol" in mapping:
         instrument.update(symbol_from="column", symbol_column=mapping["symbol"])
-        syms = {normalise_symbol(v) for v in columns[mapping["symbol"]] if not _is_blank(v)}
-        if name_id and len(syms) == 1 and name_id[1] not in syms:
-            raise _Reject(f"The file name says symbol {name_id[1]}, but the symbol column says {sorted(syms)[0]}. "
-                          "File contents are not overridden by a file name; rename the file or correct the data.")
-        evidence.append(f"A-8 symbol from the column {names[mapping['symbol']]!r}.")
-        if "exchange" in mapping:
-            instrument.update(exchange_from="column", exchange_column=mapping["exchange"])
-            evidence.append(f"A-8 exchange from the column {names[mapping['exchange']]!r}.")
-        else:
-            exch = exch_ans or (name_id[0] if name_id else None) or default_exchange
-            if exch:
-                instrument["exchange_from"] = "ingest"
-                overrides["exchange"] = normalise_exchange(exch)
-                evidence.append(f"A-8 exchange {overrides['exchange']}: " + (
-                    "given by the user." if exch_ans else "from the file name." if name_id else "the source's default exchange."))
-            else:
-                res.questions.append(Question("identity", "Which exchange are these symbols traded on?"))
+        evidence.append(f"A-8 symbol from the column {names[mapping['symbol']]!r}"
+                        + (" (the file name is consistent with it but is not used)." if name_id else "."))
     else:
-        instrument.update(exchange_from="ingest", symbol_from="ingest")
-        if exch_ans and sym_ans:
-            overrides.update(exchange=normalise_exchange(exch_ans), symbol=normalise_symbol(sym_ans))
-            evidence.append(f"A-8 instrument {overrides['exchange']}:{overrides['symbol']}: given by the user.")
+        instrument["symbol_from"] = "ingest"
+        sym = None
+        if sym_ans:
+            sym, why = sym_ans, "given by the user"
         elif name_id:
-            overrides.update(exchange=name_id[0], symbol=name_id[1])
-            evidence.append(f"A-8 instrument {name_id[0]}:{name_id[1]}: from the file name pattern EXCHANGE_SYMBOL.")
-        elif symbol_from_filename and default_exchange and _plain_symbol(stem):
-            overrides.update(exchange=normalise_exchange(default_exchange), symbol=_plain_symbol(stem))
-            evidence.append(f"A-8 instrument {overrides['exchange']}:{overrides['symbol']}: symbol from the file name "
-                            "and the source's default exchange (enabled for this source).")
-        else:
-            res.questions.append(Question("identity", "Which instrument is this (exchange and symbol)? Q-MAP could "
-                                                      "not read it from the file or its name."))
+            sym, why = name_id[1], "from the file name pattern EXCHANGE_SYMBOL"
+        elif symbol_from_filename and _plain_symbol(stem) and (overrides.get("exchange") or "exchange" in mapping):
+            sym, why = _plain_symbol(stem), "the file name (enabled for this source)"
+        if sym:
+            overrides["symbol"] = normalise_symbol(sym)
+            evidence.append(f"A-8 symbol {overrides['symbol']}: {why}.")
+    need_exch = "exchange_from" not in instrument
+    need_sym = instrument.get("symbol_from") == "ingest" and "symbol" not in overrides
+    if need_exch and need_sym:
+        res.questions.append(Question("identity", "Which instrument is this (exchange and symbol)? Q-MAP could not "
+                                                  "read it from the file or its name."))
+    elif need_exch:
+        res.questions.append(Question("exchange", "Which exchange is this traded on? The file does not say."))
+    elif need_sym:
+        res.questions.append(Question("identity", "Which symbol is this? Q-MAP could not read it from the file or "
+                                                  "its name."))
 
     # ---- structure signature (for reusing answers) ------------------------------------------------------------
     sig = {"rules": RULES_VERSION, "format": kind, "delimiter": delimiter, "header": header,

@@ -44,7 +44,7 @@ What a scan does, and does not do:
   creates duplicates; the same content under two names is loaded once.
 - A changed file is loaded as a new version. If its bars overlap an existing dataset of the same instrument and
   timeframe, identical bars are noted, and **different values are shown as a warning** on the new dataset. Neither
-  dataset is changed and nothing is merged: you choose which one to analyse (owner decision DQ-1).
+  dataset is changed and nothing is merged: you choose which one to analyse (your decision DQ-1, 02-Nov-26: report only).
 - Every loaded file goes through exactly the same checks as Data Management. A file that fails a check is rejected
   and never becomes available to the Workbench. A file rejected only because its last dates are in the future is
   loaded again automatically by a scan on or after the date that allows them.
@@ -55,8 +55,9 @@ section 6): column names such as `date`/`time`, `open`, `high`, `low`, `close`, 
 when columns 2-5 behave like open, high, low, close on every row; dates in ISO, `25-02-26`, `25/02/2026`, `25-Feb-26`,
 `20260225`, Unix seconds or milliseconds, or spreadsheet date cells. When two date readings both fit (for example
 day-first and month-first) and the order of the rows does not settle it, Q-MAP asks. Two-digit years: 00-68 =
-2000-2068, 69-99 = 1969-1999. Instrument from `exchange`/`symbol` columns, or a file name such as
-`NSE_NIFTY, 1D.csv`. Timeframe from the spacing of the bars; a file name that disagrees with the data is asked about.
+2000-2068, 69-99 = 1969-1999. Instrument from `exchange`/`symbol` columns in the file first, then your answer, then a file name such as
+`NSE_NIFTY, 1D.csv`. A file whose name contradicts its own exchange or symbol column is rejected, never read with the
+name's value (your decision DQ-2). If only the exchange is missing, only the exchange is asked. Timeframe from the spacing of the bars; a file name that disagrees with the data is asked about.
 
 ## Data Management: loading files with a chosen profile
 
@@ -171,4 +172,5 @@ at the start of each run.
 - Sources: folders only. Provider APIs and direct cloud connections are not built; scans run when you press the
   button (no schedule). Numbers with thousands separators (`22,393.60`) are not read automatically; use Data
   Management with a profile that declares them.
-- Overlapping datasets with different values are reported, not resolved (owner decision DQ-1).
+- Overlapping datasets with different values are reported, not resolved (owner decision DQ-1). Only files loaded
+  through Sources are compared when they are loaded.

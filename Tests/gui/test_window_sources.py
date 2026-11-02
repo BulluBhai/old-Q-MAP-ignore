@@ -92,3 +92,30 @@ def test_stop_using_a_folder_keeps_its_files_and_data(gui, world, tmp_path):
     assert not frame.source_rows and (market / "NSE_ABC.csv").is_file()
     app.show("datasets")
     assert len(app.screens["datasets"].rows) == 1
+
+
+def test_a_file_that_lacks_only_its_exchange_asks_only_for_the_exchange(gui, world, tmp_path):
+    """Owner decision DQ-2 (02-Nov-26): the symbol column is the file's own information; only the exchange is asked."""
+    market = tmp_path / "m"
+    market.mkdir()
+    rows = [[d[0], "INFY", *d[1:]] for d in daily_rows(10)]
+    write_delimited(market / "prices.csv", ["date", "symbol", "open", "high", "low", "close", "volume"], rows)
+    app = gui.start()
+    gui.choose_folders(app)
+    frame = app.screens["sources"]
+    frame.exch_var.set("")
+    gui.dialogs.directories.append(str(market))
+    frame.add_button.invoke()
+    frame.scan_button.invoke()
+    gui.wait(lambda: not frame.running)
+    item = next(i for i, s in frame.file_rows.items() if s.relative_path == "prices.csv")
+    frame.files_tree.selection_set(item)
+    frame.on_file_select()
+    assert str(frame.ans_exch_entry.cget("state")) == "normal"
+    assert str(frame.ans_sym_entry.cget("state")) == "disabled"
+    frame.ans_exch.set("NSE")
+    frame.answer_button.invoke()
+    assert "Answer recorded" in frame.final_label.cget("text")
+    frame.scan_button.invoke()
+    gui.wait(lambda: not frame.running)
+    assert next(s for s in frame.file_rows.values() if s.relative_path == "prices.csv").outcome == "imported"

@@ -8,8 +8,6 @@ added; see `docs/architecture/Blueprint_v1.3_Implementation_Audit.md`. Earlier u
 
 | Ref | Decision | Why it matters | Recommendation |
 |---|---|---|---|
-| DQ-1 | **Update conflict policy** (Blueprint v1.3 §17 open decision): a new file overlaps an existing dataset of the same instrument and timeframe with different values | Two active datasets with different prices for the same bars | Keep "report only, you choose" (implemented) now; decide "newer wins" or "block until resolved" before any merge feature |
-| DQ-2 | Approve automatic rules A-5 (headerless order) and A-8 (file-name identity) as conventions | They are interpretations, recorded in every import, not proofs | Approve |
 | DQ-3 | Name the first API providers and supply permitted credentials | §8.5.2 needs your priorities and a licensing review | One broker API you already hold an account for |
 | DQ-5 | Optional scheduled scanning? | §8.5.6 optional | On demand only, until daily use shows a need |
 | DQ-6 | v1.3 "Version authority", paragraph 2, still calls v1.2 the primary reference | Editorial inconsistency in the approved document | Correct both copies in a maintenance edit |
@@ -27,6 +25,10 @@ added; see `docs/architecture/Blueprint_v1.3_Implementation_Audit.md`. Earlier u
 
 **Resolved:**
 
+- **DQ-1** (owner, 02-Nov-26, PR #9): conflicting overlapping bars are reported only; both datasets kept unchanged
+  (D5-13). Code and tests done; Windows/IDLE acceptance outstanding (OW-19).
+- **DQ-2** (owner, 02-Nov-26, PR #9): headerless convention and file-name identity approved; file contents never
+  silently overridden (D5-14, D5-15; identity rule corrected). Code and tests done; Windows/IDLE acceptance outstanding (OW-19).
 - **OD-8** (Temporary folder): you adopted `Q-MAP_DATA/Temporary/`. Implemented with schema migration 7 and a
   no-data-movement transition (decision D4-15; architecture document, section 7).
 - **OD-9** (Blueprint authority): v1.2 states its own approval and adoption on 1 November 2026, and it supersedes
@@ -61,7 +63,8 @@ added; see `docs/architecture/Blueprint_v1.3_Implementation_Audit.md`. Earlier u
 | OW-21 | Automatic reading does not accept thousands separators or decimal commas (rejected with a reason; Data Management with a profile still works) | Open, low priority |
 | OW-22 | A file with several symbols in one `symbol` column: timeframe is measured across all rows, so it is usually asked rather than inferred | Open, low priority |
 | OW-23 | Sources tested only in a Linux container (Xvfb), not against a real OneDrive/Google Drive client or Windows | Open (owner acceptance) |
-| OW-24 | Choosing the "current" dataset when overlapping datasets disagree | Depends on DQ-1 (same as OW-10) |
+| OW-24 | Choosing the "current" dataset when overlapping datasets disagree | By decision DQ-1, Q-MAP does not choose; the user selects. Revisit only if the owner wants a preference flag |
+| OW-25 | Overlap/conflict checks run for files registered by a folder scan; a file loaded through Data Management is not itself checked when loaded (a later scanned file is compared with it) | Open, low priority |
 | OW-17 | Datasets still in the legacy `Temporary_Data/` folder (only if earlier PR #4 test builds created any) | Safe where they are; relocate with Make Permanent, then Move to Temporary. Recovery lists them. |
 
 ## Roadmap (Blueprint v1.2 section 15)
