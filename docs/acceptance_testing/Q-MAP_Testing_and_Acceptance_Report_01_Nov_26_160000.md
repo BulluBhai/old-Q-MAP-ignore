@@ -90,7 +90,8 @@ Tests changed because a requirement changed (none weakened or removed):
 | `de624a6` (same code as `330a9aa`) | 41328085918 and 41328091330 | **success** (both) | **success** (both) |
 | `1760b57` and later | see the PR #4 checks | reported in the PR description | reported in the PR description |
 | `9b2d063` (code `95a93c6`) | 41376952565 (push) | **failure**: 1 test, `ValueError: format %y requires year >= 1900 on Windows` (839 passed) | **success** |
-| `99d12b1` and later | see the PR #4 checks | reported in the PR #4 comment for this fix | reported in the PR #4 comment for this fix |
+| `35fc897` (code `99d12b1`) | 41377917088 and 41377922020 (push and pull-request triggers) | **success** (both): 841 passed, 1 skipped (a macOS/Linux-only test), 195 GUI tests required and passed | **success** (both) |
+| later commits | see the PR #4 checks | | |
 
 ## 3. What is NOT covered by any of the above
 
