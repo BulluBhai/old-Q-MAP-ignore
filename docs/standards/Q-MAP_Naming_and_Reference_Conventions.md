@@ -31,7 +31,8 @@ A supporting standard to Blueprint v1.2. It is **not** part of the Blueprint, an
   part of the ID.
 - **Timeframe references:** the reference `TF_1m` and the application value `1m` are separate fields.
   - Q-MAP's code and data store only the application value: `1m`, `5m`, `15m`, `30m`, `1h`, `4h`, `1D`, `1W`, `1M`,
-    `1Q`, `1Y`.
+    `1Q`, `1Y`. Proposed (PR #9 finding F-02, owner decision DQ-7 pending): `3h` (180-minute bars), between `1h` and
+    `4h`.
   - `TF_<value>` (for example `TF_1D`) is used only in testing and development records to refer to that value.
   - Q-MAP never writes `TF_...` into data, profiles or the registry.
 - **Formats:** Excel is the primary master testing register; Markdown is used for development handoffs, requirements
@@ -233,5 +234,6 @@ to `custom`, removes the library's earlier names, and marks the display name "My
 | Two-digit years | 00-68 mean 2000-2068; 69-99 mean 1969-1999 (Workbench dates and profiles with `two_digit_year_pivot = 69`) | Approved behaviour (documented and tested) |
 | UTC offset | `+05:30` etc. inside an ISO date-time | Approved |
 | Timeframe values | `1m 5m 15m 30m 1h 4h 1D 1W 1M 1Q 1Y` | Approved (application values) |
+| Timeframe value `3h` | 180-minute bars | **Proposed** (DQ-7); implemented in its own commit on PR #9's follow-up branch |
 | `TF_<value>` | Timeframe reference in testing and development records only | Agreed (section A) |
 | DMY / YMD, ISO / UNI / STD, C / T / E / P | Date-order, time-representation and file-format codes | **Proposed only** (section B) |

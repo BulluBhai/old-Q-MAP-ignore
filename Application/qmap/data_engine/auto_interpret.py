@@ -47,6 +47,7 @@ RULES_VERSION = 3  # bump when any rule below changes how the same file would be
 #   (symbol from the name, exchange/venue never defaulted); plain-name symbol only when the rest of the name is a
 #   timeframe token, otherwise suggested; headerless date + time columns; a timeframe answer that contradicts a
 #   clearly measured intraday bar interval is not used (asked again, or rejected when no timeframe fits).
+#   180-minute bars = 3h: a new timeframe value, pending the owner's approval (DQ-7); separate commit.
 # The rules version decides whether an unchanged file is interpreted again (scan fingerprint). The generated profile
 # and the structure signature use the PINNED values below, so a file whose interpretation is unchanged keeps the same
 # profile (its datasets are reused, not re-created) and its recorded answers stay valid (decision D5-16).
@@ -88,7 +89,7 @@ _DATE_FORMATS = ("%d-%m-%Y", "%d-%m-%y", "%d/%m/%Y", "%d/%m/%y", "%m/%d/%Y", "%m
                  "%d.%m.%Y", "%Y/%m/%d", "%Y%m%d", "%d-%b-%Y", "%d-%b-%y", "%d %b %Y")
 _TIME_SUFFIXES = ("", " %H:%M", " %H:%M:%S")
 _TIME_FORMATS = ("%H:%M", "%H:%M:%S")
-INTRADAY_STEPS = {1: "1m", 5: "5m", 15: "15m", 30: "30m", 60: "1h", 240: "4h"}
+INTRADAY_STEPS = {1: "1m", 5: "5m", 15: "15m", 30: "30m", 60: "1h", 180: "3h", 240: "4h"}
 MIN_BARS_FOR_TIMEFRAME = 3
 MIN_STEP_SHARE = 0.6
 
@@ -419,7 +420,7 @@ def timeframe_from_name(stem: str) -> str | None:
     if unit in ("", "m", "min"):
         return INTRADAY_STEPS.get(num)
     if unit in ("h", "H"):
-        return {1: "1h", 4: "4h"}.get(num)
+        return {1: "1h", 3: "3h", 4: "4h"}.get(num)
     if unit in ("d", "D") and num == 1:
         return "1D"
     if unit in ("w", "W") and num == 1:

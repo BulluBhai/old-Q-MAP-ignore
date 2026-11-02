@@ -18,8 +18,8 @@ from ..core.config import Settings
 from ..core.errors import IngestError, ProfileError
 from ..storage.db import Database, utc_now_iso
 
-ALLOWED_TIMEFRAMES = ("1m", "5m", "15m", "30m", "1h", "4h", "1D", "1W", "1M")
-INTRADAY_MINUTES = {"1m": 1, "5m": 5, "15m": 15, "30m": 30, "1h": 60, "4h": 240}
+ALLOWED_TIMEFRAMES = ("1m", "5m", "15m", "30m", "1h", "3h", "4h", "1D", "1W", "1M")
+INTRADAY_MINUTES = {"1m": 1, "5m": 5, "15m": 15, "30m": 30, "1h": 60, "3h": 180, "4h": 240}
 DATETIME_KINDS = ("iso", "format", "unix_s", "unix_ms", "excel_serial", "native")
 VOLUME_RULES = ("none", "use_column", "sum_columns")
 FROM_KINDS = ("fixed", "column", "filename_pattern", "ingest")

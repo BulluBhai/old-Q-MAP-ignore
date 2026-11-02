@@ -20,7 +20,7 @@ from .widgets import ERROR_COLOR, MUTED_COLOR, OK_COLOR, WARN_COLOR, LogText, Re
 COLUMNS = (("id", "Dataset", 60), ("instrument", "Instrument", 150), ("tf", "Timeframe", 90), ("kind", "Type", 100),
            ("bars", "Bars", 60), ("from", "From", 80), ("to", "To", 80), ("validation", "Validation", 140),
            ("storage", "Storage", 85), ("state", "State", 90))
-TIMEFRAME_FILTER = ("", "1m", "5m", "15m", "30m", "1h", "4h", "1D", "1W", "1M", "1Q", "1Y")
+TIMEFRAME_FILTER = ("", "1m", "5m", "15m", "30m", "1h", "3h", "4h", "1D", "1W", "1M", "1Q", "1Y")
 
 
 class DatasetsFrame(tk.Frame):

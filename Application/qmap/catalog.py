@@ -27,9 +27,9 @@ from .storage.db import Database
 from .storage.files import sha256_file
 
 TIMEFRAME_LABELS = {"1m": "1 minute", "5m": "5 minutes", "15m": "15 minutes", "30m": "30 minutes", "1h": "Hourly",
-                    "4h": "4 hours", "1D": "Daily", "1W": "Weekly", "1M": "Monthly", "1Q": "Quarterly", "1Y": "Yearly"}
+                    "3h": "3 hours", "4h": "4 hours", "1D": "Daily", "1W": "Weekly", "1M": "Monthly", "1Q": "Quarterly", "1Y": "Yearly"}
 TIMEFRAME_ORDER = tuple(TIMEFRAME_LABELS)
-INTRADAY_TIMEFRAMES = ("1m", "5m", "15m", "30m", "1h", "4h")
+INTRADAY_TIMEFRAMES = ("1m", "5m", "15m", "30m", "1h", "3h", "4h")
 LAYER_LABELS = {"raw": "Original file", "cleaned": "Standardised", "timeframe": "Derived timeframe"}
 VALIDATION_LABELS = {"passed": "Passed", "passed_with_warnings": "Passed with warnings"}
 READ_COLUMNS = ("session_date", "timestamp_utc", "open", "high", "low", "close", "volume", "quality_flags")

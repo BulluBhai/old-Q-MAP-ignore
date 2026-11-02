@@ -21,7 +21,7 @@ from .locations import LocationsPanel
 from .messages import OUTCOMES
 from .widgets import ERROR_COLOR, MUTED_COLOR, OK_COLOR, WARN_COLOR, LogText, ReadOnlyText, combobox_index, section
 
-TIMEFRAMES = ("", "1m", "5m", "15m", "30m", "1h", "4h", "1D", "1W", "1M")
+TIMEFRAMES = ("", "1m", "5m", "15m", "30m", "1h", "3h", "4h", "1D", "1W", "1M")
 
 
 class DataManagementFrame(tk.Frame):
