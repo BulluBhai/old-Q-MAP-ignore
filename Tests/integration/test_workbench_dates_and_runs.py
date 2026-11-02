@@ -244,3 +244,21 @@ def test_the_workbench_text_explains_the_mixed_case_and_keeps_the_others(setting
     assert text([daily], JANUARY).startswith("READY")
     too_few = text([daily], {"date_from": "05-01-26", "date_to": "05-01-26"})
     assert too_few.startswith("NOT READY") and PREPARE_HINT in too_few  # unchanged for other refusals
+
+
+def test_readiness_never_formats_a_typed_date_with_strftime(settings, db, daily, monkeypatch):
+    """Windows CI on 9b2d063: date.strftime('%y') refuses years before 1900 there (not on Linux). Readiness messages
+    must work for every year the parser accepts, so a strftime anywhere on this path fails here on every platform."""
+    import datetime as _dt
+
+    import qmap.catalog as catalog
+
+    class NoStrftime(_dt.date):
+        def strftime(self, fmt):
+            raise AssertionError("strftime used on a user date")
+
+    monkeypatch.setattr(catalog, "date", NoStrftime)  # covers dates built from the registry's ISO text
+    assert catalog.fmt_date("2026-01-05") == "05-Jan-26" and catalog.fmt_date(_dt.date(1, 1, 1)) == "01-Jan-0001"
+    assert catalog.fmt_date(NoStrftime(1899, 12, 31)) == "31-Dec-1899"
+    r = check_analysis(settings, db, DATASET_SUMMARY, [daily], {"date_from": "01/01/0001", "date_to": "31/12/1899"})
+    assert r.state == NO_ELIGIBLE_DATA and "01-Jan-0001 to 31-Dec-1899" in r.reports[0].failures[0].detail

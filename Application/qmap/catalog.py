@@ -21,6 +21,7 @@ import pyarrow.compute as pc
 import pyarrow.parquet as pq
 
 from .core.config import Settings
+from .core.dates import format_for_entry
 from .data_engine import canonical as C
 from .storage.db import Database
 from .storage.files import sha256_file
@@ -258,7 +259,9 @@ def fmt_date(iso: str | date | None) -> str:
     if iso is None or iso == "":
         return "-"
     d = iso if isinstance(iso, date) else date.fromisoformat(str(iso)[:10])
-    return d.strftime("%d-%b-%y")
+    # Not strftime: on Windows "%y" refuses years before 1900, and a person may type such a start date. The shared
+    # writer gives the same text for 1969-2068 (05-Jan-26) and keeps four digits otherwise (01-Jan-0001).
+    return format_for_entry(d)
 
 
 def check_readiness(settings: Settings, db: Database, dataset_id: int, req: DataRequirement, *,
