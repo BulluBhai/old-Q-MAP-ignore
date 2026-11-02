@@ -171,3 +171,29 @@ contract and mocked tests; (3) live tests only with permitted access, reported s
 | DQ-4 | Carry-over: OD-2 (QLOPB source, MIQP specs), OD-3, OD-4, OD-5, OD-10, OD-12-14 | See `Outstanding_Work_Register.md` | — | — | MIQP/QLOPB integration cannot start without OD-2 |
 | DQ-5 | Should scanning offer an optional schedule? | §8.5.6 makes it optional | On-demand only (implemented) / add an in-app schedule | On-demand until daily use shows a need | None |
 | DQ-6 | v1.3 "Version authority" paragraph 2 still names v1.2 as the primary reference | Editorial inconsistency inside the approved document | Correct in a v1.3 maintenance edit / leave | Correct it (both copies together) | None; v1.3 is treated as authoritative |
+
+## 11. Handover in plain English (02-Nov-26)
+
+**What you can do now.** In Database Manager, open **Sources**, add the folder where your market files are kept and
+press **Scan**. Q-MAP reads each file's layout by itself, checks it with the same rules as before, and loads it. It asks
+you a short question only when the file genuinely leaves something open: which instrument it is, which of two date
+readings is right, the market time zone, or a timeframe the file name contradicts. Scanning again skips unchanged files.
+A changed file is loaded as a new version, and any bars that differ from what you already have are flagged. Your
+folder is only ever read.
+
+**What was kept.** Everything in PR #4: both applications, the data checks, Permanent/Temporary storage, derived
+timeframes, the Workbench's readiness checks and run records, and loading a single file with a chosen profile (still
+there, for unusual files).
+
+**What was checked.** About 60 new automated tests, plus the 842 existing ones: 903 in total passed, 0 failed, run in
+a Linux container. One end-to-end test takes a file from a folder through to a Dataset Summary and recomputes every
+figure separately from the file's own text; all match. The data was synthetic.
+
+**What was not checked.** Windows/IDLE with your real files (please use the checklist in
+`docs/acceptance_testing/`), a real OneDrive or Google Drive client, and any provider API (none was built).
+
+**What is still to do.** Provider APIs (after you choose providers, DQ-3), the conflict policy (DQ-1), MIQP and QLOPB
+(the code and specifications are needed, OD-2), DuckDB, Research Library, result reuse.
+
+**Recommended next milestone.** First, your Windows/IDLE acceptance of PR #4 and this PR. Then decide DQ-1 and DQ-2,
+and the merge order #1 → #2 → #3 → #4 → this PR. Then a separate session for the first API adapter.
