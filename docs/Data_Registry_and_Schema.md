@@ -39,7 +39,7 @@ explicitly maps it.
 There is one file per dataset and no database per instrument. File names end with the Run ID that created them, so two
 runs can never overwrite each other.
 
-## Registry tables (schema version 7)
+## Registry tables (schema version 8)
 
 | Table | Holds | Protection |
 |---|---|---|
@@ -53,24 +53,28 @@ runs can never overwrite each other.
 | **`storage_actions`** (new) | Every move and deletion: dataset, from/to class and path, reason, Run ID, status | Inserted only as `started`; at most one open per dataset; finished once; `completed` only if the dataset shows the change, never `failed` if it does |
 | **`dataset_derivations`** (new) | For each derived dataset: method, method version, parameters, source dataset and checksum, Run ID | Append-only |
 | `research_records`, `modules` | Reserved for the Research Library | |
+| **`data_sources`** (schema 8) | Folder sources: location, name, market time zone, default exchange, "file name is the symbol", sub-folders, skip patterns, active/removed | Never deleted; location and identity immutable; settings may change (each scan keeps a snapshot) |
+| **`source_scans`** (schema 8) | One row per scan: source, Run ID, settings snapshot, status, counts | Never deleted; finished once |
+| **`source_file_observations`** (schema 8) | What each scan saw for each file: size, modification time, SHA-256, change (new/changed/unchanged/missing/unreadable), action, outcome, links to the ingest event, attempt and datasets, the full interpretation (evidence and generated profile ID), open questions, retry date | Append-only. A file's current state is its latest observation (no second, updatable copy) |
+| **`source_answers`** (schema 8) | The user's answers to interpretation questions, with the file's structure signature | Append-only; an answer is used only while the file keeps that structure |
 
 ### Identifiers and versions
 
 | Item | Format |
 |---|---|
 | Dataset | Integer `dataset_id` |
-| Run | Run ID `<MODULE>_<YYYYMMDD>_<HHMMSS>` (UTC); modules `FOUND` (loading), `DBM` (Database Manager actions), `DSUM` (Dataset Summary) |
-| Processing version, standardised data | `<profile_id>@<profile_version>+<cleaning code version>` |
+| Run | Run ID `<MODULE>_<YYYYMMDD>_<HHMMSS>` (UTC); modules `FOUND` (loading), `DBM` (Database Manager actions), `SCAN` (folder scans), `DSUM` (Dataset Summary) |
+| Processing version, standardised data | `<profile_id>@<profile_version>+<cleaning code version>`. For automatically read files the profile is generated: `auto_<12 hex>@1+c1`, where the hex is the hash of the generated profile text (stored in `source_profiles`), so the same layout always gives the same processing version |
 | Processing version, derived data | `derive:ohlcv_period_aggregation@1` |
 | Settings fingerprint | `vs1:<16 hex>` |
-| Schema | `schema_version` table; currently 7 (migration 7: Temporary area moved to `Temporary/`, OD-8) |
+| Schema | `schema_version` table; currently 8 (migration 7: Temporary area moved to `Temporary/`, OD-8; migration 8: folder sources and scans, Blueprint v1.3) |
 
 ## Three separate statuses
 
 | Status | Where it comes from |
 |---|---|
 | Processing outcome | `ingest_attempts.outcome`, or a registered derivation |
-| Validation status | Warnings among the dataset's quality checks: **Passed** or **Passed with warnings** |
+| Validation status | Warnings among the dataset's quality checks (those of the attempt that created it, plus checks recorded later on the dataset itself, such as `conflicts_with_existing_dataset`): **Passed** or **Passed with warnings** |
 | Readiness | Computed per analysis by `catalog.check_readiness` from the dataset AND that analysis's requirements. It is never stored, because it depends on the question being asked. |
 
 ## Limits of detecting earlier tampering (report-never-repair)

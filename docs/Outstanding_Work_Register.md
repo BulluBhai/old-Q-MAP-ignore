@@ -1,12 +1,18 @@
 # Q-MAP outstanding work register
 
-Updated 02-Nov-26 (roadmap wording: PR #4 vs PR #5). Earlier update 01-Nov-26, after reviewing Blueprint v1.2 (approved and adopted 1 November 2026, in PR #5). Status words:
+Updated 02-Nov-26 for **Blueprint v1.3** (merged to `main` by PR #8): decisions DQ-1 to DQ-6 and items OW-18 to OW-24
+added; see `docs/architecture/Blueprint_v1.3_Implementation_Audit.md`. Earlier update 02-Nov-26 (roadmap wording: PR #4 vs PR #5). Earlier update 01-Nov-26, after reviewing Blueprint v1.2 (approved and adopted 1 November 2026, in PR #5). Status words:
 **Open**, **Decision needed** (Project Owner), **Planned** (Blueprint v1.2 roadmap stage), **Resolved**.
 
 ## Decisions needed from the Project Owner
 
 | Ref | Decision | Why it matters | Recommendation |
 |---|---|---|---|
+| DQ-1 | **Update conflict policy** (Blueprint v1.3 §17 open decision): a new file overlaps an existing dataset of the same instrument and timeframe with different values | Two active datasets with different prices for the same bars | Keep "report only, you choose" (implemented) now; decide "newer wins" or "block until resolved" before any merge feature |
+| DQ-2 | Approve automatic rules A-5 (headerless order) and A-8 (file-name identity) as conventions | They are interpretations, recorded in every import, not proofs | Approve |
+| DQ-3 | Name the first API providers and supply permitted credentials | §8.5.2 needs your priorities and a licensing review | One broker API you already hold an account for |
+| DQ-5 | Optional scheduled scanning? | §8.5.6 optional | On demand only, until daily use shows a need |
+| DQ-6 | v1.3 "Version authority", paragraph 2, still calls v1.2 the primary reference | Editorial inconsistency in the approved document | Correct both copies in a maintenance edit |
 | OD-1 | Confirm D4-01: the repository folder is `Q-MAP_APP`, with both entry points at its top level | Blueprint v1.2 §4.4 and §9.1 describe exactly this target. Internal sub-folders are mapped onto existing packages, not renamed (architecture document, C3). | Approve D4-01 |
 | OD-2 | Supply the **QLOPB source code** and the **MIQP specifications** | Blueprint v1.2 §14 and Stages 5-6; nothing can be migrated until they are in the repository | Add them on a branch; QLOPB first (it is existing working code) |
 | OD-3 | When a Temporary dataset's file was deleted and the same source file is loaded again unchanged: keep today's behaviour (reported, not re-created), or re-create it? | Re-creating changes the approved reuse identity (D2-32) | Re-create, recorded as a new attempt linked to the old one; needs a schema migration |
@@ -49,6 +55,13 @@ Updated 02-Nov-26 (roadmap wording: PR #4 vs PR #5). Earlier update 01-Nov-26, a
 | OW-14 | `research_records` statuses (migration 1: Hypothesis ... Superseded) differ from v1.2 §5.9 (Under Research, Promising, Validated, Archived). The table is unused. | Change with a new migration when the Research Library is built |
 | OW-15 | Research Run Manager result reuse (v1.2 §13.1): every analysis creates a new run today | Planned |
 | OW-16 | Coverage view by instrument × timeframe × date range (v1.2 §5.10) | Open (per-dataset coverage exists) |
+| OW-18 | Provider API adapters (v1.3 §8.5.2, target five): adapter contract, mocked tests, live tests with permitted access | Not started (DQ-3) |
+| OW-19 | Owner acceptance of the Sources screen on Windows/IDLE with real files (checklist `docs/acceptance_testing/Q-MAP_Sources_Acceptance_Checklist_02_Nov_26_183000.md`) | **Open (owner)** |
+| OW-20 | Extra source columns (open interest, delivery volume) are kept as text `x_` columns; typed, named fields are not built | Open |
+| OW-21 | Automatic reading does not accept thousands separators or decimal commas (rejected with a reason; Data Management with a profile still works) | Open, low priority |
+| OW-22 | A file with several symbols in one `symbol` column: timeframe is measured across all rows, so it is usually asked rather than inferred | Open, low priority |
+| OW-23 | Sources tested only in a Linux container (Xvfb), not against a real OneDrive/Google Drive client or Windows | Open (owner acceptance) |
+| OW-24 | Choosing the "current" dataset when overlapping datasets disagree | Depends on DQ-1 (same as OW-10) |
 | OW-17 | Datasets still in the legacy `Temporary_Data/` folder (only if earlier PR #4 test builds created any) | Safe where they are; relocate with Make Permanent, then Move to Temporary. Recovery lists them. |
 
 ## Roadmap (Blueprint v1.2 section 15)

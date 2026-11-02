@@ -281,3 +281,22 @@ Consistent with v1.2:
 | 8. Outstanding work register | [Outstanding_Work_Register.md](Outstanding_Work_Register.md) |
 | Naming and reference conventions | [standards/Q-MAP_Naming_and_Reference_Conventions.md](standards/Q-MAP_Naming_and_Reference_Conventions.md) |
 | Decisions | [decision_log.md](decision_log.md), entries D4-01 to D4-21 |
+
+## 10. Blueprint v1.3 update (02-Nov-26)
+
+Blueprint v1.3 (on `main` since PR #8) supersedes v1.2 where they differ. The audit against it, the automatic
+interpretation rules A-1 to A-9, the risks and the owner decisions DQ-1 to DQ-6 are in
+[architecture/Blueprint_v1.3_Implementation_Audit.md](architecture/Blueprint_v1.3_Implementation_Audit.md); decisions
+D5-01 to D5-12 are in the decision log. In short, on branch `claude/happy-brahmagupta-su6tnr` (stacked on PR #4):
+
+- **Database engine:** `data_engine/auto_interpret.py` (reads a file's layout from evidence and generates an ordinary,
+  content-addressed source profile), `data_engine/discovery.py` (folder sources and idempotent scans),
+  `data_engine/overlap.py` (overlap and conflict reports). Everything still goes through `ingest_file`, so reading,
+  validation, storage, provenance and reuse are unchanged.
+- **Schema 8:** `data_sources`, `source_scans`, `source_file_observations`, `source_answers` (tables only;
+  migrations 1-7 unchanged and pinned). Run module code `SCAN`.
+- **Database Manager:** new **Sources** screen (`qmap_gui/sources.py`, logic in `qmap_gui/source_services.py`), listed
+  first. Data Management remains for unusual layouts.
+- **Analytical Workbench:** unchanged. It still never loads data-preparation code (architecture test extended to the
+  new modules).
+- **Not done:** provider API adapters, DuckDB, scheduled scans, MIQP/QLOPB (OD-2).

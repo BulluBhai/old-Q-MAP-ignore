@@ -1,9 +1,10 @@
 # Q-MAP
 Quantitative Market Analytics Platform [Q-MAP]
 
-The governing document is **Q-MAP Master Blueprint v1.2**, approved and adopted by the Project Owner on 1 November 2026
-and superseding v1.0 and v1.1. It is being added through PR #5 (branch `docs/blueprint-v1.2-and-handover`, as `docs/Q-MAP_Master_Blueprint_v1.2.md`
-and `.html`, with the project handover);
+The governing document is **Q-MAP Master Blueprint v1.3**
+([Q-MAP_Master_Blueprint_v1.3.md](Q-MAP_Master_Blueprint_v1.3.md), with an `.html` copy), approved and adopted by the
+Project Owner on 2 November 2026 and superseding v1.2, v1.1 and v1.0 where they differ. How the code meets it is in the
+[Blueprint v1.3 implementation audit](docs/architecture/Blueprint_v1.3_Implementation_Audit.md).
 [docs/Q-MAP_Master_Blueprint_v1.0.md](docs/Q-MAP_Master_Blueprint_v1.0.md) is kept for history.
 Material decisions are recorded in [docs/decision_log.md](docs/decision_log.md).
 
@@ -11,7 +12,7 @@ Material decisions are recorded in [docs/decision_log.md](docs/decision_log.md).
 
 | Open (Thonny or IDLE, press F5) | Application | For |
 |---|---|---|
-| **`database_manager.py`** | Q-MAP Database Manager | Load and check source files, see every prepared dataset with its lineage, keep it Permanent or Temporary, delete Temporary data, derive weekly/monthly/quarterly/yearly data from daily data |
+| **`database_manager.py`** | Q-MAP Database Manager | Add the folders where your market files are kept and scan them: new and changed files are read, checked and loaded automatically, and you are asked only when something is unclear. Also: load and check single files with a chosen profile, see every prepared dataset with its lineage, keep it Permanent or Temporary, delete Temporary data, derive weekly/monthly/quarterly/yearly data from daily data |
 | **`analytical_workbench.py`** | Q-MAP Analytical Workbench | Run analyses on prepared data: readiness checks first, a Run ID and a full record of inputs for every run. Never imports source files |
 | `Q-MAP.py` | (older launcher) | Opens Database Manager |
 
@@ -26,17 +27,21 @@ Documentation:
 - [Analytical Workbench guide](docs/user_guides/Analytical_Workbench_User_Guide.md)
 - [Data Registry and schema](docs/Data_Registry_and_Schema.md)
 - [Testing and acceptance report](docs/acceptance_testing/Q-MAP_Testing_and_Acceptance_Report_01_Nov_26_160000.md)
+- [Sources acceptance checklist (Windows/IDLE)](docs/acceptance_testing/Q-MAP_Sources_Acceptance_Checklist_02_Nov_26_183000.md)
 - [Outstanding work and owner decisions](docs/Outstanding_Work_Register.md)
 
 **Working now:**
 - the Stage 2 foundation: configuration, Run IDs, the SQLite registry, raw-file preservation, readers for CSV, text,
   Excel and Parquet, source profiles, validation and recovery;
+- Sources: folder discovery with automatic interpretation, idempotent re-scans, questions only for real
+  ambiguities, overlap and conflict reports (Blueprint v1.3 §8.5);
 - Data Management;
 - Datasets and Storage;
 - derived timeframes;
 - the analytical run pipeline with Dataset Summary, a descriptive utility.
 
-**Not implemented yet:** MIQP Market Intelligence and QLOPB MA research (their code is not in this repository),
+**Not implemented yet:** provider API adapters (Blueprint v1.3 §8.5.2), DuckDB queries, MIQP Market Intelligence and
+QLOPB MA research (their code is not in this repository),
 other research modules, backtesting, portfolio and risk. They are shown as COMING SOON.
 
 ![Database Manager: Datasets and Storage](docs/acceptance_testing/evidence_01_Nov_26/screenshots/04_datasets_and_storage_01_Nov_26.png)
