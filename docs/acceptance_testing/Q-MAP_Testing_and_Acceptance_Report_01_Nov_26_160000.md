@@ -45,12 +45,13 @@ Status words: **Passed**, **Failed**, **Skipped**, **Not run**, **Blocked**, **N
 | `fb19fb0` | Python 3.11, no tkinter | as above | 693 passed, 78 skipped (window tests skip without tkinter, by design), 0 failed |
 | `95a93c6` | Python 3.12.3, Tk 8.6, Xvfb | `xvfb-run -a python3.12 -m pytest -p no:cacheprovider` | 841 passed, 0 failed, 0 skipped (195 GUI) |
 | `95a93c6` | Python 3.11.18, no tkinter | `python3.11 -m pytest -p no:cacheprovider` | 733 passed, 82 skipped, 0 failed |
-| **`99d12b1` (latest code)** | Python 3.12.3, Tk 8.6, Xvfb | as above | **842 passed**, 0 failed, 0 skipped (195 GUI) |
-| **`99d12b1`** | Python 3.11.18, no tkinter | as above | **734 passed, 82 skipped** (window tests skip without tkinter, by design), 0 failed |
+| `99d12b1` | Python 3.12.3, Tk 8.6, Xvfb | as above | 842 passed, 0 failed, 0 skipped (195 GUI) |
+| **`99d12b1` (latest code)** | Python 3.11.18, no tkinter | `python3.11 -m pytest -p no:cacheprovider` | **734 passed, 82 skipped** (window tests skip without tkinter, by design), 0 failed |
+| **`7256cf1` (code `99d12b1`)** | Python 3.12.3, Tk 8.6, Xvfb, **GUI tests required** | `QMAP_REQUIRE_GUI_TESTS=1 xvfb-run -a python3.12 -m pytest -p no:cacheprovider` | **842 passed**, 0 failed, 0 skipped (195 GUI tests, all required and passed) |
 
 New failures introduced: none. Pre-existing failures: none.
 
-**New tests in PR #4: 183** (98 before the enhancement, plus 85 for it: `test_user_dates.py` 39, `test_workbench_dates_and_runs.py` 17, `test_workbench_dates_and_output.py` 16, `test_profile_library.py` 13).
+**New tests in PR #4: 228.** 98 before the enhancement; 85 for it (`test_user_dates.py` 39, `test_workbench_dates_and_runs.py` 17, `test_workbench_dates_and_output.py` 16, `test_profile_library.py` 13); and 45 for the 02-Nov-26 review findings (`test_user_dates.py` 28, `test_workbench_dates_and_runs.py` 13, `test_workbench_dates_and_output.py` 4; section 8). 797 + 45 = 842.
 
 | File | Tests | Covers |
 |---|---|---|
@@ -89,9 +90,14 @@ Tests changed because a requirement changed (none weakened or removed):
 | `832b788` | 41325137464 and 41325143242 (push and pull-request triggers) | **success** (both) | **success** (both) |
 | `de624a6` (same code as `330a9aa`) | 41328085918 and 41328091330 | **success** (both) | **success** (both) |
 | `1760b57` and later | see the PR #4 checks | reported in the PR description | reported in the PR description |
-| `9b2d063` (code `95a93c6`) | 41376952565 (push) | **failure**: 1 test, `ValueError: format %y requires year >= 1900 on Windows` (839 passed) | **success** |
+| `9b2d063` (code `95a93c6`) | 41376952565 and 41376957877 (push and pull-request triggers) | **failure** (both): 839 passed, **1 failed** (`test_the_widest_valid_years_simply_cover_all_the_data`: `ValueError: format %y requires year >= 1900 on Windows`), 1 skipped | **success** (both) |
 | `35fc897` (code `99d12b1`) | 41377917088 and 41377922020 (push and pull-request triggers) | **success** (both): 841 passed, 1 skipped (a macOS/Linux-only test), 195 GUI tests required and passed | **success** (both) |
-| later commits | see the PR #4 checks | | |
+| `7256cf1` (code `99d12b1`) | 41378632961 and 41378638271 (push and pull-request triggers) | **success** (both): 841 passed, 1 skipped (a macOS/Linux-only test), 195 GUI tests required and passed | **success** (both): 754 passed, 88 skipped |
+| later commits (documentation only) | see the PR #4 checks | | |
+
+The totals agree: Windows 841 + 1 = 842 and Ubuntu 754 + 88 = 842, the same 842 tests as the local run. Ubuntu CI has
+no display, so its window tests skip; they are required on Windows. The one Windows skip is a test of a
+macOS/Linux-only fallback.
 
 ## 3. What is NOT covered by any of the above
 
@@ -227,7 +233,7 @@ from the acceptance procedure.
 - The calendar is a small separate window; it closes when you pick a day, press Close or press Esc.
 - Month abbreviations are English (Jan … Dec) by design, independent of Windows' language.
 
-## 8. Independent review findings on `057b510` (02-Nov-26), fixed in `95a93c6`
+## 8. Independent review findings on `057b510` (02-Nov-26), fixed in `95a93c6` and `99d12b1`
 
 | Finding | Confirmed? | Correction | Regression tests (all pass; the new ones fail on `057b510`) |
 |---|---|---|---|
