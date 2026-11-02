@@ -271,6 +271,11 @@ class SourcesFrame(tk.Frame):
         self.ans_date_box.configure(values=[label for label, _ in opts])
         for var in (self.ans_exch, self.ans_sym, self.ans_tf, self.ans_date, self.ans_tz):
             var.set("")
+        if s is not None:  # a suggestion from the file name is filled in; it is used only when you press Save answer
+            exch, sym, tf = ss.suggested_answers(s)
+            self.ans_exch.set(exch)
+            self.ans_sym.set(sym)
+            self.ans_tf.set(tf)
         states = {self.ans_exch_entry: bool(keys & {"identity", "exchange"}), self.ans_sym_entry: "identity" in keys,
                   self.ans_tf_box: "timeframe" in keys, self.ans_date_box: "date_format" in keys,
                   self.ans_tz_box: "market_timezone" in keys}

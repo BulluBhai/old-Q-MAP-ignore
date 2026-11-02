@@ -16,6 +16,16 @@ def _files(frame):
     return {s.relative_path: s for s in frame.file_rows.values()}
 
 
+def ss_latest_answer(world, rel):
+    from qmap.storage.db import open_database
+
+    db = open_database(world.data / "Metadata" / "qmap_metadata.sqlite")
+    try:
+        return db.one("SELECT * FROM source_answers WHERE relative_path = ?", (rel,))
+    finally:
+        db.close()
+
+
 def test_add_scan_answer_and_load_from_the_sources_screen(gui, world, tmp_path):
     market = tmp_path / "market_files"
     market.mkdir()
@@ -49,8 +59,13 @@ def test_add_scan_answer_and_load_from_the_sources_screen(gui, world, tmp_path):
     frame.on_file_select()
     assert str(frame.ans_sym_entry.cget("state")) == "normal"
     assert str(frame.ans_date_box.cget("state")) == "disabled"  # only the boxes the question needs
+    # PR #9 finding F-01: the folder's default exchange and the file name's symbol are filled in as a suggestion only
+    assert (frame.ans_exch.get(), frame.ans_sym.get()) == ("NSE", "PRICES")
+    assert ss_latest_answer(world, "prices.csv") is None  # nothing is recorded until Save answer
+    frame.ans_exch.set("")
+    frame.ans_sym.set("")
     frame.answer_button.invoke()
-    assert gui.dialogs.messages[-1][0] == "warn"  # nothing typed yet: asked for the missing answer, nothing saved
+    assert gui.dialogs.messages[-1][0] == "warn"  # boxes emptied: asked for the missing answer, nothing saved
     frame.ans_exch.set("NSE")
     frame.ans_sym.set("PRC")
     frame.answer_button.invoke()

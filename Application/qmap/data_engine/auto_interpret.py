@@ -40,9 +40,18 @@ from .profiles import ALLOWED_TIMEFRAMES, DatetimeSpec, FileSpec, SourceProfile,
 from .readers import read_source
 from .results import Collector
 
-RULES_VERSION = 2  # bump when any rule below changes the profile it would generate for the same file
+RULES_VERSION = 3  # bump when any rule below changes how the same file would be interpreted
 # 2 (02-Nov-26, owner decision DQ-2): an exchange column is always used, and a file name that contradicts an exchange
 #   or symbol column is rejected (v1 let a file-name exchange replace an exchange column when there was no symbol column)
+# 3 (02-Nov-26, PR #9 acceptance findings F-01..F-03): "min" timeframe tokens in file names; market prefix CRYPTO_
+#   (symbol from the name, exchange/venue never defaulted); plain-name symbol only when the rest of the name is a
+#   timeframe token, otherwise suggested; headerless date + time columns; a timeframe answer that contradicts a
+#   clearly measured intraday bar interval is not used (asked again, or rejected when no timeframe fits).
+# The rules version decides whether an unchanged file is interpreted again (scan fingerprint). The generated profile
+# and the structure signature use the PINNED values below, so a file whose interpretation is unchanged keeps the same
+# profile (its datasets are reused, not re-created) and its recorded answers stay valid (decision D5-16).
+PROFILE_RULES_SEED = 2
+SIGNATURE_RULES = 2
 
 READY, NEEDS_ANSWER, REJECTED = "ready", "needs_answer", "rejected"
 
@@ -64,10 +73,14 @@ ALIASES = {
 }
 # A-8: exchange codes recognised at the start of a file name ("NSE_NIFTY, 1D.csv").
 KNOWN_EXCHANGES = ("NSE", "BSE", "MCX", "NFO", "BFO", "CDS", "NCDEX", "NYSE", "NASDAQ", "AMEX", "LSE")
+# Market prefixes ("CRYPTO_RIVERUSD, 180.csv"): the name gives the symbol, but NOT the exchange or venue, and the
+# folder's default exchange (an equity exchange such as NSE) is never applied to them: the venue is always asked.
+MARKET_PREFIXES = ("CRYPTO",)
 _NAME_ID = re.compile(r"^(?P<exchange>[A-Za-z]+)_(?P<symbol>[A-Za-z0-9&-]+)(?=$|[,_ .(])")
 _PLAIN_SYMBOL = re.compile(r"^[A-Za-z0-9&-]+$")
 # A-9: timeframe token in a file name: ", 1D", ", 5", "_5m", "_1h" ... (evidence only, never decisive).
-_NAME_TF = re.compile(r"(?:, ?|_)(\d{1,3})([mhHdDwWM]?)(?=$|[ _(.\-])")
+_NAME_TF = re.compile(r"(?:, ?|_)(\d{1,3})(min|[mhHdDwWM]?)(?=$|[ _(.\-])")
+_TIME_OF_DAY = re.compile(r"^\d{1,2}:\d{2}(:\d{2})?$")
 
 # A-6: candidate date/time layouts. Each is tested with the SAME parser the engine uses (datetime_parse).
 TWO_DIGIT_YEAR_PIVOT = 69  # Q-MAP's existing fixed rule: 00-68 -> 2000-2068, 69-99 -> 1969-1999
@@ -220,32 +233,48 @@ def _map_named(names: list, evidence: list) -> dict:
     return mapping
 
 
+def _is_time_of_day(v) -> bool:
+    return isinstance(v, time) or (isinstance(v, str) and bool(_TIME_OF_DAY.match(v.strip())))
+
+
 def _map_positional(columns: list, evidence: list) -> dict:
     n_rows = len(columns[0])
+    # Date and time in two columns ("2024-01-20,12:10:00,589.9,..."): column 2 is a time of day on EVERY row and
+    # column 1 never carries one. Then columns 3-6 are open, high, low, close and the same checks apply, one column on.
+    split_time = (len(columns) >= MIN_COLUMNS + 1 and all(_is_time_of_day(v) for v in columns[1])
+                  and not any(_is_time_of_day(v) or (isinstance(v, str) and ":" in v) for v in columns[0]))
+    first = 2 if split_time else 1
     nums = []
-    for j in range(1, 5):
+    for j in range(first, first + 4):
         vals = [parse_number(v) for v in columns[j]]
         if any(st != OK or not math.isfinite(x) for x, st in vals):
+            order = "date, time, open, high, low, close" if split_time else "date, open, high, low, close"
             raise _Reject(f"The file has no header row, and column {j + 1} is not a number on every row, so the "
-                          "column order (date, open, high, low, close) cannot be confirmed.")
+                          f"column order ({order}) cannot be confirmed.")
         nums.append([x for x, _ in vals])
     o, h, l, c = nums
     bad = [i + 1 for i in range(n_rows) if not (h[i] >= max(o[i], c[i], l[i]) and l[i] <= min(o[i], c[i], h[i]))]
+    c1, c4 = first + 1, first + 4  # 1-based numbers of the open and close columns
     if bad:
-        raise _Reject(f"The file has no header row, and on {len(bad)} row(s) (e.g. row {bad[0]}) columns 2-5 do not "
-                      "behave like open, high, low, close, so their order cannot be confirmed. Add a header row.")
-    mapping = {"date": 0, "open": 1, "high": 2, "low": 3, "close": 4}
-    note = "columns 2-5 = open, high, low, close (high and low bound open and close on every row)"
-    if len(columns) >= 6:
-        vals = [parse_number(v) for v in columns[5]]
+        raise _Reject(f"The file has no header row, and on {len(bad)} row(s) (e.g. row {bad[0]}) columns {c1}-{c4} do "
+                      "not behave like open, high, low, close, so their order cannot be confirmed. Add a header row.")
+    mapping = {"date": 0, "open": first, "high": first + 1, "low": first + 2, "close": first + 3}
+    if split_time:
+        mapping["time"] = 1
+    note = f"columns {c1}-{c4} = open, high, low, close (high and low bound open and close on every row)"
+    vol = first + 4  # 0-based position of the column after close
+    if len(columns) > vol:
+        vals = [parse_number(v) for v in columns[vol]]
         if all(st == OK and math.isfinite(x) and x >= 0 and x == int(x) for x, st in vals):
-            mapping["volume"] = 5
-            note += "; column 6 = volume (whole numbers, never negative)"
+            mapping["volume"] = vol
+            note += f"; column {vol + 1} = volume (whole numbers, never negative)"
         else:
-            note += "; column 6 is not used as volume (it has negative or fractional values) and is kept as is"
-    if len(columns) > 6:
-        note += f"; columns 7-{len(columns)} kept unchanged, never used as volume"
-    evidence.append(f"A-5 no header row; positional rule: column 1 = date; {note}.")
+            note += f"; column {vol + 1} is not used as volume (it has negative or fractional values) and is kept as is"
+    if len(columns) > vol + 1:
+        extra = f"column {vol + 2}" if len(columns) == vol + 2 else f"columns {vol + 2}-{len(columns)}"
+        note += f"; {extra} kept unchanged, never used as volume"
+    head = "column 1 = date, column 2 = time of day (every row)" if split_time else "column 1 = date"
+    evidence.append(f"A-5 no header row; positional rule: {head}; {note}.")
     return mapping
 
 
@@ -330,6 +359,26 @@ def _monotonic(keys: list) -> bool:
 # A-9: timeframe
 # ---------------------------------------------------------------------------------------------------------------
 
+def _measured_step(parsed, zone_for_days: str) -> tuple[int, float] | None:
+    """(minutes, share) when the data CLEARLY have one intraday bar interval: several bars on a trading date, enough
+    same-day steps, and the most common step covers >= MIN_STEP_SHARE of them. Whether that interval is a supported
+    timeframe is decided by the caller. None for date-only data, one bar per date, or irregular steps."""
+    if not parsed.is_instant:
+        return None
+    z = ZoneInfo(zone_for_days)
+    ts = sorted(t for t in parsed.ts_utc if t is not None)
+    per_day = Counter(t.astimezone(z).date() for t in ts)
+    if not per_day or max(per_day.values()) <= 1:
+        return None
+    steps = [int(round((b - a).total_seconds() / 60)) for a, b in zip(ts, ts[1:])
+             if a.astimezone(z).date() == b.astimezone(z).date()]
+    if len(steps) < MIN_BARS_FOR_TIMEFRAME - 1:
+        return None
+    step, n = Counter(steps).most_common(1)[0]
+    share = n / len(steps)
+    return (step, share) if share >= MIN_STEP_SHARE else None
+
+
 def _infer_timeframe(parsed, zone_for_days: str) -> tuple[str | None, str]:
     if parsed.is_instant:
         z = ZoneInfo(zone_for_days)
@@ -367,8 +416,8 @@ def timeframe_from_name(stem: str) -> str | None:
     if not found:
         return None
     num, unit = int(found[-1].group(1)), found[-1].group(2)
-    if unit in ("", "m"):
-        return {1: "1m", 5: "5m", 15: "15m", 30: "30m", 60: "1h", 240: "4h"}.get(num)
+    if unit in ("", "m", "min"):
+        return INTRADAY_STEPS.get(num)
     if unit in ("h", "H"):
         return {1: "1h", 4: "4h"}.get(num)
     if unit in ("d", "D") and num == 1:
@@ -391,9 +440,24 @@ def identity_from_name(stem: str) -> tuple[str, str] | None:
     return m.group("exchange").upper(), m.group("symbol").upper()
 
 
+def market_prefix_from_name(stem: str) -> tuple[str, str] | None:
+    """('CRYPTO', 'RIVERUSD') for 'CRYPTO_RIVERUSD, 180'. The prefix names a market, not an exchange or venue."""
+    m = _NAME_ID.match(stem)
+    if not m or m.group("exchange").upper() not in MARKET_PREFIXES:
+        return None
+    return m.group("exchange").upper(), m.group("symbol").upper()
+
+
 def _plain_symbol(stem: str) -> str | None:
-    head = re.split(r"[, _(]", stem, maxsplit=1)[0]
-    return head.upper() if head and _PLAIN_SYMBOL.match(head) else None
+    """The whole name as a symbol: 'ICICIBANK', '5PAISA_30min', 'VERANDA_1min', 'NIFTY, 1D'. Only when what follows
+    the first word is nothing but a timeframe token, so 'CRYPTO_RIVERUSD, 180' or 'csv headers std' give no symbol."""
+    parts = re.split(r"(?=[, _(])", stem, maxsplit=1)
+    head, rest = parts[0], (parts[1] if len(parts) > 1 else "")
+    if not head or not _PLAIN_SYMBOL.match(head) or head.isdigit():
+        return None
+    if rest and not re.fullmatch(r"(?:, ?|_| )\d{1,3}(?:min|[mhHdDwWM])?(?: ?\(\d+\))?", rest):
+        return None
+    return head.upper()
 
 
 # ---------------------------------------------------------------------------------------------------------------
@@ -526,12 +590,36 @@ def _interpret(path, settings, market_tz, default_exchange, symbol_from_filename
     timeframe = answers.get("timeframe")
     if timeframe and timeframe not in ALLOWED_TIMEFRAMES:
         timeframe = None
-    if timeframe:
-        evidence.append(f"A-9 timeframe {timeframe}: given by the user (recorded answer).")
-    elif probes:
-        results = {_infer_timeframe(p, tz if _valid_zone(tz) else "UTC") for p in probes}
+    inferred, why = None, ""
+    day_zone = tz if _valid_zone(tz) else "UTC"
+    if probes:
+        results = {_infer_timeframe(p, day_zone) for p in probes}
         inferred, why = (next(iter(results)) if len({r[0] for r in results}) == 1
                          else (None, "the candidate date layouts give different bar intervals"))
+    measured = {_measured_step(p, day_zone) for p in probes}
+    measured = next(iter(measured)) if len(measured) == 1 else None
+    if measured is not None and (timeframe or not inferred):
+        step, share = measured
+        fits = INTRADAY_STEPS.get(step)  # the timeframe whose bar interval IS the measured one, if Q-MAP has it
+        if fits is None:
+            # A clear interval with no matching timeframe: every possible answer would relabel the bars (e.g.
+            # 180-minute bars registered as 4h), so there is no valid answer to ask for.
+            raise _Reject(f"The bars are {step} minutes apart ({share:.0%} of steps within a day), and {step}-minute "
+                          "bars are not a supported timeframe"
+                          + (f"; your recorded answer ({timeframe}) would relabel them" if timeframe else "")
+                          + ". Q-MAP does not relabel, resample or aggregate bars.")
+        if timeframe and timeframe != fits:
+            # The interval is MEASURED (same-day steps). A different answer would relabel the data, so the recorded
+            # answer is not used and the question is asked again with the only consistent choice.
+            res.questions.append(Question(
+                "timeframe", f"Your recorded answer says {timeframe} bars, but the data are {fits} bars ({share:.0%} of "
+                             f"steps within a day are {step} minutes). Q-MAP does not relabel bars. Choose {fits}, or "
+                             "correct the file.", (fits,)))
+            timeframe = None
+    asked = any(q.key == "timeframe" for q in res.questions)
+    if timeframe and not asked:
+        evidence.append(f"A-9 timeframe {timeframe}: given by the user (recorded answer).")
+    elif probes and not asked:
         if inferred and name_tf and name_tf != inferred:
             res.questions.append(Question(
                 "timeframe", f"The data look like {inferred} bars ({why}), but the file name says {name_tf}. "
@@ -550,6 +638,7 @@ def _interpret(path, settings, market_tz, default_exchange, symbol_from_filename
     overrides: dict = {}
     instrument: dict = {}
     name_id = identity_from_name(stem)
+    prefix_id = None if name_id else market_prefix_from_name(stem)
     exch_ans, sym_ans = answers.get("exchange"), answers.get("symbol")
     col_values = {}
     for f in ("exchange", "symbol"):
@@ -567,7 +656,12 @@ def _interpret(path, settings, market_tz, default_exchange, symbol_from_filename
         instrument.update(exchange_from="column", exchange_column=mapping["exchange"])
         evidence.append(f"A-8 exchange from the column {names[mapping['exchange']]!r}.")
     else:
-        exch = exch_ans or (name_id[0] if name_id else None) or default_exchange
+        # a market prefix (CRYPTO_) says the folder's default exchange does not apply: the venue must be given
+        exch = exch_ans or (name_id[0] if name_id else None) or (None if prefix_id else default_exchange)
+        if prefix_id and not exch_ans and default_exchange:
+            evidence.append(f"A-8 the file name starts with the market prefix {prefix_id[0]}_, which names no exchange "
+                            f"or venue, so the folder's default exchange ({normalise_exchange(default_exchange)}) "
+                            "is not applied.")
         if exch:
             instrument["exchange_from"] = "ingest"
             overrides["exchange"] = normalise_exchange(exch)
@@ -586,6 +680,8 @@ def _interpret(path, settings, market_tz, default_exchange, symbol_from_filename
             sym, why = sym_ans, "given by the user"
         elif name_id:
             sym, why = name_id[1], "from the file name pattern EXCHANGE_SYMBOL"
+        elif prefix_id:
+            sym, why = prefix_id[1], f"from the file name pattern {prefix_id[0]}_SYMBOL"
         elif symbol_from_filename and _plain_symbol(stem) and (overrides.get("exchange") or "exchange" in mapping):
             sym, why = _plain_symbol(stem), "the file name (enabled for this source)"
         if sym:
@@ -593,17 +689,25 @@ def _interpret(path, settings, market_tz, default_exchange, symbol_from_filename
             evidence.append(f"A-8 symbol {overrides['symbol']}: {why}.")
     need_exch = "exchange_from" not in instrument
     need_sym = instrument.get("symbol_from") == "ingest" and "symbol" not in overrides
+    # A plain file name ("ICICIBANK.txt") is only a SUGGESTION unless the folder's option "symbol from the file name"
+    # is on (decision D5-06): the Sources screen fills it in, and the user confirms it with Save answer.
+    suggest = (_plain_symbol(stem),) if need_sym and _plain_symbol(stem) else ()
+    hint = (f" The file name suggests {suggest[0]} (confirm it, or switch on 'symbol from the file name' for this "
+            "folder)." if suggest else "")
     if need_exch and need_sym:
         res.questions.append(Question("identity", "Which instrument is this (exchange and symbol)? Q-MAP could not "
-                                                  "read it from the file or its name."))
+                                                  "read it from the file or its name." + hint, suggest))
     elif need_exch:
-        res.questions.append(Question("exchange", "Which exchange is this traded on? The file does not say."))
+        res.questions.append(Question("exchange", (
+            f"Which exchange or venue is {overrides.get('symbol', 'this')} traded on? The file does not say, and the "
+            f"{prefix_id[0]}_ prefix in its name is a market, not a venue." if prefix_id
+            else "Which exchange is this traded on? The file does not say.")))
     elif need_sym:
         res.questions.append(Question("identity", "Which symbol is this? Q-MAP could not read it from the file or "
-                                                  "its name."))
+                                                  "its name." + hint, suggest))
 
     # ---- structure signature (for reusing answers) ------------------------------------------------------------
-    sig = {"rules": RULES_VERSION, "format": kind, "delimiter": delimiter, "header": header,
+    sig = {"rules": SIGNATURE_RULES, "format": kind, "delimiter": delimiter, "header": header,
            "names": [_norm(n) if n else None for n in names] if header else len(columns),
            "date_layouts": sorted(c.cid for c, _ in full)}
     res.signature = hashlib.sha256(json.dumps(sig, sort_keys=True).encode()).hexdigest()[:16]
@@ -662,12 +766,12 @@ def _build_profile(kind, delimiter, header, mapping, cand: _Cand, zone, instrume
         lines.append('rule = "none"')
     lines.append('requirement_set = "price_only"')
     body = "\n".join(lines) + "\n"
-    digest = hashlib.sha256(f"auto-rules-{RULES_VERSION}\n{body}".encode("utf-8")).hexdigest()[:12]
+    digest = hashlib.sha256(f"auto-rules-{PROFILE_RULES_SEED}\n{body}".encode("utf-8")).hexdigest()[:12]
     pid = f"auto_{digest}"
     head = (f'profile_id = "{pid}"\nprofile_version = 1\nstatus = "auto"\n'
             f'display_name = "Automatic interpretation {pid}"\n'
-            f'source_label = "Automatic interpretation (rules v{RULES_VERSION})"\n'
-            f'description = "Generated by Q-MAP automatic interpretation rules A-1 to A-9, version {RULES_VERSION}. '
+            f'source_label = "Automatic interpretation (rules v{PROFILE_RULES_SEED})"\n'
+            f'description = "Generated by Q-MAP automatic interpretation rules A-1 to A-9, version {PROFILE_RULES_SEED}. '
             'Exchange, symbol and timeframe are supplied with each file (from its content, its name, the source '
             'settings or the user\'s recorded answer)."\n')
     return parse_profile(head + body)

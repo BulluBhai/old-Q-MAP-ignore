@@ -88,7 +88,7 @@ def file_details(s: D.FileState) -> list[tuple[str, str | None]]:
         parts.append((f"Dataset(s): {', '.join(map(str, s.dataset_ids))} - see Datasets and Storage.\n", None))
     for q in s.questions:
         parts.append((f"QUESTION: {q['text']}\n", "warning"))
-        if q.get("options") and q["key"] != "timeframe":
+        if q.get("options") and q["key"] not in ("timeframe", "identity"):  # these are filled into the boxes
             parts.append(("  Choices: " + ", ".join(describe_option(o) for o in q["options"]) + "\n", "muted"))
     ev = s.interpretation.get("evidence") or []
     if ev:
@@ -111,6 +111,23 @@ def describe_option(cid: str) -> str:
 
 def question_keys(s: D.FileState) -> set[str]:
     return {q["key"] for q in s.questions}
+
+
+def suggested_answers(s: D.FileState) -> tuple[str, str, str]:
+    """(exchange, symbol, timeframe) to fill into the answer boxes: the exchange Q-MAP already has (the folder's default
+    exchange or the file name), the file name's symbol suggestion, and the timeframe when the question offers exactly
+    one choice. Nothing is saved until the user presses Save answer."""
+    exch = sym = tf = ""
+    known = (s.interpretation.get("decisions") or {}).get("identity") or {}
+    for q in s.questions:
+        opts = q.get("options") or []
+        if q["key"] == "identity":
+            exch = str(known.get("exchange") or "")
+            if len(opts) == 1:
+                sym = str(opts[0])
+        if q["key"] == "timeframe" and len(opts) == 1 and opts[0] in TIMEFRAMES:
+            tf = str(opts[0])
+    return exch, sym, tf
 
 
 def date_options(s: D.FileState) -> list[tuple[str, str]]:
