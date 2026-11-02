@@ -23,8 +23,11 @@ Added 02-Nov-26 for Blueprint v1.3 §8.5. You do not choose profiles or type lay
    - **Market time zone** (for Indian exchanges `Asia/Kolkata`): used to work out each bar's trading date and for
      times written without an offset. Leave it empty and Q-MAP asks for it when a file needs it.
    - **Default exchange** (for example `NSE`), used when a file does not say its exchange.
-   - **File name is the symbol** (optional): `RELIANCE.csv` is read as symbol RELIANCE on the default exchange. Off
-     by default, so a name like `prices.csv` is never mistaken for a symbol.
+   - **File name is the symbol** (optional): `RELIANCE.csv` (or `RELIANCE_5min.csv`, `RELIANCE, 1D.csv`) is read as
+     symbol RELIANCE on the default exchange. Off by default, so a name like `prices.csv` is never taken as a symbol
+     without your confirmation. When it is off, Q-MAP still fills the name into the answer boxes as a suggestion: check
+     it and press **Save answer** (one click). A name such as `CRYPTO_RIVERUSD, 180.csv` gives the symbol RIVERUSD,
+     but never the default exchange: `CRYPTO` is a market, not an exchange, so the venue is always asked.
    - **Include sub-folders** and **Skip files matching** (for example `*backup*`).
    Q-MAP's own data, output and program folders are refused as sources. To change settings later, select the folder,
    edit the boxes and press **Save settings of selected folder**. **Stop using selected folder** stops scanning; it
@@ -36,7 +39,9 @@ Added 02-Nov-26 for Blueprint v1.3 §8.5. You do not choose profiles or type lay
    `Scan_Report_<dd_Mmm_yy_hhmmss>.csv` into its run folder in `Q-MAP_OUTPUT/Data_Management`.
 3. **Options - scan and answer.** **SCAN SELECTED FOLDER NOW** looks at the folder. For a file that needs an answer,
    select it: only the boxes its question needs are switched on (exchange and symbol, timeframe, date layout, or market
-   time zone). **Save answer**, then scan again. An answer is reused only while the file keeps the same layout.
+   time zone). What Q-MAP already knows or can suggest is filled in; nothing is saved until you press **Save answer**.
+   Then scan again. An answer is reused only while the file keeps the same layout. A timeframe answer that does not
+   match the measured spacing of the bars is not used (Q-MAP never relabels, for example, 180-minute bars as 4 hours).
 
 What a scan does, and does not do:
 
@@ -52,12 +57,20 @@ What a scan does, and does not do:
 
 How layouts are recognised (rules A-1 to A-9, in `docs/architecture/Blueprint_v1.3_Implementation_Audit.md`,
 section 6): column names such as `date`/`time`, `open`, `high`, `low`, `close`, `volume`; files without a header only
-when columns 2-5 behave like open, high, low, close on every row; dates in ISO, `25-02-26`, `25/02/2026`, `25-Feb-26`,
+when columns 2-5 behave like open, high, low, close on every row (or columns 3-6, when column 2 is the time of day on
+every row, as in `2024-01-20,12:10:00,589.9,...`); dates in ISO, `25-02-26`, `25/02/2026`, `25-Feb-26`,
 `20260225`, Unix seconds or milliseconds, or spreadsheet date cells. When two date readings both fit (for example
 day-first and month-first) and the order of the rows does not settle it, Q-MAP asks. Two-digit years: 00-68 =
 2000-2068, 69-99 = 1969-1999. Instrument from `exchange`/`symbol` columns in the file first, then your answer, then a file name such as
 `NSE_NIFTY, 1D.csv`. A file whose name contradicts its own exchange or symbol column is rejected, never read with the
-name's value (your decision DQ-2). If only the exchange is missing, only the exchange is asked. Timeframe from the spacing of the bars; a file name that disagrees with the data is asked about.
+name's value (your decision DQ-2). If only the exchange is missing, only the exchange is asked. Timeframe from the spacing of the bars (1, 5, 15, 30, 60 or 240 minutes, daily, weekly, monthly; 180 minutes = `3h`
+only if the owner approves it, DQ-7); a file name that disagrees with the data is asked about (`, 15`, `_5m` and
+`_30min` are all understood). A file whose bars are evenly spaced at an interval Q-MAP has no timeframe for is rejected
+with that reason.
+
+A rejected file never becomes a dataset. Typical reasons with real exports: the same day appears twice (two downloads
+appended), or a bar whose low is above its open. Q-MAP does not remove or choose between rows: correct the file (or
+keep one copy of each day) and scan again.
 
 ## Data Management: loading files with a chosen profile
 

@@ -25,6 +25,8 @@ Deleted datasets are never offered; superseded ones only if you tick "Show super
   restart it is read from the Data Registry. A refused request or a failed run never replaces it.
 - The path is shown in a read-only box, so you can select it and copy it (Ctrl+C).
 - **Open Output Folder** opens that folder in File Explorer. It only opens it; nothing is moved, renamed or deleted.
+  - The same button also appears under the completion message in **Progress / Status**, so you can open the
+    results straight after a run.
   - Before any run has completed, the button is greyed out.
   - If the folder has since been moved or deleted, or Windows refuses to open it, a message explains what happened
     instead.
@@ -36,7 +38,8 @@ Deleted datasets are never offered; superseded ones only if you tick "Show super
 Each date box accepts typing **and** has a **Calendar...** button.
 
 - **Calendar:** click a day to fill in the box.
-  - `<` and `>` change month; **Today** picks today; **Clear** empties the box.
+  - `<` and `>` change month; `<<` and `>>` change year (same month), so 1998 is a few clicks away; **Today** picks
+    today; **Clear** empties the box.
   - Esc or **Close** closes the calendar without changing anything.
   - The calendar writes dates as `25-Feb-26`.
 - **Typing:** day, then month, then year. All of these mean 25 February 2026:
