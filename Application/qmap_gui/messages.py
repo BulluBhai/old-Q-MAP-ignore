@@ -98,6 +98,15 @@ CHECKS: dict[str, tuple[str, str, str]] = {
                                "than the allowed limit (today plus the profile's allowed days ahead). Those dates are now "
                                "within the limit, so Q-MAP processed the file again. The earlier rejection stays in the history.",
                                "Nothing to do."),
+    "overlaps_existing_dataset": ("Some bars are already in another dataset, with the same values",
+                                  "This dataset shares bars with an earlier dataset of the same instrument and timeframe, "
+                                  "and every shared bar has identical prices and volume.",
+                                  "Nothing to do. Both datasets are kept."),
+    "conflicts_with_existing_dataset": ("Some bars differ from another dataset of the same instrument",
+                                        "This dataset and an earlier dataset of the same instrument and timeframe have "
+                                        "different values for the same bars (for example a revised close). Neither was "
+                                        "changed and nothing was merged.",
+                                        "Check which source is right, and select that dataset for analysis."),
     "raw_integrity": ("A stored original file is damaged", "The stored copy no longer matches its checksum.",
                       "Use the restore step with the original file (see the instructions in the message)."),
 }

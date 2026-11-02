@@ -51,7 +51,7 @@ def legacy(settings, src, monkeypatch):
     file_sha = sha256_file(settings.data_path(_path_from_file(settings, original)))
     monkeypatch.setattr(dbmod, "MIGRATIONS", MIGRATIONS)
     monkeypatch.setattr(sc, "TEMPORARY_FOLDER", "Temporary")
-    db = open_database(settings.db_path)  # upgrade to schema 7
+    db = open_database(settings.db_path)  # upgrade to schema 7 (and any later migration)
     from qmap.core.runs import finish_run, start_run
 
     run = start_run(settings, db, "DBM", area="Data_Management", recover=False)
@@ -82,7 +82,9 @@ def test_new_moves_go_to_the_blueprint_folder(settings, db, run, src):
 
 def test_upgrade_moves_and_rewrites_nothing(settings, legacy):
     db = legacy["db"]
-    assert db.current_version() == 7
+    from qmap.storage.schema import LATEST_VERSION
+
+    assert db.current_version() == LATEST_VERSION >= 7  # migration 8 (02-Nov-26) adds tables only
     path = _path(db, legacy["kept"])
     assert path.startswith("Temporary_Data/")  # registry unchanged
     assert sha256_file(settings.data_path(path)) == legacy["file_sha"]  # file unchanged, still in the old folder

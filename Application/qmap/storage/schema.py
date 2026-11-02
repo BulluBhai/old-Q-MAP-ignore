@@ -331,6 +331,83 @@ WHEN (NEW.storage_class IS NOT OLD.storage_class OR NEW.relative_path IS NOT OLD
 BEGIN SELECT RAISE(ABORT,'a storage class or path change must be a recorded move along the Temporary mapping'); END;
 """
 
+# Blueprint v1.3 (02-Nov-26): folder sources and automatic discovery. Tables only; migrations 1-7 are unchanged.
+# * data_sources: the folders the user has configured (settings may change; every scan keeps a snapshot);
+# * source_scans: one row per scan, finished once;
+# * source_file_observations: append-only, what each scan saw for each file and what happened to it. A file's
+#   current state is its latest observation, so there is no second, updatable copy of that state;
+# * source_answers: append-only, the user's answers to interpretation questions, tied to the file's structure.
+MIGRATION_8 = """
+CREATE TABLE data_sources (
+  source_id INTEGER PRIMARY KEY,
+  kind TEXT NOT NULL CHECK (kind IN ('folder')),
+  location TEXT NOT NULL UNIQUE CHECK (length(trim(location)) > 0),
+  label TEXT NOT NULL CHECK (length(trim(label)) > 0),
+  include_subfolders INTEGER NOT NULL DEFAULT 0 CHECK (include_subfolders IN (0, 1)),
+  exclude_patterns_json TEXT NOT NULL DEFAULT '[]',
+  market_timezone TEXT,
+  default_exchange TEXT CHECK (default_exchange IS NULL OR (length(default_exchange) > 0
+                                                            AND default_exchange = upper(trim(default_exchange)))),
+  symbol_from_filename INTEGER NOT NULL DEFAULT 0 CHECK (symbol_from_filename IN (0, 1)),
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'removed')),
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+CREATE TRIGGER trg_sources_no_delete BEFORE DELETE ON data_sources
+BEGIN SELECT RAISE(ABORT,'data_sources are never deleted (mark them removed)'); END;
+CREATE TRIGGER trg_sources_identity BEFORE UPDATE ON data_sources
+WHEN NEW.source_id IS NOT OLD.source_id OR NEW.kind IS NOT OLD.kind OR NEW.location IS NOT OLD.location
+  OR NEW.created_at IS NOT OLD.created_at
+BEGIN SELECT RAISE(ABORT,'a data source keeps its identity and location'); END;
+
+CREATE TABLE source_scans (
+  scan_id INTEGER PRIMARY KEY,
+  source_id INTEGER NOT NULL REFERENCES data_sources(source_id),
+  run_id TEXT NOT NULL REFERENCES runs(run_id),
+  started_at TEXT NOT NULL, finished_at TEXT,
+  settings_json TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('running', 'completed', 'failed')),
+  summary_json TEXT, detail TEXT);
+CREATE TRIGGER trg_scans_no_delete BEFORE DELETE ON source_scans
+BEGIN SELECT RAISE(ABORT,'source_scans are never deleted'); END;
+CREATE TRIGGER trg_scans_final BEFORE UPDATE ON source_scans
+WHEN OLD.status <> 'running' OR NEW.scan_id IS NOT OLD.scan_id OR NEW.source_id IS NOT OLD.source_id
+  OR NEW.run_id IS NOT OLD.run_id OR NEW.started_at IS NOT OLD.started_at OR NEW.settings_json IS NOT OLD.settings_json
+BEGIN SELECT RAISE(ABORT,'a scan can only be finished once, and its identity cannot change'); END;
+
+CREATE TABLE source_file_observations (
+  observation_id INTEGER PRIMARY KEY,
+  scan_id INTEGER NOT NULL REFERENCES source_scans(scan_id),
+  source_id INTEGER NOT NULL REFERENCES data_sources(source_id),
+  relative_path TEXT NOT NULL CHECK (length(relative_path) > 0),
+  file_size INTEGER, file_mtime_ns INTEGER, sha256 TEXT,
+  change TEXT NOT NULL CHECK (change IN ('new', 'changed', 'unchanged', 'missing', 'unreadable')),
+  action TEXT NOT NULL CHECK (action IN ('processed', 'skipped', 'none')),
+  outcome TEXT NOT NULL CHECK (outcome IN ('imported', 'reused', 'needs_answer', 'rejected', 'blocked',
+                                           'unsupported', 'ignored', 'failed', 'missing')),
+  inputs_fingerprint TEXT,
+  event_id INTEGER REFERENCES ingest_events(event_id),
+  attempt_id INTEGER REFERENCES ingest_attempts(attempt_id),
+  dataset_ids_json TEXT, interpretation_json TEXT, questions_json TEXT, retry_on TEXT,
+  detail TEXT, observed_at TEXT NOT NULL);
+CREATE INDEX ix_observations_file ON source_file_observations(source_id, relative_path, observation_id);
+CREATE TRIGGER trg_observations_no_update BEFORE UPDATE ON source_file_observations
+BEGIN SELECT RAISE(ABORT,'source_file_observations is append-only'); END;
+CREATE TRIGGER trg_observations_no_delete BEFORE DELETE ON source_file_observations
+BEGIN SELECT RAISE(ABORT,'source_file_observations is append-only'); END;
+
+CREATE TABLE source_answers (
+  answer_id INTEGER PRIMARY KEY,
+  source_id INTEGER NOT NULL REFERENCES data_sources(source_id),
+  relative_path TEXT NOT NULL,
+  structure_signature TEXT NOT NULL,
+  answers_json TEXT NOT NULL,
+  answered_at TEXT NOT NULL);
+CREATE INDEX ix_answers_file ON source_answers(source_id, relative_path, answer_id);
+CREATE TRIGGER trg_answers_no_update BEFORE UPDATE ON source_answers
+BEGIN SELECT RAISE(ABORT,'source_answers is append-only'); END;
+CREATE TRIGGER trg_answers_no_delete BEFORE DELETE ON source_answers
+BEGIN SELECT RAISE(ABORT,'source_answers is append-only'); END;
+"""
+
 # (version, description, sql)
 MIGRATIONS = [
     (1, "Stage 2 foundation: instruments, runs, registry, ingest provenance, quality checks", MIGRATION_1),
@@ -344,6 +421,8 @@ MIGRATIONS = [
     (6, "Storage class, path and deletion change only under a matching recorded storage action", MIGRATION_6),
     (7, "Temporary area is Q-MAP_DATA/Temporary/ (OD-8); datasets already under Temporary_Data/ stay valid",
      MIGRATION_7),
+    (8, "Folder sources, scans, per-file scan observations and recorded interpretation answers (Blueprint v1.3)",
+     MIGRATION_8),
 ]
 
 LATEST_VERSION = MIGRATIONS[-1][0]

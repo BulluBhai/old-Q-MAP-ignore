@@ -90,8 +90,11 @@ class DatasetInfo:
 
 def _warnings_for(db: Database, row) -> list[str]:
     if row["layer"] == "cleaned":
-        checks = db.query("SELECT check_name, detail FROM quality_checks WHERE attempt_id = ? AND severity = 'warning' "
-                          "AND passed = 0 ORDER BY check_id", (row["created_by_attempt_id"],))
+        # the checks of the attempt that created it, plus checks recorded later on the dataset itself (for example
+        # a conflict with another dataset found when it was registered from a folder scan)
+        checks = db.query("SELECT check_name, detail FROM quality_checks WHERE (attempt_id = ? OR dataset_id = ?) AND "
+                          "severity = 'warning' AND passed = 0 ORDER BY check_id",
+                          (row["created_by_attempt_id"], row["dataset_id"]))
     else:
         checks = db.query("SELECT check_name, detail FROM quality_checks WHERE dataset_id = ? AND severity = 'warning' "
                           "AND passed = 0 ORDER BY check_id", (row["dataset_id"],))
