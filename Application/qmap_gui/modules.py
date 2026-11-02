@@ -36,8 +36,16 @@ _W, _R = "Application window", "Research module"
 
 MODULES: tuple[ModuleInfo, ...] = (
     # ---- Database Manager --------------------------------------------------------------------------------------
+    ModuleInfo("sources", "Sources (automatic loading)",
+               "Add the folders where your market files are kept. Scanning finds new and changed files, works out "
+               "their layout by itself, checks and loads them, and asks you only when something is unclear.",
+               READY,
+               "Working now: folders on this computer (including synchronised OneDrive/Google Drive folders), on-demand "
+               "scans, questions and answers, overlap and conflict reports. Not built yet: provider APIs, direct "
+               "cloud connections, scheduled scans.",
+               "Prepare data", DATABASE_MANAGER, "sources"),
     ModuleInfo("data_management", "Data Management",
-               "Choose market-data files, preview them, check them and load them into Q-MAP.",
+               "Load single files with a source profile you choose (for unusual layouts), preview and check them.",
                READY,
                "Working now: preview, check without changes, load, results and report locations. "
                "Not built yet: restoring a damaged raw file from the screen (use the restore-raw command).",

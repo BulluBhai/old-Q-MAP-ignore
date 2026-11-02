@@ -80,7 +80,9 @@ ENTRY_POINTS = ("database_manager.py", "analytical_workbench.py", "Q-MAP.py")
 DATA_PREPARATION = ("qmap.data_engine.ingest", "qmap.data_engine.process", "qmap.data_engine.profiles",
                     "qmap.data_engine.readers", "qmap.data_engine.preview", "qmap.data_engine.derive",
                     "qmap.storage.registry", "qmap.storage.storage_class", "qmap_gui.jobs", "qmap_gui.services",
-                    "qmap_gui.registry_services", "qmap_gui.data_management", "qmap_gui.datasets")
+                    "qmap_gui.registry_services", "qmap_gui.data_management", "qmap_gui.datasets",
+                    "qmap.data_engine.discovery", "qmap.data_engine.auto_interpret", "qmap_gui.source_services",
+                    "qmap_gui.sources")
 
 
 def test_both_entry_points_are_in_the_application_folder_and_need_no_installation_step():
@@ -104,12 +106,13 @@ def test_the_workbench_never_loads_data_preparation_code():
         f"print(sorted(m for m in sys.modules if m in {DATA_PREPARATION!r}))")
     assert out == "[]"
     for imported in imports_of(GUI / "analysis.py"):
-        assert imported not in (".services", ".jobs", ".data_management", ".registry_services", ".datasets"), imported
+        assert imported not in (".services", ".jobs", ".data_management", ".registry_services", ".datasets",
+                                ".source_services", ".sources"), imported
 
 
 def test_both_applications_share_one_registry_and_one_data_definition():
     """One authoritative implementation: both logic layers use qmap.catalog, neither defines its own SQL."""
-    for name in ("registry_services.py", "workbench_services.py"):
+    for name in ("registry_services.py", "workbench_services.py", "source_services.py"):
         source = (GUI / name).read_text()
         assert "from qmap.catalog import" in source, name
         for forbidden in ("SELECT ", "INSERT ", "UPDATE ", "CREATE TABLE", "sqlite3"):
