@@ -88,3 +88,67 @@ def test_what_the_window_writes_reads_back_the_same():
     for d in (date(2026, 2, 25), date(1999, 12, 31), date(2000, 1, 1), date(2068, 7, 4)):
         assert parse_user_date(format_for_entry(d)) == d
     assert format_for_entry(date(2026, 2, 25)) == "25-Feb-26" and format_long(date(2026, 2, 25)) == "25-Feb-2026"
+
+
+# ---- review finding (PR #4): years a calendar date cannot have -------------------------------------------------
+@pytest.mark.parametrize("text", ["01/01/0000", "01-01-0000", "01-Jan-0000", "01 Jan 0000", "0000-01-01", "29/02/0000",
+                                  "31-Dec-0000"])
+def test_year_0000_is_refused_as_a_date_input_error_not_a_python_error(text):
+    """01/01/0000 used to pass the day/month checks and then raise the built-in ValueError from date(0, 1, 1)."""
+    with pytest.raises(DateInputError) as exc:
+        parse_user_date(text)
+    assert type(exc.value) is DateInputError
+    message = str(exc.value)
+    assert "not a real calendar date" in message and "there is no year 0000" in message
+    assert "0001 to 9999" in message and "00-68 = 2000-2068" in message
+
+
+def test_year_0000_is_refused_before_the_month_and_day_are_judged():
+    for text in ("31/13/0000", "00-00-0000"):  # the year is the first thing reported, still without a Python error
+        with pytest.raises(DateInputError, match="there is no year 0000"):
+            parse_user_date(text)
+
+
+def test_every_four_digit_year_the_formats_allow_is_either_a_date_or_a_date_input_error():
+    """The patterns accept exactly four year digits, so 0000-9999 is every year that can be typed."""
+    for year in range(0, 10000):
+        for text in (f"15/06/{year:04d}", f"15-Jun-{year:04d}", f"{year:04d}-06-15"):
+            try:
+                assert parse_user_date(text) == date(year, 6, 15)
+            except DateInputError:
+                assert year == 0, text
+
+
+def test_the_whole_range_python_supports_stays_valid():
+    assert parse_user_date("01/01/0001") == date(1, 1, 1)
+    assert parse_user_date("31-Dec-9999") == date(9999, 12, 31)
+    assert parse_user_date("1950-06-15") == date(1950, 6, 15)
+    assert parse_user_date("15/06/2100") == date(2100, 6, 15)
+
+
+@pytest.mark.parametrize("text, expected", [("29/02/2000", date(2000, 2, 29)), ("29-Feb-2024", date(2024, 2, 29)),
+                                            ("290224", date(2024, 2, 29)), ("29/02/00", date(2000, 2, 29)),
+                                            ("2400-02-29", date(2400, 2, 29)), ("29-02-0004", date(4, 2, 29))])
+def test_valid_leap_days(text, expected):
+    assert parse_user_date(text) == expected
+
+
+@pytest.mark.parametrize("text, message", [("29/02/1900", "February 1900 has 28 days"),
+                                           ("29-Feb-2100", "February 2100 has 28 days"),
+                                           ("290225", "February 2025 has 28 days"),
+                                           ("29/02/69", "February 1969 has 28 days"),
+                                           ("30-02-2024", "February 2024 has 29 days")])
+def test_invalid_leap_days(text, message):
+    with pytest.raises(DateInputError, match="not a real calendar date") as exc:
+        parse_user_date(text)
+    assert message in str(exc.value)
+
+
+@pytest.mark.parametrize("d", [date(1969, 1, 1), date(2068, 12, 31), date(1968, 12, 31), date(2069, 1, 1),
+                               date(1950, 6, 15), date(1, 1, 1), date(9999, 12, 31)])
+def test_dates_outside_1969_2068_are_written_with_four_digits_so_they_read_back_the_same(d):
+    """A calendar pick of 15-Jun-1950 must not become '15-Jun-50' (= 2050 under the 00-68 rule)."""
+    text = format_for_entry(d)
+    assert parse_user_date(text) == d
+    assert len(text.rsplit("-", 1)[1]) == (2 if 1969 <= d.year <= 2068 else 4)
+    assert format_long(d).endswith(f"-{d.year:04d}")

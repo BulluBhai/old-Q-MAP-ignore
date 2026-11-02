@@ -14,6 +14,10 @@ Two-digit years (the same rule as Q-MAP's ingestion profiles, `two_digit_year_pi
   00-68 -> 2000-2068      69-99 -> 1969-1999
 It is applied in this module itself, never by an operating-system or library default.
 
+Four-digit years must lie in the range a calendar date can have: 0001 to 9999 (Python's `datetime.MINYEAR` to
+`MAXYEAR`; Q-MAP documents no narrower limit). Year 0000 does not exist and is refused with a plain message, never
+with a Python error.
+
 Anything else is refused with a message that shows the supported formats; an impossible date such as 31/02/26 is
 refused as "not a real calendar date". Nothing here depends on the computer's language or regional settings.
 """
@@ -22,7 +26,7 @@ from __future__ import annotations
 
 import calendar
 import re
-from datetime import date
+from datetime import MAXYEAR, MINYEAR, date
 
 TWO_DIGIT_YEAR_PIVOT = 69  # same rule as datetime_parse / the example profiles
 FORMAT_EXAMPLES = "25/02/26, 25-02-26, 25-Feb-26 or 250226"
@@ -52,6 +56,10 @@ def _year(text: str) -> int:
 
 
 def _build(raw: str, day: int, month: int, year: int) -> date:
+    if not MINYEAR <= year <= MAXYEAR:  # checked first: calendar/date cannot represent such a year
+        raise DateInputError(f"'{raw}' is not a real calendar date: there is no year {year:04d}. Years run from "
+                             f"{MINYEAR:04d} to {MAXYEAR}, or use a two-digit year (00-68 = 2000-2068, "
+                             f"69-99 = 1969-1999). {FORMAT_HELP}")
     if not 1 <= month <= 12:
         raise DateInputError(f"'{raw}' is not a real calendar date: there is no month {month}. {FORMAT_HELP}")
     last = calendar.monthrange(year, month)[1]
@@ -89,10 +97,14 @@ def parse_user_date(text: str | date | None) -> date | None:
 
 
 def format_for_entry(d: date) -> str:
-    """How Q-MAP writes a date into a date box: dd-Mmm-yy (e.g. 25-Feb-26), which parse_user_date reads back."""
-    return f"{d.day:02d}-{MONTH_ABBR[d.month]}-{d.year % 100:02d}"
+    """How Q-MAP writes a date into a date box: dd-Mmm-yy (e.g. 25-Feb-26), which parse_user_date reads back.
+
+    A year outside 1969-2068 is written with four digits (e.g. 15-Jun-1950): a two-digit year would be read back as a
+    different date under the 00-68 / 69-99 rule."""
+    year = f"{d.year % 100:02d}" if expand_two_digit_year(d.year % 100) == d.year else f"{d.year:04d}"
+    return f"{d.day:02d}-{MONTH_ABBR[d.month]}-{year}"
 
 
 def format_long(d: date) -> str:
     """Unambiguous confirmation shown next to a date box (four-digit year): 25-Feb-2026."""
-    return f"{d.day:02d}-{MONTH_ABBR[d.month]}-{d.year}"
+    return f"{d.day:02d}-{MONTH_ABBR[d.month]}-{d.year:04d}"

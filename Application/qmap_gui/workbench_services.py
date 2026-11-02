@@ -111,7 +111,10 @@ def readiness_parts(res: AnalysisReadiness) -> list[tuple[str, str | None]]:
     else:
         parts.append(("NOT READY - the analysis cannot run reliably yet:\n", "error"))
         parts += [(f"  - {p}\n", "error") for p in res.problems]
-        if any(not r.ready for r in res.reports):
+        if res.partial_period_note:
+            parts.append((f"  - {res.partial_period_note}\n", "error"))
+        # Database Manager helps with every failure except "no bars in this period" (that needs another period).
+        if any(f.name != "history" or not r.no_eligible_bars for r in res.reports for f in r.failures):
             parts.append((f"  {PREPARE_HINT}\n", "muted"))
     for r in res.reports:
         parts.append((f"\n{r.label}: {'ready' if r.ready else 'not ready'}\n", "bold"))

@@ -92,6 +92,28 @@ def test_a_valid_period_with_bars_runs(an, gui):
                                                                        "date_to": date(2026, 1, 14)}
 
 
+@pytest.mark.parametrize("typed", ["01/01/0000", "0000-06-15", "29-Feb-0000"])
+def test_year_0000_is_explained_and_blocked_in_feedback_check_and_run(an, world, typed):
+    """Review finding (PR #4): such input used to raise Python's ValueError instead of the date message."""
+    an.param_vars["date_from"].set(typed)  # live feedback next to the box
+    assert "there is no year 0000" in an.date_entries["date_from"].feedback.cget("text")
+    an.check()  # Check readiness
+    assert an.readiness_box.get().startswith("INVALID DATE INPUT") and "there is no year 0000" in an.readiness_box.get()
+    an.start_run()  # Run
+    assert not an.running and an.last_result is None and "dates are not valid" in an.final_label.cget("text")
+    assert not (world.output / "Research_Reports").exists()
+
+
+def test_a_calendar_pick_outside_1969_2068_keeps_its_century(an):
+    box = an.date_entries["date_from"]
+    an.param_vars["date_from"].set("15/06/1950")
+    box.open_calendar()
+    assert box.popup.month_label.cget("text") == "June 1950"
+    box.popup.day_buttons[20].invoke()
+    assert an.param_vars["date_from"].get() == "20-Jun-1950"  # not 20-Jun-50, which would mean 2050
+    assert box.feedback.cget("text") == "= 20-Jun-1950"
+
+
 # ---- 3: Open Output Folder ---------------------------------------------------------------------------------------
 def _opened(monkeypatch):
     import qmap_gui.common as common

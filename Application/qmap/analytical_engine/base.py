@@ -92,8 +92,10 @@ class AnalysisReadiness:
 
     `state` keeps three different situations apart (Workbench requirement 2.4):
       invalid_input     - a date (or other parameter) cannot be understood, or the start is after the end;
-      no_eligible_data  - every input is valid, but the selected data have no bars in the chosen period;
-      not_ready         - anything else that stops the run (wrong timeframe, too little history, damaged file ...);
+      no_eligible_data  - every input and the selection are valid, but NONE of the selected datasets has a bar in the
+                          chosen period, and that is the only thing wrong with any of them;
+      not_ready         - anything else that stops the run (wrong timeframe, too little history, damaged file ...),
+                          including a selection where some datasets have bars in the period and others have none;
       ready             - the analysis may run.
     """
 
@@ -114,11 +116,28 @@ class AnalysisReadiness:
             return INVALID_INPUT
         if self.ready:
             return READY
-        failing = [r for r in self.reports if not r.ready]
-        if not self.selection_problems and failing and all(
-                r.no_eligible_bars and all(f.name == "history" for f in r.failures) for r in failing):
+        # "No data in this period" describes the whole selection: every selected dataset must be empty in the period
+        # and that must be its only failure. One dataset with bars (ready or not) makes the request NOT READY.
+        if not self.selection_problems and self.reports and all(
+                r.no_eligible_bars and all(f.name == "history" for f in r.failures) for r in self.reports):
             return NO_ELIGIBLE_DATA
         return NOT_READY
+
+    @property
+    def datasets_without_bars(self) -> list[ReadinessReport]:
+        """Selected datasets that have no bar at all in the chosen (valid) period."""
+        return [r for r in self.reports if r.no_eligible_bars]
+
+    @property
+    def partial_period_note(self) -> str:
+        """For a NOT READY request where only part of the selection is empty in the period: what that means."""
+        empty = self.datasets_without_bars
+        if self.state != NOT_READY or not empty or len(empty) == len(self.reports):
+            return ""
+        names = ", ".join(r.label for r in empty)
+        return (f"{len(empty)} of the {len(self.reports)} selected datasets have no bars in this period ({names}); the "
+                "others do. Choose a period that every selected dataset covers, or remove those datasets from the "
+                "selection.")
 
 
 @dataclass
@@ -207,6 +226,8 @@ def run_analysis(settings: Settings, db: Database, spec: AnalysisSpec, dataset_i
         lead = {INVALID_INPUT: "The dates entered are not valid, so nothing was run:",
                 NO_ELIGIBLE_DATA: "The dates are valid, but the selected data have no bars in that period, so nothing "
                                   "was run:"}.get(readiness.state, "The analysis cannot run reliably:")
+        if readiness.partial_period_note:
+            lead += " " + readiness.partial_period_note
         say("Not started: " + " | ".join(reasons))
         return AnalysisRunResult("blocked", lead + " " + " ".join(reasons), readiness=readiness)
     for w in readiness.warnings:

@@ -278,7 +278,8 @@ class AnalysisFrame(tk.Frame):
         self.check()  # always show the current readiness; the engine checks again itself before it starts
         if self.last_readiness is not None and not self.last_readiness.ready:
             why = {ws.INVALID_INPUT: "the dates are not valid", ws.NO_ELIGIBLE_DATA: "there are no bars in the chosen period"
-                   }.get(self.last_readiness.state, "the data are not ready")
+                   }.get(self.last_readiness.state, "some selected datasets have no bars in the chosen period"
+                         if self.last_readiness.partial_period_note else "the data are not ready")
             self.final_label.configure(text=f"Not started: {why} (see the readiness box).", fg=ERROR_COLOR)
             return
         job = ws.AnalysisJob(settings, c.analysis_id, ids, self.params())
