@@ -1,6 +1,6 @@
 # Q-MAP outstanding work register
 
-Updated 01-Nov-26, after reviewing Blueprint v1.2 (approved and adopted 1 November 2026, in PR #5). Status words:
+Updated 02-Nov-26 (roadmap wording: PR #4 vs PR #5). Earlier update 01-Nov-26, after reviewing Blueprint v1.2 (approved and adopted 1 November 2026, in PR #5). Status words:
 **Open**, **Decision needed** (Project Owner), **Planned** (Blueprint v1.2 roadmap stage), **Resolved**.
 
 ## Decisions needed from the Project Owner
@@ -53,8 +53,11 @@ Updated 01-Nov-26, after reviewing Blueprint v1.2 (approved and adopted 1 Novemb
 
 ## Roadmap (Blueprint v1.2 section 15)
 
-1. **Stages 3-4** (Database Manager and Analytical Workbench foundations, this PR): owner acceptance (OW-01) and
-   decisions OD-1, OD-3, OD-10; review and merge PR #5.
+1. **Stages 3-4** (Database Manager and Analytical Workbench foundations). The implementation is in **PR #4**,
+   which is stacked on PR #3, PR #2 and PR #1. Still needed: the owner's Windows/IDLE acceptance of PR #4 (OW-01)
+   and decisions OD-1, OD-3, OD-10; then, with the owner's approval, merge PR #1, #2, #3 and #4 in that order.
+   **PR #5** is separate and holds documentation only (Blueprint v1.2 and the handover, based on `main`). It is
+   reviewed and merged on its own and does not contain or replace the PR #4 implementation.
 2. **Stage 6**: QLOPB price-behaviour migration into `analytical_engine` as an `AnalysisSpec`, once the source is
    supplied (OD-2). v1.2 lists MIQP (Stage 5) first; the order of 5 and 6 can follow which material is available.
 3. **Stage 5**: MIQP Market Intelligence from approved specifications.

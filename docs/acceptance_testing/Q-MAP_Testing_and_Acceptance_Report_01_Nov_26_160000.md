@@ -1,4 +1,4 @@
-# Q-MAP: testing report and acceptance checklist (01-Nov-26, updated after the PR #4 reviews)
+# Q-MAP: testing report and acceptance checklist (01-Nov-26, updated after the PR #4 reviews; review-finding fixes 02-Nov-26)
 
 Branch `claude/adoring-curie-5h2mx4` (PR #4).
 
@@ -12,6 +12,8 @@ Branch `claude/adoring-curie-5h2mx4` (PR #4).
 | `de624a6` | Documentation |
 | `1760b57` | **Code**: Temporary area moved to `Q-MAP_DATA/Temporary/` (OD-8), schema **migration 7**, safe transition; Workbench roadmap stage numbers per Blueprint v1.2 |
 | `fb19fb0` | **Code**: Workbench dates and calendar, request states, Open Output Folder, source-profile naming standard |
+| `057b510` | Documentation (reviewed commit for the 02-Nov-26 findings) |
+| `95a93c6` | **Code**: review-finding fixes: year 0000 in typed dates; NO DATA IN THIS PERIOD only when every selected dataset is empty (section 8) |
 | later commits | Documentation only (this report, guides, decision log, register, architecture, conventions) |
 
 **Four kinds of evidence, kept separate:**
@@ -38,8 +40,10 @@ Status words: **Passed**, **Failed**, **Skipped**, **Not run**, **Blocked**, **N
 | `330a9aa` | Python 3.11, no tkinter | as above | 616 passed, 62 skipped, 0 failed |
 | `1760b57` | Python 3.12.3, Tk 8.6, Xvfb, GUI tests required | as above | 712 passed, 0 failed, 0 skipped |
 | `1760b57` | Python 3.11, no tkinter | as above | 624 passed, 62 skipped, 0 failed |
-| **`fb19fb0` (latest code)** | Python 3.12.3, Tk 8.6, Xvfb, GUI tests required | as above | **797 passed**, 0 failed, 0 skipped (191 GUI) |
-| **`fb19fb0`** | Python 3.11, no tkinter | as above | **693 passed, 78 skipped** (window tests skip without tkinter, by design), 0 failed |
+| `fb19fb0` | Python 3.12.3, Tk 8.6, Xvfb, GUI tests required | as above | **797 passed**, 0 failed, 0 skipped (191 GUI) |
+| `fb19fb0` | Python 3.11, no tkinter | as above | 693 passed, 78 skipped (window tests skip without tkinter, by design), 0 failed |
+| **`95a93c6` (latest code)** | Python 3.12.3, Tk 8.6, Xvfb | `xvfb-run -a python3.12 -m pytest -p no:cacheprovider` | **841 passed**, 0 failed, 0 skipped (195 GUI) |
+| **`95a93c6`** | Python 3.11.18, no tkinter | `python3.11 -m pytest -p no:cacheprovider` | **733 passed, 82 skipped** (window tests skip without tkinter, by design), 0 failed |
 
 New failures introduced: none. Pre-existing failures: none.
 
@@ -82,6 +86,7 @@ Tests changed because a requirement changed (none weakened or removed):
 | `832b788` | 41325137464 and 41325143242 (push and pull-request triggers) | **success** (both) | **success** (both) |
 | `de624a6` (same code as `330a9aa`) | 41328085918 and 41328091330 | **success** (both) | **success** (both) |
 | `1760b57` and later | see the PR #4 checks | reported in the PR description | reported in the PR description |
+| `95a93c6` and its documentation commit | see the PR #4 checks | reported in the PR #4 comment for this fix | reported in the PR #4 comment for this fix |
 
 ## 3. What is NOT covered by any of the above
 
@@ -216,3 +221,21 @@ from the acceptance procedure.
 **Known limitations:**
 - The calendar is a small separate window; it closes when you pick a day, press Close or press Esc.
 - Month abbreviations are English (Jan … Dec) by design, independent of Windows' language.
+
+## 8. Independent review findings on `057b510` (02-Nov-26), fixed in `95a93c6`
+
+| Finding | Confirmed? | Correction | Regression tests (all pass; the new ones fail on `057b510`) |
+|---|---|---|---|
+| `01/01/0000` raised Python's `ValueError` instead of `DateInputError` (`core/dates.py`) | **Yes.** `calendar.monthrange(0, 1)` works, and `date(0, 1, 1)` then fails. Only year 0000 can be typed and is out of range, because the formats allow exactly 4 year digits and Python supports 0001-9999. | The year is checked against `MINYEAR`-`MAXYEAR` first: "not a real calendar date: there is no year 0000 …". No narrower limit, because Q-MAP documents none. Related: a calendar pick outside 1969-2068 is now written with four digits, because `15-Jun-50` would read back as 2050. | `test_user_dates.py` (+28): every year-0000 spelling; every year 0000-9999 in three formats; 0001 and 9999 valid; valid and invalid leap days (2000, 2024, 2400, 0004 / 1900, 2100, 2025, 1969); two-digit-year boundaries (existing tests kept); box round-trip. `test_workbench_dates_and_runs.py`: Check and Run give INVALID DATE INPUT with no run record or folder; 0001-9999 covers all the data. Window tests (+4): live feedback, Check and Run for year 0000; calendar pick of June 1950. |
+| A mixed selection was called NO DATA IN THIS PERIOD (`analytical_engine/base.py`) | **Yes.** The rule tested only the *failing* datasets, so one ready dataset plus one empty dataset gave `no_eligible_data`. | `no_eligible_data` now requires **every** selected dataset to be empty in the period, with no other failure and no selection problem. A mixed selection is `not_ready`, and the empty datasets are named in the readiness box, the Run message and the refusal. No new state. The per-dataset readiness facts are unchanged. | `test_workbench_dates_and_runs.py` (+12), cases 1-6: one with bars; one without; several, all without; one with and one without (both orders); selection, timeframe and invalid-date problems take precedence; empty dates (both empty, and one empty). Each refusal: no run row, no folder, no outputs. The readiness-box text is checked for each state. |
+| The roadmap told the reader to "review and merge PR #5" for Stages 3-4 "this PR" (`Outstanding_Work_Register.md`) | **Yes** | The roadmap now says PR #4 holds the implementation (stacked on #3, #2 and #1) and PR #5 holds documentation only. No decision status was changed. | Not applicable (documentation) |
+
+Unchanged and still covered by the full suite: all date formats, the profile aliases and reading rules, the output
+folder behaviour, and the earlier functionality.
+
+**Additional Windows/IDLE checks (Project Owner; still outstanding):**
+1. Type Start date `01/01/0000`. **Expected:** a red "there is no year 0000" next to the box. Check gives INVALID
+   DATE INPUT, Run gives "Not started: the dates are not valid", and nothing appears in `Research_Reports`.
+2. Load a second instrument with different dates. Select both datasets and enter a period that only one of them
+   covers. **Expected:** NOT READY, naming the dataset that has no bars, and **not** NO DATA IN THIS PERIOD. Nothing
+   is created.

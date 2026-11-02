@@ -49,6 +49,8 @@ Each date box accepts typing **and** has a **Calendar...** button.
   | `250226` | six digits = DDMMYY |
 
   Four-digit years (`25/02/2026`, `25-Feb-2026`) and ISO dates (`2026-02-25`) also work.
+  A four-digit year must be from 0001 to 9999. There is no year 0000, so `01/01/0000` is refused as INVALID DATE
+  INPUT. A date before 1969 or after 2068 is always shown with its four-digit year (for example `15-Jun-1950`).
 
   Six digits are always read as DDMMYY. A longer number, such as a Unix timestamp, is refused, never converted.
 - **Two-digit years:** 00-68 mean 2000-2068, and 69-99 mean 1969-1999. So `26` is 2026 and `95` is 1995. This is the
@@ -62,8 +64,8 @@ Each date box accepts typing **and** has a **Calendar...** button.
 | You see | Meaning | What to do |
 |---|---|---|
 | **INVALID DATE INPUT** | A date can't be understood (for example `25.02.26`), doesn't exist (`31/02/26`), or the start is after the end. Nothing was checked or run. | Correct the date; the supported formats are listed |
-| **NO DATA IN THIS PERIOD** | The dates are fine, but the selected data have no bars between them. The data's actual coverage is shown. | Choose a period inside the coverage, leave the dates empty, or load more data in Database Manager |
-| **NOT READY** | Anything else that stops the run: wrong timeframe, too few bars (for example 1 bar where 2 are needed), a damaged file ... | Follow the explanation |
+| **NO DATA IN THIS PERIOD** | The dates are fine, but **none** of the selected datasets has a bar between them. The data's actual coverage is shown. | Choose a period inside the coverage, leave the dates empty, or load more data in Database Manager |
+| **NOT READY** | Anything else that stops the run: wrong timeframe, too few bars (for example 1 bar where 2 are needed), a damaged file ... It is also shown when **some** selected datasets have bars in the period and others have none. Those datasets are named. | Follow the explanation. If some datasets have no bars, choose a period they all cover, or remove those datasets |
 | **READY** | Valid dates, and enough bars in the period | Run |
 
 A request that is refused in any of these ways creates **no** run, no run folder and no output files.
