@@ -1,1 +1,1 @@
-@Q-MAP-Claude\ Standing\ Instructions.md
+@Q-MAP-Claude-Standing-Instructions.md
