@@ -244,6 +244,9 @@ def test_a_question_is_recorded_answered_and_the_answer_reused_only_for_the_same
     assert state.questions[0]["key"] == "identity"
     with pytest.raises(D.SourceError):
         D.record_answer(db, src.source_id, "other.csv", {"symbol": "X"})
+    for bad in ({"exchange": "NSE", "symbol": "A B?"}, {"timeframe": "2D"}, {"market_timezone": "Nowhere/City"}):
+        with pytest.raises(D.SourceError):
+            D.record_answer(db, src.source_id, "prices.csv", bad)
     D.record_answer(db, src.source_id, "prices.csv", {"exchange": "NSE", "symbol": "ABC"})
     r = scan(settings, db, src)
     assert outcome_of(r, "prices.csv")[3] == "imported"

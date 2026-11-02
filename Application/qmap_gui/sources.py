@@ -315,7 +315,7 @@ class SourcesFrame(tk.Frame):
         try:
             src = ss.add_source(settings, folder, **self._source_options())
         except (ss.SourceError, ValueError) as exc:
-            self.app.dialogs.error("Q-MAP", str(exc))
+            self.app.dialogs.error("Q-MAP", ss.plain(exc))
             return
         self.log.append(f"Folder added: {src.label} ({src.location})")
         self.refresh()
@@ -330,7 +330,7 @@ class SourcesFrame(tk.Frame):
         try:
             ss.update_source(settings, sid, **self._source_options())
         except (ss.SourceError, ValueError) as exc:
-            self.app.dialogs.error("Q-MAP", str(exc))
+            self.app.dialogs.error("Q-MAP", ss.plain(exc))
             return
         self.log.append("Folder settings saved. Files that were waiting are read again by the next scan.")
         self.refresh()
@@ -365,7 +365,7 @@ class SourcesFrame(tk.Frame):
         try:
             ss.save_answer(settings, sid, f.relative_path, {k: v for k, v in answers.items() if v})
         except (ss.SourceError, ValueError) as exc:
-            self.app.dialogs.error("Q-MAP", str(exc))
+            self.app.dialogs.error("Q-MAP", ss.plain(exc))
             return
         self.log.append(f"Answer recorded for {f.relative_path}. Scan again to load it.")
         self.final_label.configure(text="Answer recorded. Press SCAN SELECTED FOLDER NOW to load the file.", fg=OK_COLOR)

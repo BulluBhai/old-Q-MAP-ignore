@@ -38,7 +38,8 @@ from ..storage.files import sha256_file
 from . import auto_interpret as A
 from .format_detect import EXTENSION_KIND
 from .ingest import _date_limit_retry, ingest_file
-from .instruments import normalise_exchange
+from .instruments import normalise_exchange, normalise_symbol
+from .profiles import ALLOWED_TIMEFRAMES
 from .overlap import record_overlaps
 
 MODULE_CODE = "SCAN"
@@ -272,6 +273,15 @@ def record_answer(db: Database, source_id: int, relative_path: str, answers: dic
         raise SourceError("No answer was given.")
     if "market_timezone" in clean:
         _check_settings(clean["market_timezone"], None, ())
+    try:  # the same rules the registry applies, so a bad value is refused now rather than at the next scan
+        if "exchange" in clean:
+            clean["exchange"] = normalise_exchange(clean["exchange"])
+        if "symbol" in clean:
+            clean["symbol"] = normalise_symbol(clean["symbol"])
+    except QmapError as exc:
+        raise SourceError(exc.message, action=exc.action) from None
+    if "timeframe" in clean and clean["timeframe"] not in ALLOWED_TIMEFRAMES:
+        raise SourceError(f"Timeframe {clean['timeframe']!r} is not one of {', '.join(ALLOWED_TIMEFRAMES)}.")
     earlier = latest_answer(db, source_id, relative_path)
     sig = state.interpretation.get("signature", "")
     merged = dict(json.loads(earlier["answers_json"])) if earlier and earlier["structure_signature"] == sig else {}

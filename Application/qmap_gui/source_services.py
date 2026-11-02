@@ -22,7 +22,7 @@ from qmap.data_engine.profiles import ALLOWED_TIMEFRAMES
 from qmap.storage.db import open_database
 
 from .common import EmitHandler as _EmitHandler
-from .services import plain
+from .services import plain  # also used by the Sources screen (errors without their technical code)
 
 ATTENTION = ("needs_answer", "rejected", "blocked", "unsupported", "failed", "missing")
 COMMON_ZONES = ("Asia/Kolkata", "UTC", "America/New_York", "Europe/London", "Asia/Singapore")
