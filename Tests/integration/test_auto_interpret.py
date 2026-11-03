@@ -111,7 +111,11 @@ def test_parquet_with_naive_timestamps_uses_the_confirmed_market_zone(settings, 
     p = write_parquet(src / "NSE_BANKNIFTY_1m.parquet", {"Date": naive_ist, "Open": [r[0] for r in rows],
                                                           "High": [r[1] for r in rows], "Low": [r[2] for r in rows],
                                                           "Close": [r[3] for r in rows], "Volume": [r[4] for r in rows]})
-    assert A.interpret_file(p, settings).questions[0].key == "market_timezone"  # never assumed
+    # section 8 (03-Nov-26): no zone given -> Asia/Kolkata (the default), with a warning, never silently
+    dflt = A.interpret_file(p, settings)
+    assert dflt.status == A.READY and dflt.decisions["timezone_assumed"] and any("Asia/Kolkata" in w for w in dflt.warnings)
+    utc_it = A.interpret_file(p, settings, answers={"market_timezone": "UTC"})  # a correction is used
+    assert utc_it.decisions["market_timezone"] == "UTC" and not utc_it.decisions.get("timezone_assumed")
     it = A.interpret_file(p, settings, market_timezone="Asia/Kolkata")
     assert it.status == A.READY and it.overrides["timeframe"] == "1m"
     res = _load(run, p, it)
@@ -162,23 +166,25 @@ def test_day_month_two_digit_year_with_time_is_resolved_by_file_order(settings, 
     assert t.column("timestamp_utc").to_pylist()[0] == datetime(2015, 1, 9, 3, 45, tzinfo=timezone.utc)
 
 
-def test_dates_that_fit_day_first_and_month_first_ask_the_user(settings, run, src):
+def test_dates_that_fit_day_first_and_month_first_use_day_first_with_a_warning(settings, run, src):
+    """Section 8 (03-Nov-26): day-first is the default for Indian-market data; warned and correctable."""
     days = [date(2026, 1, 1) + timedelta(days=31 * i) for i in range(10)]
     p = write_delimited(src / "NSE_ABC.csv", HEADER, [[d.strftime("%d/%m/%Y")] + r for d, r in zip(days, ohlcv(10))])
     it = A.interpret_file(p, settings)
-    assert it.status == A.NEEDS_ANSWER and it.profile is None
-    q = next(q for q in it.questions if q.key == "date_format")
-    assert set(q.options) == {"format:%d/%m/%Y", "format:%m/%d/%Y"}
-    it2 = A.interpret_file(p, settings, answers={"date_format": "format:%d/%m/%Y", "timeframe": "1M"})
-    assert it2.status == A.READY and any("chosen by the user" in e for e in it2.evidence)
-    assert it2.signature == it.signature  # the answer is tied to this structure
+    assert it.status == A.READY and it.decisions["date_layout"] == "format:%d/%m/%Y"
+    assert it.decisions["date_layout_assumed"] and any("day-first was used" in w for w in it.warnings)
+    it2 = A.interpret_file(p, settings, answers={"date_format": "format:%m/%d/%Y"})  # the user's correction
+    assert it2.status == A.READY and it2.decisions["date_layout"] == "format:%m/%d/%Y"
+    assert any("chosen by the user" in e for e in it2.evidence) and not it2.decisions.get("date_layout_assumed")
+    assert it2.signature == it.signature  # the correction is tied to this structure
 
 
 def test_an_answer_that_does_not_fit_the_data_is_not_used(settings, src):
     days = [date(2026, 1, 1) + timedelta(days=31 * i) for i in range(10)]
     p = write_delimited(src / "NSE_ABC.csv", HEADER, [[d.strftime("%d/%m/%Y")] + r for d, r in zip(days, ohlcv(10))])
     it = A.interpret_file(p, settings, answers={"date_format": "iso"})
-    assert it.status == A.NEEDS_ANSWER
+    assert it.decisions["date_layout"] == "format:%d/%m/%Y"  # the unusable answer is ignored; the default applies
+    assert not any("chosen by the user" in e for e in it.evidence)
 
 
 def test_unix_seconds_and_milliseconds(settings, src):

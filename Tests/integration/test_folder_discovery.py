@@ -47,8 +47,8 @@ def checksums(folder):
             if p.is_file()}
 
 
-def test_schema_9_is_the_latest():
-    assert LATEST_VERSION == 9  # 9: file-name identification ON (DQ-8, 03-Nov-26)
+def test_schema_10_is_the_latest():
+    assert LATEST_VERSION == 10  # 9: file-name identification ON (DQ-8); 10: reversible user decisions
 
 
 # ---- sources ---------------------------------------------------------------------------------------------------

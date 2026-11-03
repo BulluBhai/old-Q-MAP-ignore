@@ -41,7 +41,9 @@ from .timeframe_infer import CONSISTENT, DEFAULT_SAMPLING, MIXED_STATUS, infer_f
 from .readers import read_source
 from .results import Collector
 
-RULES_VERSION = 5  # bump when any rule below changes how the same file would be interpreted
+RULES_VERSION = 6  # bump when any rule below changes how the same file would be interpreted
+# 6 (03-Nov-26, section 8): ambiguous day/month order -> day-first default (warned); missing market time zone ->
+#   Asia/Kolkata default (warned). Both correctable; a question remains only for other genuine ambiguities.
 # 5 (03-Nov-26, DQ-8): file-name cleaning + alias registry; file-name identification ON by default; provisional
 #   identities and name/column disagreements are warnings (DQ-2: the column is still used); crypto = category CRYPTO
 #   with the venue unknown; NSE when no exchange is given.
@@ -85,6 +87,7 @@ KNOWN_EXCHANGES = ("NSE", "BSE", "MCX", "NFO", "BFO", "CDS", "NCDEX", "NYSE", "N
 MARKET_PREFIXES = ("CRYPTO",)
 CRYPTO_CATEGORY = "CRYPTO"  # stored in the exchange field until category and venue have their own fields (proposal)
 DEFAULT_EXCHANGE = "NSE"    # DQ-8 section 9: used when an exchange is required and none is given
+DEFAULT_TIMEZONE = "Asia/Kolkata"  # section 8: for timestamps without time-zone information
 _NAME_ID = re.compile(r"^(?P<exchange>[A-Za-z]+)_(?P<symbol>[A-Za-z0-9&-]+)(?=$|[,_ .(])")
 _PLAIN_SYMBOL = re.compile(r"^[A-Za-z0-9&-]+$")
 # A-9: timeframe token in a file name: ", 1D", ", 5", "_5m", "_1h" ... (evidence only, never decisive).
@@ -500,11 +503,22 @@ def _interpret(path, settings, market_tz, default_exchange, symbol_from_filename
                 why = f"{len(pool)} layouts fit and give identical dates"
             evidence.append(f"A-6 date layout {chosen[0].label}: {why}.")
         else:
-            res.questions.append(Question(
-                "date_format",
-                "The dates can be read in more than one way (for example day-first or month-first), and the data "
-                "do not show which is right. Which layout do the dates use?",
-                tuple(c.cid for c, _ in pool)))
+            # DQ-7..DQ-10 section 8 (03-Nov-26): day-first is the default for Indian-market data. It is used, with a
+            # warning and a correction option, instead of a question; the question remains only when no day-first
+            # reading fits (a genuinely different ambiguity).
+            day_first = [(c, p) for c, p in pool if (c.spec.get("format") or "").startswith("%d")]
+            if day_first:
+                chosen = day_first[0]
+                evidence.append(f"A-6 date layout {chosen[0].label}: day-first (Q-MAP's default for Indian-market "
+                                f"data); {len(pool)} layouts fit and the data do not show which is right.")
+                res.warnings.append("The dates could be day-first or month-first; day-first was used (the default). "
+                                    "If that is wrong, correct the date layout for this file in Sources.")
+                res.decisions["date_layout_assumed"] = True
+            else:
+                res.questions.append(Question(
+                    "date_format",
+                    "The dates can be read in more than one way, and the data do not show which is right. Which "
+                    "layout do the dates use?", tuple(c.cid for c, _ in pool)))
     cand, parsed = chosen if chosen else (None, None)
     if cand is not None and "%y" in (cand.spec.get("format") or ""):
         evidence.append("Two-digit years use Q-MAP's fixed rule: 00-68 = 2000-2068, 69-99 = 1969-1999.")
@@ -516,14 +530,16 @@ def _interpret(path, settings, market_tz, default_exchange, symbol_from_filename
     tz = answers.get("market_timezone") or market_tz
     needs_zone = any(p.is_instant for p in probes)
     if needs_zone and not _valid_zone(tz):
-        res.questions.append(Question(
-            "market_timezone",
-            "These are date-times. Which market time zone should be used to work out each bar's trading date (and "
-            "for times written without an offset)? For Indian exchanges: Asia/Kolkata.", ("Asia/Kolkata",)))
-    elif needs_zone:
+        # section 8: Asia/Kolkata is the default for timestamps without time-zone information (warned, correctable)
+        tz = DEFAULT_TIMEZONE
+        res.warnings.append(f"No market time zone was given; {DEFAULT_TIMEZONE} (the default) was used for the trading "
+                            "date and for times written without an offset. Correct it in Sources if that is wrong.")
+        res.decisions["timezone_assumed"] = True
+    if needs_zone:
         naive = any(p.provenance.get("timezone_applied") is not None for p in probes)
         evidence.append(f"A-7 market time zone {tz} ("
-                        + ("given by the user" if answers.get("market_timezone") else "confirmed for this source")
+                        + ("given by the user" if answers.get("market_timezone") else
+                           "the default" if res.decisions.get("timezone_assumed") else "confirmed for this source")
                         + "); " + ("times without an offset are read in this zone." if naive
                                    else "the values carry their own offset or are Unix (UTC) times."))
         if tz != zone:  # re-parse with the real zone so trading dates are right for the timeframe check
@@ -682,6 +698,7 @@ def _interpret(path, settings, market_tz, default_exchange, symbol_from_filename
     res.decisions = {**res.decisions, "format": kind, "delimiter": delimiter, "header": header,
                      "mapping": {k: {"position": v, "name": names[v]} for k, v in mapping.items()},
                      "date_layout": cand.cid if cand else None, "timeframe": timeframe,
+                     "date_layouts": [c.cid for c, _ in pool],  # the readings that fit: offered for a correction
                      "market_timezone": tz if needs_zone else None, "identity": overrides or None}
 
     if res.questions:

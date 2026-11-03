@@ -91,6 +91,11 @@ class DatasetInfo:
     validation_status: str = "passed"
     warnings: list[str] = field(default_factory=list)
     source_files: list[str] = field(default_factory=list)  # original file name(s) this data came from
+    user_decision: str | None = None  # latest reversible user decision: rejected | restored | None
+
+    @property
+    def rejected_by_user(self) -> bool:
+        return self.user_decision == "rejected"
 
     @property
     def instrument(self) -> str:
@@ -108,6 +113,8 @@ class DatasetInfo:
     def state_label(self) -> str:
         if self.file_deleted_at:
             return "File deleted"
+        if self.rejected_by_user:
+            return "Rejected by you"
         return "Active" if self.status == "active" else "Superseded"
 
     @property
@@ -146,7 +153,8 @@ def _info(db: Database, row, details: bool = True) -> DatasetInfo:
         file_deleted_at=row["file_deleted_at"], processing_version=row["processing_version"],
         canonical_schema_version=row["canonical_schema_version"], volume_status=row["volume_status"],
         requirement_set=row["requirement_set"], config_fingerprint=row["config_fingerprint"], sha256=row["sha256"],
-        created_at=row["created_at"], parent_dataset_id=row["parent_dataset_id"])
+        created_at=row["created_at"], parent_dataset_id=row["parent_dataset_id"],
+        user_decision=row["user_decision"] if "user_decision" in row.keys() else None)
     if details and row["layer"] != "raw":
         info.warnings = _warnings_for(db, row)
         info.validation_status = "passed_with_warnings" if info.warnings else "passed"
@@ -154,11 +162,14 @@ def _info(db: Database, row, details: bool = True) -> DatasetInfo:
     return info
 
 
-_SELECT = ("SELECT d.*, i.exchange, i.symbol FROM datasets d LEFT JOIN instruments i USING (instrument_id) ")
+_SELECT = ("SELECT d.*, i.exchange, i.symbol, (SELECT u.decision FROM dataset_user_decisions u WHERE u.dataset_id = "
+           "d.dataset_id ORDER BY u.decision_id DESC LIMIT 1) AS user_decision "
+           "FROM datasets d LEFT JOIN instruments i USING (instrument_id) ")
 
 
 def list_datasets(db: Database, *, include_superseded: bool = True, include_deleted: bool = True,
-                  timeframes: tuple[str, ...] | None = None, details: bool = True) -> list[DatasetInfo]:
+                  timeframes: tuple[str, ...] | None = None, details: bool = True,
+                  include_rejected: bool = True) -> list[DatasetInfo]:
     """Every managed (standardised or derived) dataset, ordered by instrument, timeframe and dataset number."""
     rows = db.query(_SELECT + "WHERE d.layer <> 'raw' ORDER BY i.exchange, i.symbol, d.timeframe, d.dataset_id")
     out = []
@@ -166,6 +177,8 @@ def list_datasets(db: Database, *, include_superseded: bool = True, include_dele
         if not include_superseded and r["status"] != "active":
             continue
         if not include_deleted and r["file_deleted_at"]:
+            continue
+        if not include_rejected and r["user_decision"] == "rejected":
             continue
         if timeframes is not None and r["timeframe"] not in timeframes:
             continue
@@ -311,6 +324,10 @@ def check_readiness(settings: Settings, db: Database, dataset_id: int, req: Data
     if info.file_deleted_at:
         rep.add("file_present", FAIL, f"Its file was deleted on {fmt_date(info.file_deleted_at)}. Prepare the data "
                                       "again in Database Manager.")
+        return rep
+    if info.rejected_by_user:
+        rep.add("user_decision", FAIL, "You rejected this dataset. It is kept unchanged; restore it in Database "
+                                       "Manager (Sources or Datasets and Storage) to use it again.")
         return rep
     if info.status != "active":
         rep.add("current", WARN if req.allow_superseded else FAIL,

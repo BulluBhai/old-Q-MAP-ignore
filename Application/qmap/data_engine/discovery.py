@@ -109,10 +109,14 @@ class ScanResult:
     overlaps: list = field(default_factory=list)  # OverlapFinding for every dataset registered by this scan
     overlap_report_path: Path | None = None
     identification_report_path: Path | None = None
+    stopped: bool = False
+    not_processed: list = field(default_factory=list)  # files not reached because the user stopped the scan
     registry_problems: list = field(default_factory=list)  # alias-registry problems (conflicting aliases ...)
 
     def summary(self) -> str:
         parts = [f"{n} {OUTCOME_LABELS.get(k, k).lower()}" for k, n in sorted(self.counts.items()) if n]
+        if self.stopped:
+            parts.append(f"STOPPED by you: {len(self.not_processed)} file(s) not processed")
         return ", ".join(parts) or "no supported files found"
 
 
@@ -368,8 +372,12 @@ _OUTCOME_OF_INGEST = {"accepted": "imported", "reused": "reused", "rejected": "r
                       "unsupported": "unsupported", "failed": "failed"}
 
 
-def scan_source(run: Run, source_id: int, *, today: date | None = None, progress=None) -> ScanResult:
-    """Scan one folder source inside `run`. `progress(done, total, relative_path)` is called per file (optional)."""
+def scan_source(run: Run, source_id: int, *, today: date | None = None, progress=None,
+                should_stop=None) -> ScanResult:
+    """Scan one folder source inside `run`. `progress(done, total, relative_path)` is called per file (optional).
+    `should_stop()` is asked before each file: when it returns True the scan STOPS safely there (the file being
+    processed is always finished, so nothing is left half-written); files not reached keep their earlier state and
+    are listed in the report as not processed."""
     db, settings, log = run.db, run.settings, run.logger
     src = get_source(db, source_id)
     if src is None or src.status != "active":
@@ -392,6 +400,11 @@ def scan_source(run: Run, source_id: int, *, today: date | None = None, progress
         seen = set()
         for n, path in enumerate(files, start=1):
             rel = path.relative_to(root).as_posix()
+            if should_stop is not None and should_stop():
+                result.stopped = True
+                result.not_processed = [p.relative_to(root).as_posix() for p in files[n - 1:]]
+                log.warning("Scan stopped by the user: %d file(s) not processed.", len(result.not_processed))
+                break
             seen.add(rel)
             if progress:
                 progress(n - 1, len(files), rel)
@@ -405,7 +418,7 @@ def scan_source(run: Run, source_id: int, *, today: date | None = None, progress
                 _observe(db, scan_id, source_id, rel, change=change, action=action, outcome=outcome, detail=detail)
             result.counts[outcome] = result.counts.get(outcome, 0) + 1
             result.files.append((rel, change, action, outcome, detail))
-        for rel, row in latest.items():
+        for rel, row in (latest.items() if not result.stopped else ()):  # unknown when stopped early
             if rel not in seen and row["outcome"] != "missing":
                 detail = "No longer found in the folder (moved, renamed, deleted or now excluded). Data already " \
                          "loaded from it are unchanged."
@@ -426,7 +439,9 @@ def scan_source(run: Run, source_id: int, *, today: date | None = None, progress
         with db.transaction() as conn:
             conn.execute("UPDATE source_scans SET status = ?, finished_at = ?, summary_json = ?, detail = ? "
                          "WHERE scan_id = ?", (status, utc_now_iso(),
-                                               json.dumps({"counts": result.counts, "excluded": result.excluded},
+                                               json.dumps({"counts": result.counts, "excluded": result.excluded,
+                                                           "stopped": result.stopped,
+                                                           "not_processed": result.not_processed},
                                                           sort_keys=True), err, scan_id))
     log.info("Scan %s of '%s': %s", scan_id, src.label, result.summary())
     return result
@@ -592,4 +607,7 @@ def _write_report(run: Run, src: FolderSource, result: ScanResult) -> Path:
         w.writerow(REPORT_COLUMNS)
         for rel, change, action, outcome, detail in result.files:
             w.writerow((rel, change, action, OUTCOME_LABELS.get(outcome, outcome), detail))
+        for rel in result.not_processed:
+            w.writerow((rel, "", "none", "Not processed (scan stopped by you)",
+                        "Its earlier state, if any, is unchanged. Scan again to process it."))
     return path

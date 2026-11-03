@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
 
 from . import __version__
 from .core.config import load_settings
@@ -51,6 +52,17 @@ def _build_parser() -> argparse.ArgumentParser:
     rest.add_argument("--from", dest="source", required=True, help="the original file (must match the registered checksum)")
     rest.add_argument("--reason", required=True, help="written reason, recorded in the audit trail")
 
+    scn = sub.add_parser("scan", help="scan a folder automatically, as the Sources screen does (adds it if new)")
+    scn.add_argument("--folder", required=True, help="the folder with your market-data files")
+    scn.add_argument("--market-timezone", help="for a NEW folder (default for timestamps without a zone: Asia/Kolkata)")
+    scn.add_argument("--default-exchange", help="for a NEW folder (default: NSE)")
+
+    for name, text in (("reject", "reject datasets (reversible: nothing is deleted; they are kept out of analyses)"),
+                       ("restore", "restore datasets you rejected")):
+        cmd = sub.add_parser(name, help=text)
+        cmd.add_argument("--dataset-id", type=int, action="append", required=True, help="repeat for several")
+        cmd.add_argument("--reason", help="recorded with the decision")
+
     sub.add_parser("recover", help="finish or clean up interrupted work and report problems")
     sub.add_parser("verify", help="recover (without deleting cleaned files), then re-check every registered "
                                   "file against its checksum")
@@ -76,6 +88,33 @@ def main(argv: list[str] | None = None) -> int:
                                      "source": args.source, "reason": args.reason}) as run:
                 receipt = restore_raw_file(run, args.dataset_id, args.source, reason=args.reason)
                 print(f"RESTORED    raw dataset {args.dataset_id}\n            {receipt.detail}")
+                print(f"Run {run.run_id}  outputs: {run.dir}")
+            return 0
+        if args.command in ("reject", "restore"):
+            from .data_engine import user_decisions as UD
+
+            fn = UD.reject_datasets if args.command == "reject" else UD.restore_datasets
+            res = fn(db, args.dataset_id, reason=args.reason, origin="command line")
+            print(f"{args.command}: recorded for {res.changed}" + (f"; unchanged: {res.unchanged}" if res.unchanged else ""))
+            return 0 if res.changed else 1
+        if args.command == "scan":
+            from .data_engine import discovery as D
+
+            folder = Path(args.folder).expanduser().resolve()
+            src = next((x for x in D.list_sources(db) if Path(x.location) == folder), None)
+            if src is None:
+                src = D.add_folder_source(settings, db, folder, market_timezone=args.market_timezone,
+                                          default_exchange=args.default_exchange)
+            with run_context(settings, db, D.MODULE_CODE, area=D.AREA, module_name=D.MODULE_NAME,
+                             params={"command": "scan", "source_id": src.source_id}) as run:
+                res = D.scan_source(run, src.source_id)
+                for rel, change, action, outcome, detail in res.files:
+                    print(f"{D.OUTCOME_LABELS.get(outcome, outcome).upper():22s} {rel}\n            {detail[:300]}")
+                print(f"Summary: {res.summary()}")
+                for label, path in (("Scan report", res.report_path), ("Overlap report", res.overlap_report_path),
+                                    ("Identification exceptions", res.identification_report_path)):
+                    if path:
+                        print(f"{label}: {path}")
                 print(f"Run {run.run_id}  outputs: {run.dir}")
             return 0
         if args.command in ("recover", "verify"):

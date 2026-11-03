@@ -415,6 +415,29 @@ MIGRATION_9 = """
 UPDATE data_sources SET symbol_from_filename = 1, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now');
 """
 
+# Migration 10 (03-Nov-26, owner instruction DQ-7..DQ-10 section 7.2): a REVERSIBLE "rejected by user" status.
+# Imports are accepted by default; the user may later reject a dataset (for example a wrong detected timeframe or
+# identity) and may restore it again. Decisions are append-only; a dataset's current decision is its latest one.
+# Nothing is deleted or moved, and the datasets table itself is not changed (its immutability rules stay as they are).
+MIGRATION_10 = """
+CREATE TABLE dataset_user_decisions (
+  decision_id INTEGER PRIMARY KEY,
+  dataset_id INTEGER NOT NULL REFERENCES datasets(dataset_id),
+  decision TEXT NOT NULL CHECK (decision IN ('rejected', 'restored')),
+  reason TEXT,
+  origin TEXT NOT NULL CHECK (length(trim(origin)) > 0),
+  run_id TEXT REFERENCES runs(run_id),
+  decided_at TEXT NOT NULL);
+CREATE INDEX ix_user_decisions_dataset ON dataset_user_decisions(dataset_id, decision_id);
+CREATE TRIGGER trg_user_decisions_no_update BEFORE UPDATE ON dataset_user_decisions
+BEGIN SELECT RAISE(ABORT,'dataset_user_decisions is append-only'); END;
+CREATE TRIGGER trg_user_decisions_no_delete BEFORE DELETE ON dataset_user_decisions
+BEGIN SELECT RAISE(ABORT,'dataset_user_decisions is append-only'); END;
+CREATE TRIGGER trg_user_decisions_not_raw BEFORE INSERT ON dataset_user_decisions
+WHEN (SELECT layer FROM datasets WHERE dataset_id = NEW.dataset_id) = 'raw'
+BEGIN SELECT RAISE(ABORT,'original source files are never rejected; reject the standardised dataset'); END;
+"""
+
 # (version, description, sql)
 MIGRATIONS = [
     (1, "Stage 2 foundation: instruments, runs, registry, ingest provenance, quality checks", MIGRATION_1),
@@ -431,6 +454,7 @@ MIGRATIONS = [
     (8, "Folder sources, scans, per-file scan observations and recorded interpretation answers (Blueprint v1.3)",
      MIGRATION_8),
     (9, "File-name identification ON for every folder source (owner decision DQ-8)", MIGRATION_9),
+    (10, "Reversible user decisions on datasets: rejected by user / restored (append-only)", MIGRATION_10),
 ]
 
 LATEST_VERSION = MIGRATIONS[-1][0]

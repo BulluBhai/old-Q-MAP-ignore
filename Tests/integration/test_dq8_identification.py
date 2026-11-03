@@ -219,7 +219,7 @@ def test_existing_folders_are_switched_on_by_migration_9_and_new_folders_default
     old.close()
     monkeypatch.undo()
     db = open_database(path)
-    assert db.current_version() == 9
+    assert db.current_version() == 10
     assert db.one("SELECT symbol_from_filename FROM data_sources")[0] == 1
     g = tmp_path / "new_folder"
     g.mkdir()

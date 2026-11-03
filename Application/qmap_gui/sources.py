@@ -20,8 +20,8 @@ from .widgets import ERROR_COLOR, MUTED_COLOR, OK_COLOR, WARN_COLOR, LogText, Re
 
 SOURCE_COLUMNS = (("label", "Name", 140), ("folder", "Folder", 330), ("tz", "Market time zone", 120),
                   ("exch", "Default exchange", 110), ("symname", "Symbol from name", 115), ("sub", "Sub-folders", 80))
-FILE_COLUMNS = (("file", "File", 230), ("result", "Result", 170), ("change", "Change", 75), ("ds", "Dataset(s)", 75),
-                ("when", "Checked", 75), ("detail", "Detail", 330))
+FILE_COLUMNS = (("file", "File", 210), ("result", "Result", 130), ("tf", "Timeframe", 85),
+                ("inst", "Instrument", 170), ("change", "Change", 70), ("ds", "Dataset(s)", 70), ("detail", "Detail", 260))
 TAGS = {"imported": "ok", "reused": "ok", "needs_answer": "attention", "missing": "attention", "rejected": "bad",
         "blocked": "bad", "unsupported": "bad", "failed": "bad", "ignored": "muted"}
 
@@ -105,8 +105,9 @@ class SourcesFrame(tk.Frame):
         self.files_count.pack(side="left", padx=8)
         frame = tk.Frame(box)
         frame.pack(fill="x", pady=3)
+        # several files can be selected (Ctrl/Shift+click) for bulk Reject / Restore / correction / alias update
         self.files_tree = ttk.Treeview(frame, columns=[c[0] for c in FILE_COLUMNS], show="headings", height=8,
-                                       selectmode="browse")
+                                       selectmode="extended")
         for key, text, width in FILE_COLUMNS:
             self.files_tree.heading(key, text=text)
             self.files_tree.column(key, width=width, anchor="w", stretch=key == "detail")
@@ -129,11 +130,18 @@ class SourcesFrame(tk.Frame):
         self.open_run_button = tk.Button(row, text="Open run folder", state="disabled", command=self.open_run_folder)
         self.open_run_button.pack(side="right")
 
-        box = section(self, "3. Options - scan, and answer questions about a file")
+        tk.Label(box, text="Exceptions found (grouped; routine files are accepted automatically and not listed):",
+                 anchor="w", fg=MUTED_COLOR).pack(fill="x", pady=(6, 0))
+        self.exceptions_box = ReadOnlyText(box, height=7, mono=False)
+        self.exceptions_box.pack(fill="x")
+
+        box = section(self, "3. Options - scan, review and correct")
         row = tk.Frame(box)
         row.pack(fill="x", pady=3)
         self.scan_button = tk.Button(row, text="SCAN SELECTED FOLDER NOW", font=bold, padx=10, command=self.scan)
         self.scan_button.pack(side="left")
+        self.stop_button = tk.Button(row, text="Stop scan", state="disabled", fg=ERROR_COLOR, command=self.stop_scan)
+        self.stop_button.pack(side="left", padx=4)
         self.hint = tk.Label(row, text="", anchor="w", justify="left", wraplength=640)
         self.hint.pack(side="left", padx=10)
         tk.Label(box, anchor="w", fg=MUTED_COLOR, justify="left", wraplength=940,
@@ -158,9 +166,31 @@ class SourcesFrame(tk.Frame):
         tk.Label(form, text="Market time zone:").grid(row=1, column=4, sticky="w", padx=(10, 0))
         self.ans_tz_box = ttk.Combobox(form, textvariable=self.ans_tz, values=ss.COMMON_ZONES, width=16)
         self.ans_tz_box.grid(row=1, column=5, sticky="w")
-        self.answer_button = tk.Button(form, text="Save answer", command=self.save_answer)
+        self.answer_button = tk.Button(form, text="Save answer / correction", command=self.save_answer)
         self.answer_button.grid(row=0, column=6, rowspan=2, padx=10)
         self._date_ids: dict[str, str] = {}
+        self._decisions: dict = {}
+        tk.Label(box, anchor="w", fg=MUTED_COLOR, justify="left", wraplength=940,
+                 text="Everything Q-MAP reads is accepted by default. If something is wrong, select the file(s) above "
+                      "and Reject (reversible: Restore), correct them, or add their names to the alias registry. "
+                      "Nothing is ever deleted.").pack(fill="x", pady=(6, 0))
+        row = tk.Frame(box)
+        row.pack(fill="x", pady=3)
+        self.reject_button = tk.Button(row, text="Reject selected", fg=ERROR_COLOR, command=lambda: self._bulk("reject"))
+        self.reject_button.pack(side="left")
+        self.restore_button = tk.Button(row, text="Restore selected", command=lambda: self._bulk("restore"))
+        self.restore_button.pack(side="left", padx=4)
+        tk.Label(row, text="Reason (recorded):").pack(side="left", padx=(10, 2))
+        self.reason_var = tk.StringVar(self)
+        tk.Entry(row, textvariable=self.reason_var, width=40).pack(side="left")
+        row = tk.Frame(box)
+        row.pack(fill="x", pady=3)
+        tk.Label(row, text="Canonical name:").pack(side="left")
+        self.alias_var = tk.StringVar(self)
+        tk.Entry(row, textvariable=self.alias_var, width=24).pack(side="left", padx=2)
+        self.alias_button = tk.Button(row, text="Add selected names to alias registry", command=self.add_alias)
+        self.alias_button.pack(side="left", padx=4)
+        tk.Button(row, text="Open alias registry folder", command=self.open_alias_registry).pack(side="left")
 
         box = section(self, "Progress / Status")
         self.stage_var, self.item_var = tk.StringVar(self, value="Idle"), tk.StringVar(self, value="-")
@@ -195,6 +225,9 @@ class SourcesFrame(tk.Frame):
     def selected_file(self):
         sel = self.files_tree.selection()
         return self.file_rows.get(sel[0]) if sel else None
+
+    def selected_files(self) -> list:
+        return [self.file_rows[i] for i in self.files_tree.selection() if i in self.file_rows]
 
     def refresh(self) -> None:
         if self._closing:
@@ -244,12 +277,25 @@ class SourcesFrame(tk.Frame):
             except Exception as exc:
                 self.details.set(f"Could not read the scan results: {exc}", "error")
         shown = [s for s in states if not self.attention_var.get() or s.outcome in ss.ATTENTION]
+        try:
+            self._decisions = ss.dataset_decisions(settings, [i for s in states for i in s.dataset_ids]) if states else {}
+        except Exception:
+            self._decisions = {}
         for s in shown:
-            item = self.files_tree.insert("", "end", values=ss.file_row(s), tags=(TAGS.get(s.outcome, ""),))
+            rejected = s.dataset_ids and all(self._decisions.get(i) == "rejected" for i in s.dataset_ids)
+            item = self.files_tree.insert("", "end", values=ss.file_row(s, self._decisions),
+                                          tags=("bad" if rejected else TAGS.get(s.outcome, ""),))
             self.file_rows[item] = s
             if s.relative_path == keep_path:
                 self.files_tree.selection_set(item)
         self.files_count.configure(text=ss.counts_text(states) if sid is not None else "")
+        if sid is not None and settings is not None and states:
+            try:
+                self.exceptions_box.set_parts(ss.exceptions_text(ss.exception_groups(settings, sid)))
+            except Exception as exc:
+                self.exceptions_box.set(f"The exceptions could not be listed: {exc}", "error")
+        else:
+            self.exceptions_box.set("No scan results yet.", "muted")
         if not self.files_tree.selection():
             if settings is None:
                 self.details.set("Choose your two folders on the Home screen first.", "muted")
@@ -266,7 +312,10 @@ class SourcesFrame(tk.Frame):
         s = self.selected_file()
         keys = ss.question_keys(s) if s is not None else set()
         if s is not None:
-            self.details.set_parts(ss.file_details(s))
+            many = len(self.selected_files())
+            self.details.set_parts(ss.file_details(s, getattr(self, "_decisions", {})) +
+                                   ([(f"\n{many} files selected: Reject, Restore, Save correction and Add to alias "
+                                      "registry apply to all of them.\n", "bold")] if many > 1 else []))
         opts = ss.date_options(s) if s is not None else []
         self._date_ids = dict(opts)
         self.ans_date_box.configure(values=[label for label, _ in opts])
@@ -277,9 +326,13 @@ class SourcesFrame(tk.Frame):
             self.ans_exch.set(exch)
             self.ans_sym.set(sym)
             self.ans_tf.set(tf)
-        states = {self.ans_exch_entry: bool(keys & {"identity", "exchange"}), self.ans_sym_entry: "identity" in keys,
-                  self.ans_tf_box: "timeframe" in keys, self.ans_date_box: "date_format" in keys,
-                  self.ans_tz_box: "market_timezone" in keys}
+        # a file with a question: only the boxes the question needs. A file Q-MAP read and accepted by default: the
+        # correction boxes (exchange, symbol, date layout, time zone); the timeframe is measured, never typed over.
+        correcting = s is not None and not keys and s.outcome in ("imported", "reused", "rejected")
+        states = {self.ans_exch_entry: bool(keys & {"identity", "exchange"}) or correcting,
+                  self.ans_sym_entry: "identity" in keys or correcting,
+                  self.ans_tf_box: "timeframe" in keys, self.ans_date_box: "date_format" in keys or correcting,
+                  self.ans_tz_box: "market_timezone" in keys or correcting}
         for widget, on in states.items():
             readonly = widget in (self.ans_tf_box, self.ans_date_box)
             widget.configure(state=("readonly" if readonly else "normal") if on and not self.running else "disabled")
@@ -291,7 +344,13 @@ class SourcesFrame(tk.Frame):
         self.add_button.configure(state="normal" if idle else "disabled")
         for b in (self.save_button, self.remove_button, self.scan_button):
             b.configure(state="normal" if idle and sid is not None else "disabled")
-        self.answer_button.configure(state="normal" if idle and f is not None and f.questions else "disabled")
+        chosen = self.selected_files()
+        self.answer_button.configure(state="normal" if idle and chosen and (f.questions or any(
+            s.outcome in ("imported", "reused", "rejected") for s in chosen)) else "disabled")
+        has_data = idle and any(s.dataset_ids for s in chosen)
+        for b in (self.reject_button, self.restore_button, self.alias_button):
+            b.configure(state="normal" if has_data or (b is self.alias_button and idle and chosen) else "disabled")
+        self.stop_button.configure(state="normal" if self.running else "disabled")
         if self.running:
             self.hint.configure(text="Scanning...", fg=MUTED_COLOR)
         elif settings is None:
@@ -357,6 +416,24 @@ class SourcesFrame(tk.Frame):
         sid, f, settings = self.selected_source(), self.selected_file(), self.app.core_settings
         if sid is None or f is None or settings is None or self.running:
             return
+        chosen = self.selected_files()
+        if len(chosen) > 1 or not f.questions:  # a (bulk) correction of files Q-MAP already read
+            answers = {"exchange": self.ans_exch.get(), "symbol": self.ans_sym.get(),
+                       "date_format": self._date_ids.get(self.ans_date.get(), ""), "market_timezone": self.ans_tz.get()}
+            answers = {k: v.strip() for k, v in answers.items() if v and v.strip()}
+            if not answers:
+                self.app.dialogs.warn("Q-MAP", "Type the correction first (exchange, symbol, date layout or time zone).")
+                return
+            try:
+                n = ss.correct_files(settings, sid, chosen, answers)
+            except (ss.SourceError, ValueError) as exc:
+                self.app.dialogs.error("Q-MAP", ss.plain(exc))
+                return
+            self.log.append(f"Correction recorded for {n} file(s): {answers}. The next scan applies it.")
+            self.final_label.configure(text=f"Correction recorded for {n} file(s). Scan again to apply it (the "
+                                            "corrected data become new datasets; nothing is changed in place).",
+                                       fg=OK_COLOR)
+            return
         answers = {"exchange": self.ans_exch.get(), "symbol": self.ans_sym.get(), "timeframe": self.ans_tf.get(),
                    "date_format": self._date_ids.get(self.ans_date.get(), ""), "market_timezone": self.ans_tz.get()}
         keys = ss.question_keys(f)
@@ -376,6 +453,50 @@ class SourcesFrame(tk.Frame):
             return
         self.log.append(f"Answer recorded for {f.relative_path}. Scan again to load it.")
         self.final_label.configure(text="Answer recorded. Press SCAN SELECTED FOLDER NOW to load the file.", fg=OK_COLOR)
+
+    def stop_scan(self) -> None:
+        """Stop safely: the file being processed is finished, then the scan stops and reports what was not done."""
+        if self._job is not None and self.running:
+            self._job.cancel()
+            self.stage_var.set("Stopping after the current file...")
+            self.stop_button.configure(state="disabled")
+
+    def _bulk(self, action) -> None:
+        settings, chosen = self.app.core_settings, self.selected_files()
+        if settings is None or not chosen or self.running:
+            return
+        reason = self.reason_var.get().strip()
+        fn = ss.reject_files if action == "reject" else ss.restore_files
+        res = fn(settings, chosen, reason)
+        verb = "Rejected" if action == "reject" else "Restored"
+        self.log.append(f"{verb} {len(res.changed)} dataset(s) {res.changed}" +
+                        (f"; unchanged: {res.unchanged}" if res.unchanged else "") + (f" (reason: {reason})" if reason else ""))
+        self.final_label.configure(
+            text=(f"{verb} {len(res.changed)} dataset(s). " + ("They are kept unchanged and no longer offered to "
+                  "analyses; Restore undoes it." if action == "reject" else "They are offered to analyses again.")),
+            fg=WARN_COLOR if action == "reject" else OK_COLOR)
+        self.refresh_files()
+
+    def add_alias(self) -> None:
+        settings, chosen = self.app.core_settings, self.selected_files()
+        if settings is None or not chosen or self.running:
+            return
+        names = ss.cleaned_names(chosen)
+        try:
+            record = ss.add_to_alias_registry(settings, self.alias_var.get(), names)
+        except (ValueError, OSError) as exc:
+            self.app.dialogs.error("Q-MAP", str(exc))
+            return
+        self.log.append(f"Alias registry: {names} added as aliases of {self.alias_var.get().strip()} (record: {record}).")
+        self.final_label.configure(text="Alias registry updated (a backup was kept). The next scan identifies these "
+                                        "files again.", fg=OK_COLOR)
+
+    def open_alias_registry(self) -> None:
+        settings = self.app.core_settings
+        if settings is not None:
+            ok, msg = open_in_file_manager(ss.alias_registry_file(settings).parent)
+            if not ok:
+                self.app.dialogs.warn("Q-MAP", msg)
 
     def scan(self) -> None:
         sid, settings = self.selected_source(), self.app.core_settings
@@ -436,7 +557,11 @@ class SourcesFrame(tk.Frame):
             self.last_report = summary.report_path
             self.report_var.set(str(summary.report_path))
         self.counts_var.set(summary.summary or "-")
-        if summary.error:
+        if getattr(summary, "stopped", False):
+            self.final_label.configure(
+                text=f"Stopped by you after {sum(summary.counts.values())} file(s); {len(summary.not_processed)} file(s) "
+                     "not processed (listed in the scan report). Work already done is kept.", fg=WARN_COLOR)
+        elif summary.error:
             self.final_label.configure(text=f"Stopped: {summary.error}", fg=ERROR_COLOR)
         else:
             attention = sum(n for k, n in summary.counts.items() if k in ss.ATTENTION)

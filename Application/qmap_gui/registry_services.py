@@ -201,3 +201,11 @@ def derive_items(assessments) -> list[tuple[str, Callable]]:
 __all__ = ["DERIVABLE", "LABELS", "PERMANENT", "TEMPORARY", "OperationJob", "OperationSummary", "assess_derive",
            "assess_storage", "confirmation_text", "datasets", "derive_items", "details", "overview_text",
            "row_values", "storage_items", "timeframe_label"]
+
+
+def record_decision(settings: Settings, ids: list[int], action: str, reason: str = ""):
+    """Reject (reversible) or restore datasets; recorded in dataset_user_decisions. Nothing is deleted or moved."""
+    from qmap.data_engine import user_decisions as UD
+
+    fn = UD.reject_datasets if action == "reject" else UD.restore_datasets
+    return _with_db(settings, lambda db: fn(db, ids, reason=reason, origin="datasets"))

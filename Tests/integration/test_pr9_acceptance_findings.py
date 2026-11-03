@@ -290,11 +290,12 @@ def test_headerless_date_and_time_with_an_eighth_column_keeps_it_and_never_uses_
     assert any("column 8 kept unchanged, never used as volume" in e for e in it.evidence)
 
 
-def test_headerless_date_and_time_without_a_market_time_zone_is_asked(settings, src):
+def test_headerless_date_and_time_without_a_market_time_zone_uses_the_default_with_a_warning(settings, src):
     rows, _ = _ujjivan_rows()
     p = write_delimited(src / "NSE_UJJIVAN.txt", None, rows)
-    it = A.interpret_file(p, settings)
-    assert it.status == A.NEEDS_ANSWER and "market_timezone" in [q.key for q in it.questions]
+    it = A.interpret_file(p, settings)  # section 8 (03-Nov-26): Asia/Kolkata by default, warned
+    assert it.status == A.READY and it.decisions["market_timezone"] == "Asia/Kolkata"
+    assert it.decisions["timezone_assumed"]
 
 
 @pytest.mark.parametrize("mutate, words", [
