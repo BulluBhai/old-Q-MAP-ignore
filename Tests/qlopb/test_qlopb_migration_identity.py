@@ -52,7 +52,8 @@ _IMPORT = re.compile(r"^(\s*)from qlopb\.(config|core|references|analysis|valida
 
 
 def _as_original(text: str) -> bytes:
-    return _IMPORT.sub(r"\1from \2", text).encode("utf-8")
+    # A Windows checkout may use CRLF line endings; the QLOPB originals use LF.
+    return _IMPORT.sub(r"\1from \2", text.replace("\r\n", "\n")).encode("utf-8")
 
 
 def test_every_migrated_file_matches_the_qlopb_original_apart_from_imports():
