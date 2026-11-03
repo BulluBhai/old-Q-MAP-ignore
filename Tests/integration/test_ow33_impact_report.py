@@ -86,12 +86,13 @@ def _load_multi(src, run):
 
 def _fingerprint(settings) -> dict:
     """Every stored file (datasets and stored originals) byte by byte, and the registry's complete content.
-    The registry's own files (main file, -wal, -shm journal) are excluded from the byte scan: on Windows the journal
-    files are locked while the registry is open. Its content is covered instead by a logical dump through a read-only
-    connection (which sees committed WAL content) plus the main file's bytes."""
-    db_names = settings.db_path.name
+    Excluded from the byte scan: the Metadata folder, which holds the registry's own files (main file, -wal, -shm)
+    and the run lock of the test's open run - on Windows these are locked while open (PermissionError). The registry's
+    content is covered by a logical dump through a read-only connection (which sees committed WAL content) plus its
+    main file's bytes."""
+    meta = settings.data_root / "Metadata"
     files = {p.relative_to(settings.data_root).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
-             for p in sorted(settings.data_root.rglob("*")) if p.is_file() and not p.name.startswith(db_names)}
+             for p in sorted(settings.data_root.rglob("*")) if p.is_file() and meta not in p.parents}
     conn = O.open_read_only(settings.db_path)
     try:
         files["<registry content>"] = hashlib.sha256("\n".join(conn.iterdump()).encode("utf-8")).hexdigest()
