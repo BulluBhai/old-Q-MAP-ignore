@@ -1,5 +1,12 @@
 # Proposals DQ-11 to DQ-14 (PR #10 review, 03-Nov-26) — NOT implemented in PR #10
 
+> **Status after the owner's review (03-Nov-26):** DQ-11 and DQ-12 approved in principle, NOT for PR #10; their
+> separate proposals are `Proposal_DQ11_Asset_Category_and_Venue_03_Nov_26_075552.md` and
+> `Proposal_DQ12_Technical_Export_Columns_03_Nov_26_075552.md`. DQ-13: the source file and its values are not changed;
+> rows 34185 and 34189 stay rejected under the current OHLC rule until authoritative evidence is obtained; the
+> investigation is kept separate from PR #10. DQ-14: not approved; superseded by
+> `Proposal_DQ14_Revised_03_Nov_26_075552.md`.
+
 Each is a separate owner decision. Nothing below is built; PR #10 keeps today's behaviour, described in the
 implementation report. Approve, amend or decline each one independently.
 

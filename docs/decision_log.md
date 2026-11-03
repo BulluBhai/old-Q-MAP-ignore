@@ -239,3 +239,12 @@ storage rule or analytical methodology was changed.
 | D5-33 | Full-file verification: validation reports `interval_change_detected` (>= 30 consecutive steps of one other interval, or >= 30 consecutive one-bar dates in intraday data) with source rows. The registered timeframe is unchanged; relabelling as MIXED is proposal DQ-14 | Implemented (`2393721`), tested |
 | D5-34 | Canonical display name kept in the existing `instruments.name` (filled only while empty; canonical/alias matches only); no schema change | Implemented (`2393721`) |
 | D5-35 | Dataset Summary keeps conflicting timestamps, conflicting observation rows, returns between conflicting observations, derived bars built from conflicts and exact duplicates removed at load in separate columns, with a "potentially misleading" note; method unchanged | Implemented (`2393721`); fixes a conflation for derived datasets |
+
+### PR #10 second review (03-Nov-26)
+
+| Ref | Decision | Status |
+|---|---|---|
+| D5-36 | Full-file interval check: detection unchanged; a section is ASSERTED (`interval_change_detected`) only when missing bars cannot explain it (steps not whole multiples; one-bar dates at one time of day outside the intraday bar times). Regular whole-multiple grids and one-bar dates at an intraday time are `interval_change_uncertain` (WARNING); one-bar dates at varying times (sparse instruments) and random gaps are not reported. Sampling unchanged | Implemented (`fad8d2f`), tested |
+| D5-37 | DQ-11 and DQ-12 approved in principle; implementation outside PR #10 (separate proposals) | Proposals written; not implemented |
+| D5-38 | DQ-13: AKZOINDIA source and values unchanged; rows 34185 and 34189 stay rejected until authoritative evidence; investigation separate from PR #10 | Settled |
+| D5-39 | DQ-14 not approved: the registered timeframe stays the sampled one; revised proposal written | Open (owner) |

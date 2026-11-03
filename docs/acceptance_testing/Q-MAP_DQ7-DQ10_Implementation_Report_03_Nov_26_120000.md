@@ -179,6 +179,8 @@ Findings:
   of >= 30 consecutive same-day steps of one other interval, or >= 30 consecutive one-bar dates in intraday data, as
   `interval_change_detected` with its source rows. Tested for the four missed cases; no false positive on the owner's
   eight files or on a synthetic illiquid file. Whether such a finding should relabel the dataset `MIXED` is DQ-14.
+  **Refined by the second review (section 11):** those four sections are regular whole multiples of 1 minute, so they
+  are now reported as `interval_change_uncertain`, not asserted.
 - Unrepresentative first rows only change the number of blocks (case B: candidate 5m, 15 blocks), not the result.
   Repeated, out-of-order and fully descending timestamps give the right interval. Files shorter than two blocks
   (60 rows) are examined completely.
@@ -228,3 +230,100 @@ backward compatible), DQ-12 (controlled list of export columns ignored for dupli
 Python 3.12 + Xvfb: **1101 passed, 0 failed, 0 skipped** (208 GUI). Python 3.13 without tkinter: **980 passed, 0 failed,
 95 skipped** (GUI, no display). Owner acceptance on Windows/IDLE: **not done** (checklist W1-W12 unchanged; W9 now also shows the new
 Dataset Summary columns).
+
+## 11. Second review (03-Nov-26): full-file check versus missing bars, commit `fad8d2f`
+
+### 11.1 Finding
+
+`validation._interval_changes()` compared each run of >= 30 identical same-day steps only with the expected interval.
+That conflicted with the DQ-7 principle that gaps of whole multiples may be missing bars: a regular grid of multiples
+(every other 1-minute bar present; 10-minute steps in 5-minute data) was asserted as "another interval", and >= 30
+consecutive one-bar dates of a sparse instrument were described "like daily data" whatever their times of day. Random
+missing bars were not affected (they never form 30 identical steps; bound below), and genuine changes were detected.
+
+### 11.2 Correction (detection unchanged, classification new)
+
+| Section found (unchanged rule) | Now | Why |
+|---|---|---|
+| >= 30 identical steps, not a whole multiple of the interval (3m or 7m in 5m data; any finer step) | `interval_change_detected` (WARNING) | missing bars cannot produce such a step |
+| >= 30 identical steps, a whole multiple (2m in 1m; 10m in 5m; a 5m tail in 1m data) | `interval_change_uncertain` (WARNING): "another interval, or bars present only every k intervals" | the timestamps cannot tell these apart |
+| >= 30 consecutive one-bar dates, >= 90 % at one local time of day outside the times the multi-bar dates use (e.g. 00:00, 15:30 after a 15:29 last bar) | `interval_change_detected` | cannot be surviving intraday bars |
+| the same at a time the intraday bars also use (e.g. 09:15) | `interval_change_uncertain` | daily data, or one intraday bar per date |
+| one-bar dates at varying times | not reported here (still in `partial_session`) | a sparse instrument, not another interval |
+
+Bound: with independent gaps, a step of k intervals has probability q(1-q)^(k-1) <= 0.25, so 30 identical steps have
+probability <= 0.25^30 ≈ 8.7e-19 per position; random missing bars never reach either check. The registered timeframe
+is never changed (DQ-14 not approved). Sampling (`timeframe_infer.py`) is untouched: seed, block positions, rows examined
+and the consistency rule are as before. The GUI shows the uncertain case as its own exception group with its own
+explanation. Time of day uses the profile's exchange time zone (the same zone that defines the trading date).
+
+### 11.3 Targeted regression tests (`Tests/integration/test_dq7_full_file_classification.py`, 16 tests)
+
+Sampling result on the same timestamps (zone Asia/Kolkata, default configuration), and the full-file result:
+
+| Case | Rows | Sampling | Block intervals | Rows examined | Seed | Block positions (1-based) | Full-file check |
+|---|---|---|---|---|---|---|---|
+| 1a 1m, middle 20 % with bars randomly missing (p 0.5; > 20 % of its steps are 2-minute gaps) | 72476 | consistent 1m | {'1m': 20} | 620 | 47702885879248 | 1142, 4427, 9955, 11466 ... 69564 (20) | nothing (correct) |
+| 1b 1m, 5 days with every other bar missing | 81938 | consistent 1m | {'1m': 20} | 620 | 142183988441694 | 3889, 7278, 8590, 13201 ... 81449 (20) | uncertain, 2-minute grid |
+| 1c 1m, 20 days with every other bar missing | 83813 | **mixed MIXED** | {'1m': 19, '2m': 1} | 620 | 153212517993164 | 92, 4327, 12076, 14649 ... 83016 (20) | not run (MIXED is not a single intraday timeframe) |
+| 2 5m, 3 % of bars missing | 10463 | consistent 5m | {'5m': 15} | 470 | 279309678846803 | 194, 927, 1728, 2445 ... 10410 (15) | nothing |
+| 2 5m, 10 % missing | 9729 | consistent 5m | {'5m': 15} | 470 | 106325263972693 | 325, 858, 1879, 2122 ... 9104 (15) | nothing |
+| 2 5m, 25 % missing | 8164 | consistent 5m | {'5m': 15} | 470 | 7060488642778 | 259, 611, 1593, 1879 ... 7621 (15) | nothing |
+| 3 5m with 200 rows of 3m / 7m / 1m | 11000 | consistent 5m (section missed) | {'5m': 15} | 468 | 131435030026616 | 602, 1410, 1923, 2476 ... 10557 (15) | **detected**, with source rows |
+| 3b 5m with 300 rows of 3m, 1 % of them missing | 11297 | consistent 5m | — | — | — | — | **detected** |
+| 4 5m sparse: 40 consecutive one-bar dates at varying times + scattered one-bar dates | 11682 | consistent 5m | {'5m': 15} | 455 | 137507532262368 | 6, 975, 2020, 2960 ... 11157 (15) | nothing; `partial_session` lists the dates |
+| 5 1m + 60 one-bar dates at 00:00 | 40560 | consistent 1m | {'1m': 20} | 620 | 189009869754661 | 329, 3074, 5890, 7005 ... 40304 (20) | **detected** (daily) |
+| 5 1m + 60 one-bar dates at 15:30 | 40560 | consistent 1m | {'1m': 20} | 620 | 196591891031131 | 1925, 3625, 4161, 7416 ... 39891 (20) | **detected** (daily) |
+| 5 1m + 60 one-bar dates at 09:15 | 40560 | consistent 1m | {'1m': 20} | 620 | 233629776672805 | 789, 3450, 4689, 6751 ... 39704 (20) | uncertain |
+
+Comparison with the sampling consistency rule (a block agrees when >= 90 % of its steps are whole multiples of the
+dominant interval and that interval is >= 10 % of its steps):
+- Random gaps (1a, 2): both methods agree — consistent, nothing reported.
+- Genuine non-multiple sections (3, 3b) and daily bars outside intraday times (5): both treat them as another interval
+  (sampling only when a block lands there; here the sections are short enough to be missed, which is what the
+  full-file check is for).
+- **Remaining difference, recorded, not changed:** a regular whole-multiple section (1c) and a long stretch of sparse
+  one-bar dates make a sampled block disagree, so sampling registers MIXED when a block lands there; the full-file
+  check reports the same evidence as uncertain (1b) or not at all (4). Aligning sampling would change the approved
+  DQ-7 rule; it is offered as an option in the revised DQ-14 proposal (register OW-33).
+- Updated existing test: `test_dq7_review_edge_cases.py::test_short_sections_missed_by_sampling_are_reported_by_validation`
+  — its four sections (5m tail, 7m sections, daily bars at 09:15 in 1-minute data) are regular whole multiples, so the
+  expected check changed from `interval_change_detected` to `interval_change_uncertain`; the assertions on severity,
+  source rows and wording are kept, and it now also asserts that nothing is asserted as detected. Detection of genuine
+  non-multiple changes is covered by the new tests (case 3, 3b, 5).
+
+### 11.4 Items the review asked to be recorded (DQ-8, DQ-9/DQ-10, provenance; accepted, not redesigned)
+
+- **Display names separate from machine-safe symbols:** the canonical display name ("NIFTY 50") is stored in
+  `instruments.name`; the symbol (`NIFTY_50`) and exchange stay the immutable identity and storage path. Filled only
+  while empty, only for canonical/alias matches (section 10.2).
+- **Separate counts** (Dataset Summary columns, never conflated): conflicting timestamps; conflicting observation rows
+  (affected rows); returns between conflicting observations (same-timestamp returns); derived bars built from
+  conflicting observations; exact duplicate rows removed at load (section 10.3).
+- **Warnings at the analytical points of use:** Workbench readiness NOTE "conflicts" (also stored in the run's
+  `readiness_warnings`); Dataset Summary conflict note and WARNING log line; weekly/monthly derivation assessment
+  warning and `period_has_conflicting_observations`; the issues report for command-line loads (section 10.3).
+- **Preservation:** original source files and stored originals never change; earlier datasets stay (superseded and
+  linked to successors, files kept); run records, their inputs and outputs stay; provenance lines exist for old and
+  new datasets (section 10.4).
+- **Known behaviour:** a derived dataset is **not rebuilt automatically** when its daily source is superseded; it stays
+  linked to that source, the assessment warns, and deriving again is a user action (section 10.4, register OW-32).
+
+### 11.5 Decisions after the second review
+
+DQ-11 and DQ-12 approved in principle, not for PR #10: separate proposals
+`docs/architecture/Proposal_DQ11_Asset_Category_and_Venue_03_Nov_26_075552.md` and
+`docs/architecture/Proposal_DQ12_Technical_Export_Columns_03_Nov_26_075552.md`. DQ-13: AKZOINDIA unchanged; rows
+34185 and 34189 stay rejected until authoritative evidence; investigation separate. DQ-14: not approved, timeframe
+unchanged; revised proposal `docs/architecture/Proposal_DQ14_Revised_03_Nov_26_075552.md` (1 % materiality, from a
+200-seed simulation: sampling registers a 1 % section MIXED for 20.5 % of seeds, 3 % for 60.5 %, 5 % for 99 %).
+Decision log D5-36 to D5-39.
+
+### 11.6 Tests after the correction (local, Linux container, not CI)
+
+- Python 3.12 + Xvfb: **1117 passed, 0 failed, 0 skipped** (208 GUI tests).
+- Python 3.13 without tkinter: **996 passed, 0 failed, 95 skipped** (GUI tests, no display).
+- The owner's eight files were not available in this container, so the "no false positive on the owner's files"
+  check of section 10.1 was **not repeated** for this change (to be covered by acceptance W1-W2).
+- CI (GitHub Actions, Ubuntu and Windows, Python 3.11): recorded on the PR for the latest commit.
+- Windows/IDLE acceptance W1-W12: **outstanding**.
