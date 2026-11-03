@@ -1,5 +1,9 @@
 # OW-33 — should sampling and full-file validation classify regular-multiple sections and sparse one-bar dates the same way? Technical assessment — NOT implemented
 
+> **Owner decision (D5-49): Option C selected.** Only step 1 is authorised: a read-only impact report of existing
+> MIXED datasets whose classification would change under Option C. Option C itself, the `vs3` identity change and any
+> reprocessing are **not authorised** until the owner has reviewed that report.
+
 Requested by the Project Owner, 03-Nov-26 (D5-43). **Assessment only.** The approved DQ-7 sampling method is not
 changed in PR #10. Any change below needs a separate approval.
 

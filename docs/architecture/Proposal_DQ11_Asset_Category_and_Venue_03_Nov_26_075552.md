@@ -1,6 +1,9 @@
 # DQ-11 — separate asset category and trading venue: migration and compatibility proposal — NOT implemented
 
-Status: **principle approved** by the Project Owner (03-Nov-26; confirmed in the second decision note the same day,
+Status (latest): **APPROVED** with the nine-category list below (D5-46, 03-Nov-26); **not implemented**; a separate
+task outside PR #10.
+
+Earlier status: **principle approved** by the Project Owner (03-Nov-26; confirmed in the second decision note the same day,
 D5-40). Category list revised as requested (ETF, Fixed Income, Unclassified added): **awaiting the owner's review of the
 list**. **Not implemented**; implementation is **not authorised inside PR #10**;
 this is a separate task, to be built on its own branch after PR #10 when approved. Supersedes the DQ-11 section of

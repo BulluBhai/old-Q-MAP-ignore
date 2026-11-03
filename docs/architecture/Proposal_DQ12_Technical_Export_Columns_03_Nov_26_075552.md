@@ -1,6 +1,9 @@
 # DQ-12 — ignoring known technical/export columns in exact-duplicate comparison — NOT implemented
 
-Status: **approved in principle** (03-Nov-26): controlled, auditable, `index` as the first approved column,
+Status (latest): **DESIGN APPROVED** as revised here — source profile or folder setting, profile over folder, no global
+rule, default unchanged (D5-47); **not implemented**; separately planned outside PR #10.
+
+Earlier status: **approved in principle** (03-Nov-26): controlled, auditable, `index` as the first approved column,
 protected fields never ignored. **Revised** to source-specific configuration at the owner's request (D5-41). **Not
 implemented**. Implementation is
 **not authorised inside PR #10**; this is a separate task. Supersedes the DQ-12 section of

@@ -4,6 +4,8 @@ Supersedes the DQ-14 section of `Proposals_DQ11-DQ14_03_Nov_26_150000.md`. Writt
 correction (commit `fad8d2f`). **Nothing below is built.** The registered timeframe stays the sampled one; the
 full-file check only reports.
 
+> **Latest (D5-48): APPROVED FOR SEPARATE IMPLEMENTATION on the terms below; not implemented; not in PR #10.**
+>
 > **Owner decision, 03-Nov-26 (D5-42): PROVISIONALLY APPROVED, not implemented.**
 > - 30-step minimum evidence and the 1 % materiality threshold (of distinct timestamps) for registering MIXED.
 > - A **detected** section covering >= 1 % of distinct timestamps may cause the dataset to be registered as MIXED.

@@ -367,3 +367,27 @@ the owner to look at.
 - Python 3.13 without tkinter: **998 passed, 0 failed, 95 skipped** (GUI tests, no display).
 - CI (Ubuntu and Windows): recorded on the PR for the latest commit.
 - The owner's eight files were not available; their behaviour after `fad8d2f` is **not re-verified**.
+
+## 13. Final implementation summary for PR #10 (03-Nov-26)
+
+**Scope (fixed by D5-50):** DQ-7 to DQ-10 and their review corrections; nothing from DQ-11, DQ-12, DQ-14 or OW-33 is
+implemented in this PR.
+
+| Area | What PR #10 delivers | Commits |
+|---|---|---|
+| DQ-10/DQ-9 duplicates, conflicts, overlap | exact duplicates removed from the copy only; conflicting observations kept, flagged, warned at every point of use; overlap reports for every load path; separate counts in Dataset Summary | `dbce7ef`, `2393721` |
+| DQ-7 timeframe | measured by reproducible sampling (seed, blocks, rows examined recorded); any interval; MIXED kept; full-file check with `interval_change_detected` / `interval_change_uncertain`; daily-section detection gap fixed | `3e96bcc`, `2393721`, `fad8d2f`, `8e98440` |
+| DQ-8 identification | file-name cleaning, alias registry, provisional identities, NSE default, crypto category, display names separate from symbols | `3876772`, `2393721` |
+| P4 workflow | default acceptance, reversible reject/restore, Stop, grouped exceptions, bulk corrections, date/zone defaults | `66895cc`, `988c613` |
+| Evidence | implementation report (this document), checklist W1-W18, step-by-step guide, six synthetic pattern files with an automated scan test | `054d87a` … this commit |
+
+**Decision status:** decision log D5-22 to D5-51 (approved / provisionally approved / deferred / not implemented are
+stated per item; the latest owner decisions are D5-46 to D5-51).
+
+**Test evidence:** local totals in 12.4 (1119 passed with GUI; 998 passed + 95 skipped without a display); CI on
+Ubuntu and Windows for every pushed commit is listed on the PR. The owner's eight files were not available after
+`fad8d2f`; their behaviour is **not re-verified**.
+
+**Acceptance:** W1-W18 **outstanding**; guide `Q-MAP_Windows_IDLE_Acceptance_Guide_03_Nov_26_150000.md`.
+
+**Merge:** not merged; order PR #4 → PR #9 → PR #10; each merge needs Sandeep's explicit approval.
