@@ -86,32 +86,68 @@ Yes, for either B or C (read from the code; not tested):
 2. If B or C: approve the read-only impact report as step 1, and the identity change (`vs3` with a one-off
    reprocessing) as step 2.
 
-## 7. Step 1 — the read-only impact report (authorised by D5-49; prepared outside PR #10)
+## 7. Step 1 — the read-only impact report (authorised by D5-49; review corrections D5-53; prepared outside PR #10)
 
 Branch `claude/youthful-babbage-d71hnl` (stacked on PR #10's branch; no pull request opened). **Option C is not
-applied**; sampling (`timeframe_infer.py`) is unchanged; no `vs3`, no reprocessing.
+applied**; production sampling (`timeframe_infer.py`) is unchanged; no `vs3`, no reprocessing, no migration.
+**Status: implemented and tested on synthetic data; NOT yet independently reviewed; NOT accepted; not yet run on the
+owner's registry.**
 
-- `Application/qmap/data_engine/ow33_impact.py`: for every **active MIXED** cleaned dataset it rebuilds the file-order
-  timestamps from the stored data (`src_row`) and the recorded exact-duplicate removals, **verifies that the recorded
-  sampling seed and result are reproduced exactly**, then evaluates Option C on the same blocks. If anything cannot be
-  reproduced the dataset is "not evaluable" with the reason (nothing is guessed). The registry is opened read-only
-  (SQLite `mode=ro`).
-- Option C as evaluated: a sampled block whose dates all have one bar each at varying local times of day (< 90 % at
-  one time) is treated as missing observations, **only if another block of the same file measures a minute
-  interval** (so a daily file stamped at varying times is never affected). Regular-multiple blocks and one-time-of-day
-  daily blocks are unchanged (still MIXED).
-- `ow33_impact_report.py` (top level): open in IDLE, press F5. It uses the Q-MAP_DATA / Q-MAP_OUTPUT folders the Q-MAP
-  applications remember (asks if none), and saves `Q-MAP_OUTPUT\OW33_Impact\OW33_Impact_Report_<dd_Mmm_yy_hhmmss>.csv`
-  and a summary `.txt`; a message shows the counts.
-- Report columns: dataset id, instrument, display name, source file, current classification, proposed classification
-  under Option C, would change (yes/no/unknown), reason, recorded seed, seed reproduced, blocks, excluded blocks,
-  derived datasets, runs using the dataset, processing and lineage implications (re-registration under a new
-  timeframe and path, old dataset superseded and kept, derived datasets not rebuilt (OW-32), earlier runs keep their
-  inputs; unchanged datasets would still be processed once more under a `vs3` change).
-- Tests: `Tests/integration/test_ow33_impact_report.py` (6): Option C changes only sparse one-bar blocks; regular
-  multiples and fixed-time daily bars stay MIXED; a file without a minute block is untouched; the report lists the
-  MIXED datasets, reproduces the seed and leaves the registry byte-identical; a missing stored file gives "not
-  evaluable"; report file names; sampling unchanged. The IDLE script was smoke-run headless against a synthetic
-  registry (1 MIXED dataset, 1 would change); not run on Windows.
-- **The report on the owner's real registry has not been produced**: it must be run on the owner's computer, where the
-  registry is. The result is then reviewed before any further step.
+### 7.1 What exactly is reconstructed
+
+The registered inference is computed ONCE per ingest attempt on the parsed timestamps of EVERY row of the file, in
+file order, before rows are split into instrument groups (`process.process_table` → `_settle_timeframe` →
+`infer_from_parsed`); every cleaned dataset of that attempt registers the same timeframe. The exact input of a
+dataset's inference is therefore the whole file's sequence, not its own rows. `reconstruct_input` rebuilds it only
+when it can prove it complete and exact, otherwise the dataset is **NOT EVALUABLE** with the reason:
+
+| Check | NOT EVALUABLE when |
+|---|---|
+| creating attempt | not recorded, outcome not `accepted`, evidence not readable, no recorded inference, no recorded sampling configuration |
+| observation count | recorded `rows_total` differs from the attempt's rows read |
+| shared inference | another dataset of the attempt is registered with a different timeframe |
+| each dataset of the attempt (all statuses) | stored file missing; stored row count differs from the registry; a `src_row` outside 1..rows read; a source row stored twice; a row without a timestamp; timestamps and date-only values mixed |
+| duplicate-removal lineage | count and listed pairs differ; unreadable pair; a removed row is stored; its kept row is not stored |
+| completeness | any file position neither stored nor recorded as a removed duplicate (the reason says if no removal record exists) |
+
+### 7.2 Reproduction check (before any Option C conclusion)
+
+The unchanged sampling is re-run on the rebuilt sequence with the recorded configuration and compared with the
+recorded evidence: observation count, seed, candidate, number of blocks, rows examined, block patterns, status,
+timeframe, the registered timeframe, and for every block its start row, size, measured interval, step count,
+agreeing share and agreement. Any difference is listed precisely (e.g. "block 3 (recorded start row 10933): steps
+reconstructed 29, recorded 30") and the dataset is NOT EVALUABLE.
+
+### 7.3 Option C calculation, shown per block
+
+For every evaluable dataset the CSV has one `dataset` row and one `block` row per sampled block: start row, size,
+interval, steps, agreeing share, original agreement, Option C role (`used` / `excluded` / `not measured`), the sparse
+test with its facts (rows, dates, maximum distinct bars per date, distinct times of day, most common time share) and
+the block's agreement under Option C. Rules: a block is excluded only if it is day-based, every date has one distinct
+bar, fewer than 90 % of its bars share one time of day, AND another block of the same inference measures minutes.
+Minute blocks (including regular whole multiples) are never excluded; fixed-time daily blocks are never excluded; a
+series with no minute block is never affected.
+
+### 7.4 Files, how to run, tests
+
+- Code: `Application/qmap/data_engine/ow33_impact.py`; IDLE runner `ow33_impact_report.py` (top level).
+- Run: open `ow33_impact_report.py` in IDLE, press F5. It uses the Q-MAP_DATA / Q-MAP_OUTPUT folders the Q-MAP
+  applications remember (asks if none). The registry is opened read-only (SQLite `mode=ro`); settings are loaded
+  without creating folders. It writes only `Q-MAP_OUTPUT\OW33_Impact\OW33_Impact_Report_<dd_Mmm_yy_hhmmss>.csv` and
+  `OW33_Impact_Summary_<dd_Mmm_yy_hhmmss>.txt` and shows the counts.
+- Tests: `Tests/integration/test_ow33_impact_report.py` (13): sparse blocks excluded only under Option C (production
+  sampling unchanged); regular-multiple blocks stay MIXED; fixed-time daily blocks stay MIXED; a varying-time daily
+  series without a minute block is unaffected; a two-instrument interleaved file with exact duplicates — each
+  dataset's rebuilt input equals the file's sequence exactly, and a per-group concatenation would not reproduce the
+  record; full report on a registry of four MIXED datasets, every stored file and the registry byte-identical
+  afterwards; NOT EVALUABLE for a source row stored twice, a stored row missing, matching seed but a changed block step
+  count, missing and incomplete duplicate lineage, and missing stored files (tampering only on copies).
+
+### 7.5 Known limitations
+
+- Not run on Windows and not on the owner's registry; the owner's report has not been produced.
+- Datasets registered before the timeframe-inference record existed (no `timeframe_inference` or sampling
+  configuration in the attempt) are NOT EVALUABLE by design.
+- Only active MIXED cleaned datasets are examined; superseded datasets are not listed (their successors are).
+- The report states consequences for lineage (new dataset and path, superseded old one, derived datasets not rebuilt,
+  earlier runs keep inputs); it does not simulate the processing itself.

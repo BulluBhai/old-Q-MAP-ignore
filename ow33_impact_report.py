@@ -1,7 +1,9 @@
 """Q-MAP OW-33 impact report (READ-ONLY). Open this file in IDLE or Thonny and press F5.
 
 Owner decision D5-49 (03-Nov-26), step 1 only: lists every active MIXED dataset and shows whether Option C
-(sparse-only alignment of the timeframe sampling) WOULD change its classification. Nothing is changed: the registry
+(sparse-only alignment of the timeframe sampling) WOULD change its classification. A dataset is evaluated only if the
+exact input of its recorded timeframe inference is rebuilt and the recorded evidence (seed, candidate, every sampled
+block, status) is reproduced; otherwise it is reported as NOT EVALUABLE. Nothing is changed: the registry
 is opened read-only, no dataset or file is touched, Option C is not applied and nothing is reprocessed.
 The report (CSV for Excel, and a short summary) is saved in Q-MAP_OUTPUT\\OW33_Impact\\.
 """
@@ -65,7 +67,7 @@ def main() -> int:
         messagebox.showinfo(TITLE, f"Active MIXED datasets examined: {s['mixed_datasets']}\n"
                                    f"Would change classification: {s['would_change']}\n"
                                    f"Would stay MIXED: {s['unchanged']}\n"
-                                   f"Not evaluable: {s['not_evaluable']}\n\n"
+                                   f"NOT EVALUABLE: {s['not_evaluable']}\n\n"
                                    f"Nothing was changed.\n\nReport saved:\n{csv_path}\n{txt}", parent=root)
         return 0
     except Exception as exc:  # noqa: BLE001 - shown to the user, nothing was changed
