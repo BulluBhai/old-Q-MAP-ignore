@@ -10,6 +10,7 @@ added; see `docs/architecture/Blueprint_v1.3_Implementation_Audit.md`. Earlier u
 |---|---|---|---|
 | DQ-11 | Separate `asset_category` and `venue` fields for instruments (crypto today: category CRYPTO stored in the exchange field, venue "unknown" in the interpretation record) | Owner instruction section 9 asks for a proposal before a schema change | Approve: two nullable columns on `instruments` (migration 11), filled for crypto, editable |
 | DQ-12 | Should preserved export columns such as AKZOINDIA's `index` (a download row counter) count when deciding whether two rows are exact duplicates? | Today every source column counts (safest): AKZOINDIA's repeated days are 750 conflicts although 428 differ only in that counter | Keep the safe rule; optionally list "immaterial" column names per folder in a later change |
+| DQ-14 | Relabel a dataset MIXED when the full-file check finds a material section with another interval (>= 1 % of rows or 30 steps) | Sampling can miss short sections; today they are a warning only | Approve (see `docs/architecture/Proposals_DQ11-DQ14_03_Nov_26_150000.md`) |
 | DQ-13 | Clean the owner's source files (formerly DQ-10 of 02-Nov-26): AKZOINDIA 08-Nov-25 session (2 bars with low above open, still rejected); repeated days in AKZOINDIA and OLAELEC are now kept as conflicts | Q-MAP never chooses between copies | Owner action, then rescan |
 | DQ-3 | Name the first API providers and supply permitted credentials | §8.5.2 needs your priorities and a licensing review | One broker API you already hold an account for |
 | DQ-5 | Optional scheduled scanning? | §8.5.6 optional | On demand only, until daily use shows a need |
@@ -69,7 +70,8 @@ added; see `docs/architecture/Blueprint_v1.3_Implementation_Audit.md`. Earlier u
 | OW-24 | Choosing the "current" dataset when overlapping datasets disagree | By decision DQ-1, Q-MAP does not choose; the user selects. Revisit only if the owner wants a preference flag |
 | OW-25 | Overlap/conflict checks for Data Management and command-line loads | **Resolved 03-Nov-26** (DQ-9, D5-24) |
 | OW-29 | GUI acceptance on Windows/IDLE of the DQ-7..DQ-10 workflow (checklist `docs/acceptance_testing/Q-MAP_DQ7-DQ10_Acceptance_Checklist_03_Nov_26_120000.md`) | **Open (owner)** |
-| OW-30 | `instruments.name` is not filled with the canonical display name (e.g. "NIFTY 50" is stored as symbol NIFTY_50; the display name is in the interpretation record) | Open, low priority |
+| OW-30 | Canonical display name in `instruments.name` | **Resolved 03-Nov-26** (D5-34) |
+| OW-32 | Derived datasets stay linked to the daily dataset they were built from after it is superseded by re-processing; not re-derived automatically | By design; derive again from the new daily dataset if wanted |
 | OW-31 | Every dataset is processed once more after this update (cleaning code c2, fingerprint vs2, rules v6): identical content gets new dataset numbers and the old ones become superseded | Expected one-off; documented |
 | OW-26 | Bar-time convention: some sources label intraday bars by their END time (UJJIVAN 5m: 09:20 ... 15:30), others by their START (09:15 ...). Q-MAP stores times as written and does not detect or convert the convention | Open; needs an owner rule before cross-source comparison of intraday data |
 | OW-27 | Unexplained multi-day gaps in 5PAISA (e.g. 15-Dec-17 to 05-Jan-18) and VERANDA (13-Jun-22 to 23-Jun-22, 22-Aug-22 to 01-Sep-22) | Reported as warnings; owner judgement before gap-sensitive research |

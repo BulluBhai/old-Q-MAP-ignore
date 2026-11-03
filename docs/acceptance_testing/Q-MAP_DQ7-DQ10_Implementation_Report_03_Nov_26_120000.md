@@ -127,7 +127,7 @@ the "Conflicting timestamps" column. Weekly/monthly derivation applies its uncha
 - **Exact duplicate = every source column identical.** Export artefacts such as AKZOINDIA's `index` make copies count as
   conflicts (safe: nothing is removed wrongly). Whether such columns should be ignored is DQ-12.
 - **AKZOINDIA** stays rejected for two impossible bars; DQ-10 covers repeated timestamps, not OHLC errors.
-- The canonical display name ("NIFTY 50") is not written to `instruments.name`; the symbol is `NIFTY_50` (OW-30).
+- The canonical display name ("NIFTY 50") was not written to `instruments.name`: fixed in the review follow-up (section 10.2).
 - After this update every dataset is processed once more (new cleaning code, fingerprint and rules): identical
   content gets new dataset numbers, the old ones are superseded (OW-31).
 - A bare number after "_" or a space is kept as part of a name (`NIFTY_50`), so `BAJAJ-AUTO_5` is not shortened; an
@@ -142,3 +142,89 @@ plus the earlier open items in `docs/Outstanding_Work_Register.md`.
 ## 9. Manual acceptance still required
 
 All of `Q-MAP_DQ7-DQ10_Acceptance_Checklist_03_Nov_26_120000.md` (W1-W12), on Windows in IDLE.
+
+## 10. Independent review follow-up (03-Nov-26), commit `2393721` and the documentation commit
+
+CI on `054d87a` (before this follow-up): successful on Ubuntu and Windows (confirmed by the reviewer). The CI result
+for this follow-up is recorded on the PR.
+
+### 10.1 DQ-7 timeframe edge cases
+
+Probe of the sampler (synthetic sessions, no calendar). Seed, block positions (first row of each block, 1-based) and
+rows examined are reported so each result can be repeated:
+
+| Case | Rows | Result | Block intervals | Rows examined | Seed | Block positions |
+|---|---|---|---|---|---|---|
+| A 1m then 5m (last 30%) | 61050 | mixed MIXED | {'1m': 18, '5m': 2} | 620 | 78149163127756 | 543, 3855, 7872, 11776 ... 60205 (20 blocks) |
+| A2 1m then 5m (last 3%) | 78217 | consistent 1m | {'1m': 20} | 620 | 54990678878582 | 678, 7023, 7876, 13525 ... 76991 (20 blocks) |
+| B unrepresentative start: 5m first 25 rows, then 1m | 53275 | consistent 1m | {'1m': 15} | 470 | 130807607494862 | 3005, 4120, 10205, 11490 ... 51157 (15 blocks) |
+| C intraday 1m then daily bars | 27400 | mixed MIXED | {'1m': 19, '1D': 1} | 620 | 68613001332051 | 1108, 1930, 3499, 4460 ... 27021 (20 blocks) |
+| C2 daily then intraday 15m | 5075 | mixed MIXED | {'1D': 1, '15m': 4} | 170 | 253701685620064 | 876, 1570, 2689, 3814 ... 4746 (5 blocks) |
+| D irregular 2,000-row section in middle | 81438 | consistent 1m | {'1m': 20} | 620 | 47370629968531 | 3828, 5233, 10212, 14658 ... 78444 (20 blocks) |
+| D2 irregular 300-row section | 80550 | consistent 1m | {'1m': 20} | 620 | 239117717117393 | 2755, 7195, 8063, 13190 ... 78087 (20 blocks) |
+| E repeated timestamps every 10 rows | 3548 | consistent 5m | {'5m': 15} | 458 | 148119297008189 | 9, 385, 684, 831 ... 3391 (15 blocks) |
+| E2 out-of-order section of 100 rows | 3225 | consistent 5m | {'5m': 15} | 470 | 149730941969829 | 176, 400, 632, 835 ... 2997 (15 blocks) |
+| E3 fully descending file | 3225 | consistent 5m | {'5m': 15} | 470 | 268242514775332 | 90, 240, 542, 787 ... 3190 (15 blocks) |
+| F small file 15 rows | 15 | consistent 5m | {'5m': 1} | 15 | 82662908989839 | 1 (1 block) |
+| F2 small 59 rows | 59 | consistent 5m | {'5m': 1} | 59 | 4127326843391 | 1 (1 block) |
+
+Findings:
+- **Defect (fixed):** a block that fell in a daily section of an intraday file was measured with minute steps,
+  found none and was silently skipped; and a block measured in days could "agree" with a 1-minute interval because both
+  step values are 1. Blocks are now measured by their own observations and a day-based block never agrees with a
+  minute interval (case C is now MIXED; it was "consistent 1m").
+- **Limitation (confirmed, not a defect of the rule):** sampling cannot see a section shorter than the distance between
+  two blocks (cases A2, D, D2: a 3 % tail, a 2,000-row and a 300-row section). Increasing the sample would only move
+  the threshold. **Proportionate improvement (done):** validation, which already reads every row, reports any section
+  of >= 30 consecutive same-day steps of one other interval, or >= 30 consecutive one-bar dates in intraday data, as
+  `interval_change_detected` with its source rows. Tested for the four missed cases; no false positive on the owner's
+  eight files or on a synthetic illiquid file. Whether such a finding should relabel the dataset `MIXED` is DQ-14.
+- Unrepresentative first rows only change the number of blocks (case B: candidate 5m, 15 blocks), not the result.
+  Repeated, out-of-order and fully descending timestamps give the right interval. Files shorter than two blocks
+  (60 rows) are examined completely.
+- Tests: `Tests/integration/test_dq7_review_edge_cases.py` (17).
+
+### 10.2 DQ-8 canonical display name
+
+`instruments.name` already exists and is outside the identity trigger. The scan now stores the alias registry's
+canonical display name there ("NIFTY 50" beside symbol `NIFTY_50`), only while it is empty (never overwritten), for
+canonical and alias matches only (never for provisional names). No schema change; identity, paths and processing
+identity are unchanged. Shown in Datasets and Storage and available as `DatasetInfo.instrument_name`.
+
+### 10.3 DQ-9/DQ-10 conflicts at the points of use
+
+| Entry point | Conflict visibility |
+|---|---|
+| Workbench readiness (and `run_analysis` used by it) | "conflicts" NOTE; recorded in the run metadata (`readiness_warnings`) |
+| Dataset Summary output | Separate columns: Conflicting timestamps; Conflicting observation rows; Returns between conflicting observations; Derived bars built from conflicting observations; Exact duplicate rows removed at load; Conflict note ("Potentially misleading ..."); plus a WARNING line in the run log |
+| Weekly/monthly derivation | assessment warning, flagged periods, `period_has_conflicting_observations` |
+| Command line | no analysis command exists; `ingest`/`scan` print the load outcome, overlap findings and report paths, and the conflict check is in the issues report |
+
+**Defect (fixed):** for a DERIVED dataset, Dataset Summary counted periods built from conflicts as "Conflicting
+timestamps". Counts are now never conflated: in the test, 1 conflicting timestamp, 3 observation rows, 2 returns
+between them, 2 exact duplicates removed at load, 10 bars; for the weekly dataset, 1 derived bar built from
+conflicts and no "conflicting timestamps". The calculation method is unchanged and no row is selected.
+
+### 10.4 Reprocessing and provenance
+
+Verified by `test_reprocessing_after_the_update_keeps_every_record_and_links_correctly` (registry built with the
+previous cleaning code c1 and rules v5, a derived weekly dataset and a Dataset Summary run, then the current code):
+raw source files and stored originals unchanged and not duplicated; old datasets kept, files present, marked
+superseded and linked to their successors; new datasets have the same original file as parent and point to the attempt
+of the right file; provenance lines exist for both; the earlier run's inputs and output files remain; a second
+unchanged scan creates nothing. **Exception (by design, reported):** a derived dataset stays linked to the daily
+dataset it was built from, which is now superseded; it is not re-derived automatically (deriving again from the new
+daily dataset is a user action, and the assessment warns about a superseded source).
+
+### 10.5 Proposals kept out of PR #10
+
+`docs/architecture/Proposals_DQ11-DQ14_03_Nov_26_150000.md`: DQ-11 (asset category and venue columns, migration 11,
+backward compatible), DQ-12 (controlled list of export columns ignored for duplicate comparison, audited), DQ-13
+(AKZOINDIA rows 34185 and 34189 of 08-Nov-25 with their values and the evidence needed; nothing changed), DQ-14
+(relabel MIXED when the full-file check finds a material section).
+
+### 10.6 Tests after the follow-up (local, not CI)
+
+Python 3.12 + Xvfb: **1101 passed, 0 failed, 0 skipped** (208 GUI). Python 3.13 without tkinter: **980 passed, 0 failed,
+95 skipped** (GUI, no display). Owner acceptance on Windows/IDLE: **not done** (checklist W1-W12 unchanged; W9 now also shows the new
+Dataset Summary columns).

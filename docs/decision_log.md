@@ -230,3 +230,12 @@ storage rule or analytical methodology was changed.
 | D5-29 | Defaults instead of questions (section 8): ambiguous day/month order → day-first (warned, correctable); timestamps without a zone and no folder zone → Asia/Kolkata (warned only for zone-less values). Date-layout questions remain only where no day-first reading fits | Implemented (P4) |
 | D5-30 | Stop: a scan stops before the next file (the current file is always finished), lists the files not processed in the scan report and summary; corrections can be recorded for imported files (bulk), applied by the next scan as new datasets | Implemented (P4) |
 | D5-31 | The `3h` proposal of 02-Nov-26 (D5-21, DQ-7 of that date) is superseded by D5-25: every measured interval is a timeframe | Settled |
+
+### PR #10 independent review follow-up (03-Nov-26)
+
+| Ref | Decision | Status |
+|---|---|---|
+| D5-32 | Timeframe sampling: each block is measured by its own observations; day-based and minute-based block intervals never agree | Defect fixed (`2393721`), tested |
+| D5-33 | Full-file verification: validation reports `interval_change_detected` (>= 30 consecutive steps of one other interval, or >= 30 consecutive one-bar dates in intraday data) with source rows. The registered timeframe is unchanged; relabelling as MIXED is proposal DQ-14 | Implemented (`2393721`), tested |
+| D5-34 | Canonical display name kept in the existing `instruments.name` (filled only while empty; canonical/alias matches only); no schema change | Implemented (`2393721`) |
+| D5-35 | Dataset Summary keeps conflicting timestamps, conflicting observation rows, returns between conflicting observations, derived bars built from conflicts and exact duplicates removed at load in separate columns, with a "potentially misleading" note; method unchanged | Implemented (`2393721`); fixes a conflation for derived datasets |
