@@ -6,7 +6,9 @@ Run ID, recorded inputs, outputs, metadata). It makes no market judgement and de
 For each selected dataset, within the optional period:
   bars, first and last bar date, calendar days covered, longest gap between consecutive bars (calendar days),
   first and last close, change from first to last close (%), bar-to-bar close returns (count, mean, standard
-  deviation, smallest, largest, in %), bars with any quality flag, bars with volume, average volume.
+  deviation, smallest, largest, in %), bars with any quality flag, bars with volume, average volume; and, kept separate, conflicting timestamps,
+  conflicting observation rows, returns between two observations of one timestamp, derived bars built from conflicts,
+  and exact duplicate rows removed at load, with a plain note when results are potentially misleading.
 
 Bar-to-bar return = close / previous close - 1, using only consecutive bars of the same dataset, so no value uses
 information from a later bar than the one it is reported for. Standard deviation uses n - 1 (sample).
@@ -26,7 +28,9 @@ from .base import AnalysisSpec, Parameter, RunContext
 COLUMNS = ("Dataset", "Instrument", "Timeframe", "Storage", "Validation", "Bars", "First bar", "Last bar",
            "Calendar days covered", "Longest gap (days)", "First close", "Last close", "Change first-last close %",
            "Returns counted", "Mean return %", "Std dev return %", "Smallest return %", "Largest return %",
-           "Bars with quality flags", "Conflicting timestamps", "Bars with volume", "Average volume")
+           "Bars with quality flags", "Conflicting timestamps", "Conflicting observation rows",
+           "Returns between conflicting observations", "Derived bars built from conflicting observations",
+           "Exact duplicate rows removed at load", "Conflict note", "Bars with volume", "Average volume")
 
 
 def _r(x, nd=4):
@@ -47,7 +51,17 @@ def summarise(ctx: RunContext, dataset_id: int) -> dict:
     # The statistics below are unchanged: they treat every stored row as a bar.
     keys = t.column("timestamp_utc").to_pylist() if "timestamp_utc" in t.column_names else dates
     keys = [k if k is not None else d for k, d in zip(keys, dates)]
-    conflicted = {k for k, f in zip(keys, flags) if f & C.FLAG_CONFLICTING_OBSERVATION}
+    flagged = (flags & C.FLAG_CONFLICTING_OBSERVATION) != 0
+    derived = d.layer == "timeframe"
+    # Three different quantities, never added together (review 03-Nov-26):
+    #   conflicting timestamps = distinct times that hold more than one different observation;
+    #   conflicting observation rows = the stored rows at those times (always >= 2 per timestamp);
+    #   exact duplicate rows removed = identical copies dropped at load (they are NOT in the dataset).
+    # In a DERIVED dataset the flag marks a period built from conflicting daily observations instead.
+    conflicted = set() if derived else {k for k, f in zip(keys, flagged) if f}
+    conflict_rows = 0 if derived else int(flagged.sum())
+    # bar-to-bar returns whose two rows are observations of the SAME timestamp: potentially misleading
+    same_time_returns = 0 if derived else sum(1 for a, b in zip(keys, keys[1:]) if a == b and a in conflicted)
     rets = (close[1:] / close[:-1] - 1.0) * 100.0 if n > 1 else np.array([])
     gaps = [(b - a).days for a, b in zip(dates, dates[1:]) if a and b]
     volumes = np.asarray(vol.to_numpy(zero_copy_only=False), dtype=float)[vol_ok] if vol_ok.any() else np.array([])
@@ -64,10 +78,33 @@ def summarise(ctx: RunContext, dataset_id: int) -> dict:
         "Std dev return %": _r(rets.std(ddof=1)) if rets.size > 1 else "",
         "Smallest return %": _r(rets.min()) if rets.size else "",
         "Largest return %": _r(rets.max()) if rets.size else "",
-        "Bars with quality flags": int((flags != 0).sum()), "Conflicting timestamps": len(conflicted),
+        "Bars with quality flags": int((flags != 0).sum()),
+        "Conflicting timestamps": "" if derived else len(conflicted),
+        "Conflicting observation rows": "" if derived else conflict_rows,
+        "Returns between conflicting observations": "" if derived else same_time_returns,
+        "Derived bars built from conflicting observations": int(flagged.sum()) if derived else "",
+        "Exact duplicate rows removed at load": "" if derived else _duplicates_removed(ctx, d),
+        "Conflict note": _conflict_note(derived, len(conflicted), conflict_rows, same_time_returns, int(flagged.sum())),
         "Bars with volume": int(vol_ok.sum()),
         "Average volume": _r(volumes.mean(), 2) if volumes.size else "",
     }
+
+
+def _duplicates_removed(ctx: RunContext, d) -> int:
+    row = ctx.db.one("SELECT q.rows_failed FROM datasets x JOIN quality_checks q ON q.attempt_id = x.created_by_attempt_id "
+                     "WHERE x.dataset_id = ? AND q.check_name = 'exact_duplicates_removed'", (d.dataset_id,))
+    return int(row["rows_failed"]) if row else 0
+
+
+def _conflict_note(derived: bool, timestamps: int, rows: int, same_time_returns: int, derived_bars: int) -> str:
+    if derived:
+        return ("" if not derived_bars else f"{derived_bars} derived bar(s) were built from daily data with conflicting "
+                "observations (existing rules applied to every row); treat them as potentially misleading.")
+    if not timestamps:
+        return ""
+    return (f"Potentially misleading: {timestamps} timestamp(s) hold {rows} conflicting observations; every stored row "
+            f"counts as a bar, so {same_time_returns} bar-to-bar return(s) compare two observations of the same time. "
+            "Q-MAP has not chosen between them.")
 
 
 def execute(ctx: RunContext) -> list[Path]:
@@ -75,6 +112,8 @@ def execute(ctx: RunContext) -> list[Path]:
     for i in ctx.dataset_ids:
         ctx.log(f"Summarising dataset {i}...")
         rows.append(summarise(ctx, i))
+        if rows[-1]["Conflict note"]:
+            ctx.log(f"WARNING dataset {i}: {rows[-1]['Conflict note']}")
     out = ctx.output(f"Dataset_Summary_{ctx.stamp}.csv")
     with open(out, "w", newline="", encoding="utf-8") as fh:
         w = csv.DictWriter(fh, fieldnames=COLUMNS)

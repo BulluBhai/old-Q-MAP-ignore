@@ -92,6 +92,7 @@ class DatasetInfo:
     warnings: list[str] = field(default_factory=list)
     source_files: list[str] = field(default_factory=list)  # original file name(s) this data came from
     user_decision: str | None = None  # latest reversible user decision: rejected | restored | None
+    instrument_name: str | None = None  # canonical display name from the alias registry ("NIFTY 50"), if any
 
     @property
     def rejected_by_user(self) -> bool:
@@ -154,7 +155,8 @@ def _info(db: Database, row, details: bool = True) -> DatasetInfo:
         canonical_schema_version=row["canonical_schema_version"], volume_status=row["volume_status"],
         requirement_set=row["requirement_set"], config_fingerprint=row["config_fingerprint"], sha256=row["sha256"],
         created_at=row["created_at"], parent_dataset_id=row["parent_dataset_id"],
-        user_decision=row["user_decision"] if "user_decision" in row.keys() else None)
+        user_decision=row["user_decision"] if "user_decision" in row.keys() else None,
+        instrument_name=row["instrument_name"] if "instrument_name" in row.keys() else None)
     if details and row["layer"] != "raw":
         info.warnings = _warnings_for(db, row)
         info.validation_status = "passed_with_warnings" if info.warnings else "passed"
@@ -162,7 +164,7 @@ def _info(db: Database, row, details: bool = True) -> DatasetInfo:
     return info
 
 
-_SELECT = ("SELECT d.*, i.exchange, i.symbol, (SELECT u.decision FROM dataset_user_decisions u WHERE u.dataset_id = "
+_SELECT = ("SELECT d.*, i.exchange, i.symbol, i.name AS instrument_name, (SELECT u.decision FROM dataset_user_decisions u WHERE u.dataset_id = "
            "d.dataset_id ORDER BY u.decision_id DESC LIMIT 1) AS user_decision "
            "FROM datasets d LEFT JOIN instruments i USING (instrument_id) ")
 

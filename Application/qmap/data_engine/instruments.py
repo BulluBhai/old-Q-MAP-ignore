@@ -48,3 +48,15 @@ def get_or_create_instrument(conn, exchange: str, symbol: str) -> tuple[int, boo
         return int(row["instrument_id"]), False
     cur = conn.execute("INSERT INTO instruments(exchange, symbol) VALUES (?, ?)", (exchange, symbol))
     return int(cur.lastrowid), True
+
+
+def record_display_name(db, instrument_id: int, name: str | None) -> bool:
+    """Keep an instrument's canonical DISPLAY name (e.g. "NIFTY 50") beside its machine-safe symbol ("NIFTY_50"),
+    in the existing `instruments.name` column (no schema change; identity stays exchange + symbol). The name is
+    filled only while it is empty: an existing name is never overwritten silently. Returns True if it was filled."""
+    if not name or not str(name).strip():
+        return False
+    with db.transaction() as conn:
+        cur = conn.execute("UPDATE instruments SET name = ? WHERE instrument_id = ? AND (name IS NULL OR name = '')",
+                           (str(name).strip(), instrument_id))
+        return cur.rowcount == 1

@@ -21,6 +21,11 @@ Method (reproducible and explainable):
 
 Only the sampled observations are examined for the timeframe; every row is still parsed and validated elsewhere,
 because data integrity (dates, OHLC, duplicates) needs all of them.
+
+Known limit (review 03-Nov-26): a section shorter than the distance between two blocks (for example the last 3 % of
+a file, or a few hundred irregular rows) can fall between blocks. Sampling is therefore complemented, not replaced, by
+validation's full-file check `interval_change_detected` (validation.py), which uses the steps validation already
+computes for every row and reports such sections with their source rows.
 """
 
 from __future__ import annotations
@@ -183,6 +188,10 @@ def _base_unit(label: str) -> int:
     return 1
 
 
+def _is_minutes(label: str | None) -> bool:
+    return bool(label) and (label.endswith("m") or label.endswith("h")) and label not in ("1M",)
+
+
 def _blocks_for(candidate: str | None, intraday: bool, cfg: dict) -> int:
     if candidate is None:
         return cfg["blocks_daily"]
@@ -248,10 +257,12 @@ def infer_interval(keys: list, *, zone: str | None, config: dict | None = None) 
     else:
         starts, size = block_starts(n, _blocks_for(candidate, intraday, cfg), block_rows, seed), block_rows
     examined = set()
+    # Each block is judged by ITS OWN observations (review 03-Nov-26): a block that falls in a daily section of an
+    # intraday file is measured as daily, so it shows up as a different interval instead of being skipped.
     for st in starts:
         part = keys[st:st + size]
         days = _local_dates(part, z)
-        label, steps, _unit = _label_from_steps(part, days, intraday or _is_intraday(part, days))
+        label, steps, _unit = _label_from_steps(part, days, _is_intraday(part, days))
         inf.blocks.append(Block(st + 1, len(part), label, len(steps)))
         examined.update(range(st, st + len(part)))
     inf.rows_examined = len(examined) + (0 if not init else len(set(range(len(init))) - examined))
@@ -270,13 +281,15 @@ def infer_interval(keys: list, *, zone: str | None, config: dict | None = None) 
             continue
         part = keys[st:st + size]
         days = _local_dates(part, z)
-        _l, steps, _u = _label_from_steps(part, days, intraday or _is_intraday(part, days))
+        _l, steps, _u = _label_from_steps(part, days, _is_intraday(part, days))
         multiples = [s for s in steps if s % unit == 0] if unit > 1 else steps
         b.agreeing_share = len(multiples) / len(steps) if steps else 0.0
         # the dominant interval itself must occur in the block: a block of only 5-minute steps is not "1-minute data
         # with missing bars", but a block of mostly 2-minute steps with some 1-minute steps is
         has_base = b.interval == dominant or steps.count(unit) >= max(1, len(steps) // 10)
-        b.agrees = b.agreeing_share >= cfg["consistency_share"] and has_base
+        # minutes and days are different units: a daily block never agrees with an intraday interval, or the reverse
+        same_kind = _is_minutes(b.interval) == _is_minutes(dominant)
+        b.agrees = same_kind and b.agreeing_share >= cfg["consistency_share"] and has_base
     inf.patterns = dict(counts)
     if all(b.agrees for b in measured):
         inf.status, inf.timeframe = CONSISTENT, dominant

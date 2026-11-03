@@ -67,7 +67,8 @@ def details(settings: Settings, dataset_id: int) -> list[tuple[str, str | None]]
         d = get_dataset(db, dataset_id)
         if d is None:
             return [(f"Dataset {dataset_id} is not registered.\n", "error")]
-        parts = [(f"{d.instrument}  {d.timeframe_label}  (dataset {d.dataset_id})\n", "bold"),
+        shown = f"{d.instrument} ({d.instrument_name})" if d.instrument_name else d.instrument
+        parts = [(f"{shown}  {d.timeframe_label}  (dataset {d.dataset_id})\n", "bold"),
                  (f"Bars: {d.row_count}   From {fmt_date(d.date_from)} to {fmt_date(d.date_to)}   "
                   f"Volume: {d.volume_status}\n", None),
                  (f"Storage: {d.storage_label}   State: {d.state_label}\n", "warning" if d.storage_class == TEMPORARY else None),

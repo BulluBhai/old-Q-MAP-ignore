@@ -59,6 +59,59 @@ def _distinct_in_order(dates: list, keys: list) -> list:
     return out
 
 
+CHANGE_RUN = 30  # consecutive steps (or trading dates) that make a section "another interval" (= one sample block)
+
+
+def _interval_changes(frame: dict, keys: list, src, expected: int, timeframe: str, collector: Collector) -> CheckResult:
+    """Full-file verification of the sampled timeframe (review 03-Nov-26). Sampling can miss a short section between
+    blocks; validation reads every row anyway, so it reports any section of at least CHANGE_RUN consecutive same-day
+    steps that all have ONE other interval, or of CHANGE_RUN consecutive trading dates with a single bar each (a daily
+    section in intraday data). Report only: the registered timeframe is not changed (owner decision DQ-14)."""
+    sections = []
+    run_val, run_start, run_len = None, None, 0
+    dates = frame["session_date"]
+
+    def close(end_row):
+        if run_val is not None and run_val != expected and run_len >= CHANGE_RUN:
+            sections.append(f"source rows {run_start}-{end_row}: {run_len} consecutive steps of {run_val:g} minute(s)")
+
+    last_end = None
+    for i in range(1, len(keys)):
+        a, b = keys[i - 1], keys[i]
+        if a is None or b is None or a == b or dates[i] != dates[i - 1]:
+            continue
+        step = (b - a).total_seconds() / 60.0
+        if step == run_val and last_end == i - 1:
+            run_len += 1
+        else:
+            close(int(src[last_end]) if last_end is not None else None)
+            run_val, run_start, run_len = step, int(src[i - 1]), 1
+        last_end = i
+    close(int(src[last_end]) if last_end is not None else None)
+    # daily section: consecutive trading dates with one bar each, while the usual date has many
+    per_date = Counter(d for d, _k in _distinct_in_order(dates, keys))
+    if per_date and Counter(per_date.values()).most_common(1)[0][0] > 1:
+        first_row = {}
+        for d, r in zip(dates, src):
+            first_row.setdefault(d, int(r))
+        run = []
+        for d in sorted(per_date) + [None]:
+            if d is not None and per_date[d] == 1:
+                run.append(d)
+                continue
+            if len(run) >= CHANGE_RUN:
+                sections.append(f"source rows {first_row[run[0]]}-{first_row[run[-1]]}: {len(run)} consecutive trading "
+                                f"dates with one bar each ({run[0]} to {run[-1]}), like daily data")
+            run = []
+    detail = ""
+    if sections:
+        detail = (f"The sampled timeframe is {timeframe}, but the full file contains section(s) with another interval: "
+                  + "; ".join(sections[:5]) + (" ..." if len(sections) > 5 else "")
+                  + ". Treat results across these sections with care; consider splitting the file.")
+        collector.add("interval_change_detected", WARNING, None, "date", None, detail)
+    return CheckResult("interval_change_detected", WARNING, not sections, len(sections), detail)
+
+
 def validate_group(frame: dict, ctx: GroupContext, collector: Collector) -> ValidationOutput:
     out: list[CheckResult] = []
     o, h, lo, c = (np.asarray(frame[k], dtype=float) for k in ("open", "high", "low", "close"))
@@ -175,6 +228,7 @@ def validate_group(frame: dict, ctx: GroupContext, collector: Collector) -> Vali
             detail = "; ".join(f"{d}: {k}/{mode} bars" for d, k in partial[:10]) + (" ..." if len(partial) > 10 else "")
             out.append(CheckResult("partial_session", WARNING, not partial, len(partial), "" if not partial else
                                    f"Sessions with fewer bars than the usual {mode}: {detail}"))
+        out.append(_interval_changes(frame, keys, src, expected, ctx.timeframe, collector))
     elif ctx.timeframe in PERIOD_OF and (ctx.is_instant or ctx.timeframe != "1D"):
         # A daily/weekly/monthly dataset must have at most one bar per day/week/month. (Date-only daily data is already
         # a repeated date is a conflict, reported separately.) Report-only: the timeframe is never changed here.

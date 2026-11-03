@@ -262,12 +262,13 @@ class ScanJob:
 
 
 # ---- consolidated exceptions and bulk actions (DQ-7..DQ-10 section 7) ---------------------------------------------
-EXCEPTION_ORDER = ("needs_answer", "rejected_data", "mixed_intervals", "timeframe_name", "conflicts_within",
+EXCEPTION_ORDER = ("needs_answer", "rejected_data", "mixed_intervals", "interval_change", "timeframe_name", "conflicts_within",
                    "conflicts_between", "provisional", "ambiguous", "name_column_disagreement", "crypto_venue_unknown",
                    "date_layout_assumed", "timezone_assumed", "rejected_by_you")
 EXCEPTION_LABELS = {
     "needs_answer": "Needs your answer", "rejected_data": "Not loaded: data errors",
-    "mixed_intervals": "Mixed bar intervals (kept as MIXED)", "timeframe_name": "File name timeframe differs from the data",
+    "mixed_intervals": "Mixed bar intervals (kept as MIXED)",
+    "interval_change": "A section of the file has another bar interval (found by the full-file check)", "timeframe_name": "File name timeframe differs from the data",
     "conflicts_within": "Conflicting observations inside the file (kept, not resolved)",
     "conflicts_between": "Bars differ from another dataset (both kept)",
     "provisional": "Instrument not in the alias registry (provisional)", "ambiguous": "Ambiguous instrument name",
@@ -316,6 +317,8 @@ def exception_groups(settings: Settings, source_id: int) -> list[dict]:
                     add("conflicts_within", st)
                 if any(w.startswith("conflicts_with_existing_dataset") for w in info.warnings):
                     add("conflicts_between", st)
+                if any(w.startswith("interval_change_detected") for w in info.warnings):
+                    add("interval_change", st)
         return [groups[k] for k in EXCEPTION_ORDER if k in groups]
     return _with_db(settings, build)
 

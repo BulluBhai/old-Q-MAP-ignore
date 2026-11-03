@@ -38,7 +38,7 @@ from ..storage.files import sha256_file
 from . import auto_interpret as A
 from .format_detect import EXTENSION_KIND
 from .ingest import _date_limit_retry, ingest_file
-from .instruments import normalise_exchange, normalise_symbol
+from .instruments import normalise_exchange, normalise_symbol, record_display_name
 from .profiles import MIXED, canonical_timeframe
 from .instrument_names import ensure_registry_template, load_registry, registry_path
 from .overlap import check_new_datasets, write_overlap_report
@@ -540,6 +540,8 @@ def _scan_one(run: Run, src: FolderSource, scan_id: int, path: Path, rel: str, l
         retry_on = _date_limit_retry(db, attempt, today, settings)[1]
         if retry_on:
             detail += f" It will be loaded again automatically by a scan on or after {retry_on.isoformat()}."
+    if outcome in ("imported", "reused"):
+        _record_display_names(db, res.dataset_ids, interp)
     if outcome == "imported":
         found = check_new_datasets(run, res.dataset_ids)
         if overlaps is not None:
@@ -550,6 +552,17 @@ def _scan_one(run: Run, src: FolderSource, scan_id: int, path: Path, rel: str, l
              attempt_id=res.attempt_id, dataset_ids_json=list(res.dataset_ids),
              retry_on=retry_on.isoformat() if retry_on else None, detail=detail.strip(), **base)
     return outcome, change, "processed", detail.strip()
+
+
+def _record_display_names(db: Database, dataset_ids, interp) -> None:
+    """DQ-8 review (03-Nov-26): a registry match keeps its canonical display name ("NIFTY 50") with the instrument."""
+    match = ((interp.decisions or {}).get("identification") or {}).get("match") or {}
+    if match.get("status") not in ("canonical", "alias") or not match.get("canonical"):
+        return
+    for ds in dataset_ids:
+        row = db.one("SELECT instrument_id FROM datasets WHERE dataset_id = ?", (ds,))
+        if row is not None and row["instrument_id"] is not None:
+            record_display_name(db, row["instrument_id"], match["canonical"])
 
 
 REPORT_COLUMNS = ("File", "Change", "Action", "Result", "Detail")
