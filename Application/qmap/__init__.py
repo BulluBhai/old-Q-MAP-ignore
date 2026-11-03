@@ -1,6 +1,6 @@
 """Q-MAP: Quantitative Market Analytics Platform (Stage 2 foundation)."""
 
-__version__ = "0.1.0"
+__version__ = "0.1.0rc1"  # release label only; the build ID (qmap.core.build) tells builds apart
 
 # Bump this whenever standardisation or validation logic changes in a way that
 # could change the result for the same raw file and the same source profile.

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "qmap"
-version = "0.1.0"
+version = "0.1.0rc1"
 description = "Q-MAP (Quantitative Market Analytics Platform) - Stage 2 foundation"
 requires-python = ">=3.11"
 dependencies = [

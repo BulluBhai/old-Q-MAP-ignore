@@ -25,6 +25,7 @@ from typing import Callable
 
 from .. import CLEANING_CODE_VERSION, __version__
 from ..catalog import DataRequirement, ReadinessReport, check_readiness, get_dataset, provenance
+from ..core.build import current_build
 from ..core.config import Settings
 from ..core.dates import DateInputError, format_long, parse_user_date
 from ..core.runs import run_context
@@ -251,7 +252,7 @@ def run_analysis(settings: Settings, db: Database, spec: AnalysisSpec, dataset_i
             meta = {
                 "run_id": run.run_id, "analysis_id": spec.analysis_id, "analysis_name": spec.name,
                 "analysis_version": spec.version, "result_kind": spec.kind_note,
-                "qmap_version": __version__, "cleaning_code_version": CLEANING_CODE_VERSION,
+                "qmap_version": __version__, "cleaning_code_version": CLEANING_CODE_VERSION, "build": current_build(),
                 "created_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
                 "parameters": params["parameters"], "readiness_warnings": readiness.warnings,
                 "input_datasets": [_dataset_record(db, r.dataset_id, r) for r in readiness.reports],

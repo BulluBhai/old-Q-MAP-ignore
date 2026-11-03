@@ -24,6 +24,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from .. import CLEANING_CODE_VERSION, __version__
+from .build import build_label, current_build
 from ..storage.db import Database, utc_now_iso
 from ..storage.files import atomic_write_bytes, sha256_file
 from .config import Settings
@@ -170,7 +171,7 @@ def _reserve_run(settings: Settings, db: Database, module_code: str, area: str, 
                     "INSERT INTO runs(run_id, module_code, status, started_at, params_json, code_version, output_path) "
                     "VALUES (?, ?, 'running', ?, ?, ?, ?)",
                     (run_id, module_code, utc_now_iso(), json.dumps(params, default=str, sort_keys=True),
-                     f"qmap {__version__} / {CLEANING_CODE_VERSION}",
+                     build_label(),
                      run_dir.resolve().relative_to(settings.output_root).as_posix()),
                 )
         except sqlite3.IntegrityError as exc:
@@ -263,6 +264,7 @@ def _finish(run: Run, status: str, error: str | None) -> Path:
         "finished_at": finished_at,
         "qmap_version": __version__,
         "cleaning_code_version": CLEANING_CODE_VERSION,
+        "build": current_build(),
         "parameters": run.params,
         "error_message": error,
         "input_datasets": inputs,
