@@ -274,9 +274,10 @@ restore, run `recover`, then ingest the original again.
 - Both applications have been exercised on Linux (real windows on a virtual screen), **not yet on Windows**: Windows-only behaviour (opening folders, remembered-settings location, high-DPI
   text) is covered by simulation. The command line remains for `recover`, `verify` and `restore-raw`.
 - Selecting the "current" dataset across several raw files for one instrument is not defined yet.
-- A daily, weekly or monthly timeframe on data with several bars per day/week/month (for example 5-minute bars
-  declared `1D`) is reported as a warning (`one_bar_per_period`), not rejected; a 5-minute file declared `1m` is
-  likewise only a warning (`timeframe_spacing`). The timeframe you declare is always used as declared.
+- Timeframes are measured from the data (DQ-7, 03-Nov-26): a declared timeframe that contradicts the data is
+  reported (`timeframe_declared_differs`) and the measured interval is registered. A daily file in which a few dates
+  carry a second bar is measured as intraday (only same-date steps count); MA Affinity and weekly/monthly derivation
+  then refuse it (see the v0.1 known-limitations document).
 - **Incomplete trading days are not reliably detected.** The note "Some days have fewer bars than usual" compares each day with
   the most common day length in the same file; there is no trading calendar. In the owner's sample files 4 of 5
   incomplete intraday days were not flagged. Every bar is still stored exactly as in the source, but do not treat

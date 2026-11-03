@@ -38,6 +38,13 @@ analytical use** by the Project Owner after Windows/IDLE acceptance. **Not produ
 - QLOPB's own notes say intraday MA Affinity research is not validated; v0.1 therefore offers only daily, weekly and
   monthly datasets. Quarterly is not offered (it was not in the approved scope, although it was shown to be equal).
 - One dataset per run (as in QLOPB). No cross-instrument comparison screen.
+- **Start date on weekly/monthly data** (found in the final audit): a period filter keeps every bar whose date (the
+  last session of the week or month) falls inside the period. With a start date in the middle of a week, that week's
+  bar is kept and contains the sessions just before the start date. This uses earlier data, never later data (no
+  look-ahead). For exact boundaries, start on the first trading day of a week or month. Dataset Summary behaves the
+  same way.
+- The standalone QLOPB program in its own repository (`main`) does not contain safeguards S-1..S-3; they are on its
+  branch `claude/youthful-bardeen-11wtok` and in Q-MAP. Its results on clean data are the same.
 - QLOPB's three safeguards (S-1 infinite prices, S-2 weights, S-3 extra CSV values) have **not been independently
   reviewed** yet. S-3 applies to QLOPB's own file loader, which Q-MAP keeps (with its tests) but does not use.
 - The migrated engine was developed on pandas 2; this candidate was tested with pandas 3.1, which prints deprecation
@@ -56,6 +63,11 @@ analytical use** by the Project Owner after Windows/IDLE acceptance. **Not produ
   contain them in the chosen period; Dataset Summary runs with a warning.
 - OW-33: a small section with another interval may or may not make a dataset MIXED depending on the sample (DQ-14
   pending). The full-file check still warns.
+- **Daily file with a few two-bar dates** (found in the final audit; same area as OW-33/DQ-14): if some dates of a
+  daily file carry a second bar at another time, DQ-7 measures only same-date steps and registers the file as intraday
+  (for example "30 minutes"), without a warning. Nothing is lost or changed, MA Affinity refuses it (timeframe not
+  supported) and weekly/monthly derivation refuses it (needs daily). Dataset Summary would describe it as intraday.
+  Changing this needs the DQ-14/OW-33 decision; not changed in v0.1.
 - DQ-11/DQ-12 not built (see section 2). Thousands separators and decimal commas are not read automatically (OW-21);
   multi-symbol files are usually asked, not inferred (OW-22).
 
