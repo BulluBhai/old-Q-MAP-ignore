@@ -20,7 +20,8 @@ from .datetime_parse import parse_times
 from .instruments import instrument_key, normalise_exchange, normalise_symbol
 from .mapping import SourceTable, resolve_column, safe_extra_name
 from .numeric import INVALID, parse_number
-from .profiles import ALLOWED_TIMEFRAMES, SourceProfile
+from .profiles import MIXED, SourceProfile, canonical_timeframe
+from .timeframe_infer import CONSISTENT, DEFAULT_SAMPLING, MIXED_STATUS, infer_from_parsed
 from .results import ERROR, INFO, WARNING, CheckResult, Collector, Issue, examples
 from .validation import GroupContext, merge_results, validate_group
 from .volume import apply_volume
@@ -77,15 +78,17 @@ def _fatal(err: IngestError, rows_read: int, table: SourceTable | None, extra_ch
                          transformations=list(table.transformations) if table else [])
 
 
-def _timeframe(profile: SourceProfile, filename: str, overrides: dict) -> str:
+def _timeframe(profile: SourceProfile, filename: str, overrides: dict) -> str | None:
+    """The DECLARED timeframe (profile, file-name pattern or typed value), or None. Since DQ-7 it is a cross-check
+    only: the registered timeframe is the interval measured in the data (see _settle_timeframe)."""
     spec = profile.instrument
     tf = spec.timeframe
+    if tf == "infer":
+        return None
     if tf == "ingest":
         tf = overrides.get("timeframe")
         if not tf:
-            raise IngestError("The profile takes the timeframe from the ingest request, but none was supplied.",
-                              code="E_TIMEFRAME_REQUIRED", check="instrument_declared",
-                              action="Supply the timeframe when ingesting (it is never inferred).")
+            return None
     elif tf == "filename_pattern":
         m = re.compile(spec.filename_pattern).search(filename)
         if not m or not m.group("timeframe"):
@@ -95,11 +98,53 @@ def _timeframe(profile: SourceProfile, filename: str, overrides: dict) -> str:
                               action="Rename the file so that it fits the pattern, or use a profile that asks for the "
                                      "timeframe (timeframe = \"ingest\").")
         tf = dict(spec.timeframe_map).get(m.group("timeframe"), m.group("timeframe"))
-    if tf not in ALLOWED_TIMEFRAMES:
-        raise IngestError(f"Timeframe {tf!r} is not one of {ALLOWED_TIMEFRAMES}.", code="E_TIMEFRAME_REQUIRED",
-                          check="instrument_declared",
+    canon = canonical_timeframe(tf)
+    if canon is None or canon == MIXED:
+        raise IngestError(f"Timeframe {tf!r} is not a timeframe (examples: 1m, 5m, 75m, 1h, 2h, 1D, 1W, 1M).",
+                          code="E_TIMEFRAME_REQUIRED", check="instrument_declared",
                           action="Add a timeframe_map to the profile, or correct the value.")
-    return tf
+    return canon
+
+
+def _settle_timeframe(declared: str | None, parsed, profile: SourceProfile, settings: Settings,
+                      overrides: dict) -> tuple[str, list[CheckResult], dict]:
+    """DQ-7: the interval MEASURED in the data (sampled blocks) is the timeframe. A declared value (profile, file name,
+    typed) is a cross-check: a difference is a warning, never an override. MIXED when the blocks disagree."""
+    zone = profile.datetime.exchange_timezone or profile.datetime.timezone or "UTC"
+    cfg = {**DEFAULT_SAMPLING, **(getattr(settings, "timeframe_sampling", None) or {})}
+    inf = infer_from_parsed(parsed, zone, cfg)
+    record = inf.as_dict()
+    source = {"ingest": "the value supplied when loading", "filename_pattern": "the file name"}.get(
+        profile.instrument.timeframe, "the source profile")
+    checks = []
+    if inf.status == CONSISTENT and canonical_timeframe(inf.timeframe):
+        tf = canonical_timeframe(inf.timeframe)
+        why = f"{inf.summary}; {inf.rows_examined} of {inf.rows_total} rows examined"
+    elif inf.status == MIXED_STATUS:
+        tf = MIXED
+        why = f"{inf.summary}; {inf.rows_examined} of {inf.rows_total} rows examined"
+        checks.append(CheckResult("mixed_intervals", WARNING, False, len(inf.blocks),
+                                  f"{inf.summary}. The data are kept as one dataset with timeframe MIXED; analyses "
+                                  "that assume one uniform interval will say they cannot use it."))
+    elif declared:
+        tf = declared
+        why = f"{inf.summary}; the declared {declared} from {source} is used"
+        checks.append(CheckResult("timeframe_not_measurable", WARNING, False, 0,
+                                  f"The bar interval could not be measured ({inf.reason}); the declared timeframe "
+                                  f"{declared} from {source} was used without a cross-check."))
+    else:
+        raise IngestError(f"The bar interval cannot be measured from the data ({inf.reason}), and no timeframe was "
+                          "declared.", code="E_TIMEFRAME_REQUIRED", check="instrument_declared",
+                          action="Supply the timeframe when loading (it is used only when the data are too short to "
+                                 "measure it).")
+    record["registered"] = tf
+    record["declared"] = declared
+    checks.insert(0, CheckResult("timeframe_inferred", "info", True, 0, f"Timeframe {tf}: {why}."))
+    if declared and tf != MIXED and inf.status == CONSISTENT and declared != tf:
+        checks.append(CheckResult("timeframe_declared_differs", WARNING, False, 0,
+                                  f"{source[:1].upper() + source[1:]} says {declared}, but the data are {tf} bars "
+                                  f"({inf.summary.lower()}). The data are authoritative: registered as {tf}."))
+    return tf, checks, record
 
 
 def _scalar_instrument(kind: str, label: str, fixed, pattern: str | None, filename: str, override, normalise):
@@ -213,8 +258,10 @@ def process_table(table: SourceTable, profile: SourceProfile, settings: Settings
 
         # --- dates -----------------------------------------------------------------------
         time_values = table.columns[mapping["time"]] if "time" in mapping else None
-        parsed = parse_times(table.columns[mapping["date"]], profile.datetime, timeframe=timeframe, settings=settings,
+        parsed = parse_times(table.columns[mapping["date"]], profile.datetime, timeframe=None, settings=settings,
                              collector=collector, time_values=time_values, today=today)
+        timeframe, tf_checks, tf_record = _settle_timeframe(timeframe, parsed, profile, settings, overrides)
+        checks_pre.extend(tf_checks)
 
         # --- volume ----------------------------------------------------------------------
         vol = apply_volume(table, profile.volume, profile.file, collector)
@@ -317,7 +364,8 @@ def process_table(table: SourceTable, profile: SourceProfile, settings: Settings
         source_columns=table.describe_columns(),
         column_mapping={k: {"position": v, "name": table.names[v]} for k, v in mapping.items()},
         datetime_rules={"profile": {k: getattr(profile.datetime, k) for k in profile.datetime.__dataclass_fields__},
-                        "applied": parsed.provenance, "timeframe": timeframe, "sort_rule": C.SORT_RULE},
+                        "applied": parsed.provenance, "timeframe": timeframe, "sort_rule": C.SORT_RULE,
+                        "timeframe_inference": tf_record},
         volume_rule={"profile_rule": profile.volume.rule, "status": vol.status, **vol.provenance},
         field_provenance=_field_provenance(table, mapping, parsed, vol, extra_names, groups, profile))
 

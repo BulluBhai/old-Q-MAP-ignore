@@ -18,8 +18,33 @@ from ..core.config import Settings
 from ..core.errors import IngestError, ProfileError
 from ..storage.db import Database, utc_now_iso
 
-ALLOWED_TIMEFRAMES = ("1m", "5m", "15m", "30m", "1h", "3h", "4h", "1D", "1W", "1M")
-INTRADAY_MINUTES = {"1m": 1, "5m": 5, "15m": 15, "30m": 30, "1h": 60, "3h": 180, "4h": 240}
+# Timeframes are open-ended since DQ-7 (03-Nov-26): any whole number of minutes ("3m", "75m") or hours ("2h"), plus
+# 1D, 1W, 1M (and 1Q, 1Y for derived data). The bar interval is inferred from the data (timeframe_infer.py); MIXED
+# marks a file whose sampled blocks show materially different intervals. ALLOWED_TIMEFRAMES is only the list of COMMON
+# values offered in drop-down boxes; validity is decided by is_timeframe().
+ALLOWED_TIMEFRAMES = ("1m", "3m", "5m", "15m", "30m", "75m", "1h", "2h", "3h", "4h", "1D", "1W", "1M")
+from ..core.timeframes import (MIXED, PERIOD_TIMEFRAMES, canonical_timeframe, is_timeframe,  # noqa: E402,F401
+                               minutes_label, timeframe_minutes)
+
+
+class _IntradayMinutes(dict):
+    """Backward-compatible mapping: INTRADAY_MINUTES[tf] / `tf in INTRADAY_MINUTES` for ANY intraday timeframe."""
+
+    def __contains__(self, tf) -> bool:
+        return timeframe_minutes(tf) is not None
+
+    def __getitem__(self, tf):
+        m = timeframe_minutes(tf)
+        if m is None:
+            raise KeyError(tf)
+        return m
+
+    def get(self, tf, default=None):
+        m = timeframe_minutes(tf)
+        return default if m is None else m
+
+
+INTRADAY_MINUTES = _IntradayMinutes()
 DATETIME_KINDS = ("iso", "format", "unix_s", "unix_ms", "excel_serial", "native")
 VOLUME_RULES = ("none", "use_column", "sum_columns")
 FROM_KINDS = ("fixed", "column", "filename_pattern", "ingest")
@@ -227,12 +252,13 @@ def parse_profile(text: str, path: str | None = None) -> SourceProfile:
     if timeframe == "filename_pattern":
         if compiled is None or "timeframe" not in compiled.groupindex:
             raise ProfileError("[instrument] timeframe = 'filename_pattern' needs a named group (?P<timeframe>...).")
-    elif timeframe != "ingest" and timeframe not in ALLOWED_TIMEFRAMES:
-        raise ProfileError(f"[instrument] timeframe must be one of {ALLOWED_TIMEFRAMES}, 'ingest' or 'filename_pattern'. "
-                           "It is declared, never inferred.")
+    elif timeframe not in ("ingest", "infer") and (not is_timeframe(timeframe) or timeframe == MIXED):
+        raise ProfileError(f"[instrument] timeframe must be a timeframe (e.g. 1m, 5m, 75m, 1h, 2h, 1D, 1W, 1M), 'infer', "
+                           "'ingest' or 'filename_pattern'. Since DQ-7 a declared value is a cross-check; the interval "
+                           "measured in the data is registered.")
     for _, v in tf_map:
-        if v not in ALLOWED_TIMEFRAMES:
-            raise ProfileError(f"[instrument] timeframe_map value {v!r} is not one of {ALLOWED_TIMEFRAMES}.")
+        if not is_timeframe(v) or v == MIXED:
+            raise ProfileError(f"[instrument] timeframe_map value {v!r} is not a timeframe (e.g. 5m, 1h, 1D).")
     instrument = InstrumentSpec(
         exchange_from=exch_from, symbol_from=sym_from, exchange=ins.get("exchange"), symbol=ins.get("symbol"),
         exchange_column=_ref(ins["exchange_column"], "[instrument] exchange_column") if "exchange_column" in ins else None,

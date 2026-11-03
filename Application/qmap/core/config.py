@@ -81,6 +81,8 @@ class Settings:
     max_gap_days: int = 7
     min_rows: int = 1
     requirement_sets: dict = field(default_factory=lambda: {k: dict(v) for k, v in DEFAULT_REQUIREMENT_SETS.items()})
+    # timeframe inference by sampling (DQ-7); keys and defaults in data_engine/timeframe_infer.DEFAULT_SAMPLING
+    timeframe_sampling: dict = field(default_factory=dict)
 
     # ---- derived locations -------------------------------------------------
     @property
@@ -273,6 +275,16 @@ def load_settings(config_path: str | os.PathLike | None = None, *, env=None,
     for name, body in cfg.get("requirement_sets", {}).items():
         req_sets[name] = {"require_volume": bool(body.get("require_volume", False))}
 
+    sampling = {}
+    for key, value in cfg.get("timeframe_sampling", {}).items():
+        if key == "consistency_share":
+            sampling[key] = _number(cfg["timeframe_sampling"], key, 0.9, float, minimum=0)
+            if not 0.5 <= sampling[key] <= 1:
+                raise ConfigError("[timeframe_sampling] consistency_share must be between 0.5 and 1.",
+                                  action="Use a value such as 0.9.")
+        else:
+            sampling[key] = _number(cfg["timeframe_sampling"], key, 1, int, minimum=1)
+
     settings = Settings(
         data_root=data_root,
         output_root=output_root,
@@ -287,6 +299,7 @@ def load_settings(config_path: str | os.PathLike | None = None, *, env=None,
         max_gap_days=_number(val, "max_gap_days", 7, int, minimum=1),
         min_rows=_number(val, "min_rows", 1, int, minimum=1),
         requirement_sets=req_sets,
+        timeframe_sampling=sampling,
     )
     if create_layout:
         ensure_layout(settings)

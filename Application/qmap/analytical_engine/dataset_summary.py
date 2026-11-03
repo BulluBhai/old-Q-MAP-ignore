@@ -19,7 +19,7 @@ from pathlib import Path
 
 import numpy as np
 
-from ..catalog import DataRequirement, TIMEFRAME_ORDER, fmt_date, get_dataset, read_dataset
+from ..catalog import DataRequirement, fmt_date, get_dataset, read_dataset
 from ..data_engine import canonical as C
 from .base import AnalysisSpec, Parameter, RunContext
 
@@ -89,7 +89,8 @@ SPEC = AnalysisSpec(
     description="Coverage and descriptive statistics of prepared datasets (bars, dates, gaps, bar-to-bar returns, "
                 "volume). A utility that checks data before research; it is not a research methodology.",
     run_prefix="DSUM",
-    requirement=DataRequirement(timeframes=TIMEFRAME_ORDER, min_rows=2),
+    # any timeframe (DQ-7: 75m, 2h ... included); MIXED allowed with a visible warning, the statistics unchanged
+    requirement=DataRequirement(timeframes=None, min_rows=2, allow_mixed=True),
     execute=execute,
     parameters=(Parameter("date_from", "Start date", "date",
                           help="Optional. Type 25/02/26, 25-02-26, 25-Feb-26 or 250226, or use Calendar. "

@@ -22,11 +22,9 @@ import hashlib
 import json
 import math
 import re
-from collections import Counter
 from dataclasses import dataclass, field
 from datetime import date, datetime, time
 from pathlib import Path
-from statistics import median
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from ..core.config import Settings
@@ -36,11 +34,15 @@ from .format_detect import PARQUET, TEXT, XLS, XLSX, detect_format
 from .instruments import normalise_exchange, normalise_symbol
 from .mapping import SourceTable
 from .numeric import OK, parse_number
-from .profiles import ALLOWED_TIMEFRAMES, DatetimeSpec, FileSpec, SourceProfile, parse_profile
+from .profiles import (ALLOWED_TIMEFRAMES, MIXED, DatetimeSpec, FileSpec, SourceProfile, canonical_timeframe,
+                       minutes_label, parse_profile)
+from .timeframe_infer import CONSISTENT, DEFAULT_SAMPLING, MIXED_STATUS, infer_from_parsed
 from .readers import read_source
 from .results import Collector
 
-RULES_VERSION = 3  # bump when any rule below changes how the same file would be interpreted
+RULES_VERSION = 4  # bump when any rule below changes how the same file would be interpreted
+# 4 (03-Nov-26, DQ-7): the timeframe is measured by sampling (timeframe_infer.py), any interval, MIXED; file-name
+#   tokens and recorded answers are cross-checks; asked only when the data are too short to measure.
 # 2 (02-Nov-26, owner decision DQ-2): an exchange column is always used, and a file name that contradicts an exchange
 #   or symbol column is rejected (v1 let a file-name exchange replace an exchange column when there was no symbol column)
 # 3 (02-Nov-26, PR #9 acceptance findings F-01..F-03): "min" timeframe tokens in file names; market prefix CRYPTO_
@@ -89,9 +91,6 @@ _DATE_FORMATS = ("%d-%m-%Y", "%d-%m-%y", "%d/%m/%Y", "%d/%m/%y", "%m/%d/%Y", "%m
                  "%d.%m.%Y", "%Y/%m/%d", "%Y%m%d", "%d-%b-%Y", "%d-%b-%y", "%d %b %Y")
 _TIME_SUFFIXES = ("", " %H:%M", " %H:%M:%S")
 _TIME_FORMATS = ("%H:%M", "%H:%M:%S")
-INTRADAY_STEPS = {1: "1m", 5: "5m", 15: "15m", 30: "30m", 60: "1h", 180: "3h", 240: "4h"}
-MIN_BARS_FOR_TIMEFRAME = 3
-MIN_STEP_SHARE = 0.6
 
 
 @dataclass
@@ -112,13 +111,15 @@ class Interpretation:
     overrides: dict = field(default_factory=dict)  # exchange / symbol / timeframe passed to ingest_file
     evidence: list = field(default_factory=list)  # plain-English decisions, in order
     questions: list = field(default_factory=list)
+    warnings: list = field(default_factory=list)  # material exceptions, reported; the file is still processed
     signature: str = ""  # structure signature: answers are reused only for the same signature
     decisions: dict = field(default_factory=dict)
 
     def as_dict(self) -> dict:
         return {"status": self.status, "message": self.message, "rules_version": RULES_VERSION,
                 "profile_id": self.profile.profile_id if self.profile else None, "overrides": self.overrides,
-                "evidence": self.evidence, "questions": [q.as_dict() for q in self.questions],
+                "evidence": self.evidence, "warnings": self.warnings,
+                "questions": [q.as_dict() for q in self.questions],
                 "signature": self.signature, "decisions": self.decisions}
 
 
@@ -360,67 +361,17 @@ def _monotonic(keys: list) -> bool:
 # A-9: timeframe
 # ---------------------------------------------------------------------------------------------------------------
 
-def _measured_step(parsed, zone_for_days: str) -> tuple[int, float] | None:
-    """(minutes, share) when the data CLEARLY have one intraday bar interval: several bars on a trading date, enough
-    same-day steps, and the most common step covers >= MIN_STEP_SHARE of them. Whether that interval is a supported
-    timeframe is decided by the caller. None for date-only data, one bar per date, or irregular steps."""
-    if not parsed.is_instant:
-        return None
-    z = ZoneInfo(zone_for_days)
-    ts = sorted(t for t in parsed.ts_utc if t is not None)
-    per_day = Counter(t.astimezone(z).date() for t in ts)
-    if not per_day or max(per_day.values()) <= 1:
-        return None
-    steps = [int(round((b - a).total_seconds() / 60)) for a, b in zip(ts, ts[1:])
-             if a.astimezone(z).date() == b.astimezone(z).date()]
-    if len(steps) < MIN_BARS_FOR_TIMEFRAME - 1:
-        return None
-    step, n = Counter(steps).most_common(1)[0]
-    share = n / len(steps)
-    return (step, share) if share >= MIN_STEP_SHARE else None
-
-
-def _infer_timeframe(parsed, zone_for_days: str) -> tuple[str | None, str]:
-    if parsed.is_instant:
-        z = ZoneInfo(zone_for_days)
-        ts = sorted(t for t in parsed.ts_utc if t is not None)
-        per_day = Counter(t.astimezone(z).date() for t in ts)
-        if per_day and max(per_day.values()) > 1:
-            steps = [int(round((b - a).total_seconds() / 60)) for a, b in zip(ts, ts[1:])
-                     if a.astimezone(z).date() == b.astimezone(z).date()]
-            if len(steps) < MIN_BARS_FOR_TIMEFRAME - 1:
-                return None, "too few bars within a day to measure the bar interval"
-            step, n = Counter(steps).most_common(1)[0]
-            share = n / len(steps)
-            if step in INTRADAY_STEPS and share >= MIN_STEP_SHARE:
-                return INTRADAY_STEPS[step], f"{share:.0%} of steps within a day are {step} minute(s)"
-            return None, f"the most common step within a day is {step} minute(s) ({share:.0%} of steps), which is not a supported bar size"
-        days = sorted(per_day)
-        basis = "one bar per trading date"
-    else:
-        days = sorted({d for d in parsed.session_dates if d is not None})
-        basis = "date-only values"
-    if len(days) < MIN_BARS_FOR_TIMEFRAME:
-        return None, f"only {len(days)} distinct date(s), too few to measure the bar interval"
-    gap = median((b - a).days for a, b in zip(days, days[1:]))
-    if 1 <= gap <= 4:
-        return "1D", f"{basis}, typical gap {gap:g} day(s)"
-    if 5 <= gap <= 9:
-        return "1W", f"{basis}, typical gap {gap:g} days"
-    if 27 <= gap <= 33:
-        return "1M", f"{basis}, typical gap {gap:g} days"
-    return None, f"{basis}, typical gap {gap:g} days, which is not a supported bar size"
-
-
 def timeframe_from_name(stem: str) -> str | None:
     found = list(_NAME_TF.finditer(stem))
     if not found:
         return None
     num, unit = int(found[-1].group(1)), found[-1].group(2)
+    if num == 0:
+        return None
     if unit in ("", "m", "min"):
-        return INTRADAY_STEPS.get(num)
+        return minutes_label(num) if num < 24 * 60 else None
     if unit in ("h", "H"):
-        return {1: "1h", 3: "3h", 4: "4h"}.get(num)
+        return f"{num}h" if num < 24 else None
     if unit in ("d", "D") and num == 1:
         return "1D"
     if unit in ("w", "W") and num == 1:
@@ -585,52 +536,48 @@ def _interpret(path, settings, market_tz, default_exchange, symbol_from_filename
             else:
                 probes = [p for p in (_try(c, values, tvalues, settings, tz) for c, _ in pool) if p is not None]
 
-    # ---- A-9 timeframe ---------------------------------------------------------------------------------------
+    # ---- A-9 timeframe (DQ-7, 03-Nov-26) --------------------------------------------------------------------
+    # The interval is MEASURED from sampled blocks of the data (timeframe_infer.py). A file-name token and a recorded
+    # answer are cross-checks only: a difference is reported, never used. Asked only when the data are too short.
     stem = path.stem
     name_tf = timeframe_from_name(stem)
-    timeframe = answers.get("timeframe")
-    if timeframe and timeframe not in ALLOWED_TIMEFRAMES:
-        timeframe = None
-    inferred, why = None, ""
+    ans_tf = canonical_timeframe(answers.get("timeframe"))
+    if ans_tf == MIXED:
+        ans_tf = None
+    timeframe = None
     day_zone = tz if _valid_zone(tz) else "UTC"
-    if probes:
-        results = {_infer_timeframe(p, day_zone) for p in probes}
-        inferred, why = (next(iter(results)) if len({r[0] for r in results}) == 1
-                         else (None, "the candidate date layouts give different bar intervals"))
-    measured = {_measured_step(p, day_zone) for p in probes}
-    measured = next(iter(measured)) if len(measured) == 1 else None
-    if measured is not None and (timeframe or not inferred):
-        step, share = measured
-        fits = INTRADAY_STEPS.get(step)  # the timeframe whose bar interval IS the measured one, if Q-MAP has it
-        if fits is None:
-            # A clear interval with no matching timeframe: every possible answer would relabel the bars (e.g.
-            # 180-minute bars registered as 4h), so there is no valid answer to ask for.
-            raise _Reject(f"The bars are {step} minutes apart ({share:.0%} of steps within a day), and {step}-minute "
-                          "bars are not a supported timeframe"
-                          + (f"; your recorded answer ({timeframe}) would relabel them" if timeframe else "")
-                          + ". Q-MAP does not relabel, resample or aggregate bars.")
-        if timeframe and timeframe != fits:
-            # The interval is MEASURED (same-day steps). A different answer would relabel the data, so the recorded
-            # answer is not used and the question is asked again with the only consistent choice.
-            res.questions.append(Question(
-                "timeframe", f"Your recorded answer says {timeframe} bars, but the data are {fits} bars ({share:.0%} of "
-                             f"steps within a day are {step} minutes). Q-MAP does not relabel bars. Choose {fits}, or "
-                             "correct the file.", (fits,)))
-            timeframe = None
-    asked = any(q.key == "timeframe" for q in res.questions)
-    if timeframe and not asked:
-        evidence.append(f"A-9 timeframe {timeframe}: given by the user (recorded answer).")
-    elif probes and not asked:
-        if inferred and name_tf and name_tf != inferred:
-            res.questions.append(Question(
-                "timeframe", f"The data look like {inferred} bars ({why}), but the file name says {name_tf}. "
-                             "Which is right?", (inferred, name_tf)))
-        elif inferred:
-            timeframe = inferred
-            evidence.append(f"A-9 timeframe {inferred}: {why}" + (f"; the file name agrees ({name_tf})." if name_tf else "."))
+    cfg = {**DEFAULT_SAMPLING, **(getattr(settings, "timeframe_sampling", None) or {})}
+    infs = [infer_from_parsed(p, day_zone, cfg) for p in probes]
+    outcomes = {(i.status, i.timeframe) for i in infs}
+    inference = infs[0] if infs and len(outcomes) == 1 else None
+    if inference is not None and inference.status in (CONSISTENT, MIXED_STATUS):
+        timeframe = inference.timeframe
+        res.decisions["timeframe_inference"] = inference.as_dict()
+        evidence.append(f"A-9 timeframe {timeframe}: {inference.summary} ({inference.rows_examined} of "
+                        f"{inference.rows_total} rows examined; sampling seed {inference.seed}).")
+        if inference.status == MIXED_STATUS:
+            res.warnings.append(f"Mixed or inconsistent intervals: {inference.summary}. Kept as one dataset with "
+                                "timeframe MIXED.")
+        if name_tf and name_tf != timeframe:
+            res.warnings.append(f"The file name says {name_tf}, but the data are {timeframe}; the data are used.")
+        elif name_tf:
+            evidence.append(f"A-9 the file name agrees ({name_tf}).")
+        if ans_tf and ans_tf != timeframe:
+            res.warnings.append(f"Your earlier answer ({ans_tf}) is not used: the data are {timeframe}.")
+    elif infs and len(outcomes) > 1:
+        if not any(q.key == "date_format" for q in res.questions):
+            res.questions.append(Question("timeframe", "The possible date layouts give different bar intervals. What "
+                                                       "is the timeframe?", ALLOWED_TIMEFRAMES))
+    elif infs:
+        reason = infs[0].reason
+        timeframe = ans_tf or name_tf
+        if timeframe:
+            evidence.append(f"A-9 timeframe {timeframe}: the data are too short to measure it ({reason}); "
+                            + ("your recorded answer" if ans_tf else "the file name") + " is used.")
+            res.warnings.append(f"Timeframe {timeframe} could not be checked against the data ({reason}).")
         else:
-            res.questions.append(Question("timeframe", f"The bar interval could not be worked out ({why}). "
-                                                       "What is the timeframe?", ALLOWED_TIMEFRAMES))
+            res.questions.append(Question("timeframe", f"The bar interval cannot be measured ({reason}). What is the "
+                                                       "timeframe?", ALLOWED_TIMEFRAMES))
 
     # ---- A-8 identity ----------------------------------------------------------------------------------------
     # Precedence (owner decision DQ-2, 02-Nov-26): explicit columns in the file > the user's recorded answer > the
@@ -712,7 +659,7 @@ def _interpret(path, settings, market_tz, default_exchange, symbol_from_filename
            "names": [_norm(n) if n else None for n in names] if header else len(columns),
            "date_layouts": sorted(c.cid for c, _ in full)}
     res.signature = hashlib.sha256(json.dumps(sig, sort_keys=True).encode()).hexdigest()[:16]
-    res.decisions = {"format": kind, "delimiter": delimiter, "header": header,
+    res.decisions = {**res.decisions, "format": kind, "delimiter": delimiter, "header": header,
                      "mapping": {k: {"position": v, "name": names[v]} for k, v in mapping.items()},
                      "date_layout": cand.cid if cand else None, "timeframe": timeframe,
                      "market_timezone": tz if needs_zone else None, "identity": overrides or None}
@@ -723,7 +670,7 @@ def _interpret(path, settings, market_tz, default_exchange, symbol_from_filename
         return res
 
     # ---- generate the profile ---------------------------------------------------------------------------------
-    overrides["timeframe"] = timeframe
+    overrides["timeframe"] = timeframe if timeframe != MIXED else None  # MIXED is measured again, never declared
     res.profile = _build_profile(kind, delimiter, header, mapping, cand, tz if needs_zone else None, instrument)
     res.overrides = overrides
     res.status = READY

@@ -122,7 +122,7 @@ def test_fingerprint_is_stable_and_covers_exactly_the_identity_settings(settings
     for key in FINGERPRINT_KEYS:
         changed = {**base, key: "something else"}
         assert config_fingerprint(changed) != config_fingerprint(base), key
-    assert config_fingerprint(base).startswith("vs1:")
+    assert config_fingerprint(base).startswith("vs2:")  # vs2 since DQ-7 (timeframe_sampling added)
 
 
 def test_fingerprint_is_the_same_when_settings_are_reloaded_from_a_file(roots, tmp_path):

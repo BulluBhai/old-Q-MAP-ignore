@@ -226,12 +226,12 @@ def test_symbol_column_is_content_and_a_contradicting_name_is_rejected(settings,
     assert A.interpret_file(bad, settings).status == A.REJECTED
 
 
-def test_a_file_name_timeframe_that_contradicts_the_data_is_asked(settings, src):
+def test_a_file_name_timeframe_that_contradicts_the_data_is_reported_not_used(settings, src):
     p = write_delimited(src / "NSE_ABC, 1D.csv", HEADER,
                         [[t.isoformat()] + r for t, r in zip(intraday_utc(30, step_minutes=5), ohlcv(30))])
-    it = A.interpret_file(p, settings, market_timezone="Asia/Kolkata")
-    q = next(q for q in it.questions if q.key == "timeframe")
-    assert set(q.options) == {"5m", "1D"}
+    it = A.interpret_file(p, settings, market_timezone="Asia/Kolkata")  # DQ-7: the data decide, the name is reported
+    assert it.status == A.READY and it.overrides["timeframe"] == "5m"
+    assert any("file name says 1D" in w for w in it.warnings)
 
 
 @pytest.mark.parametrize("step, expected", [(1, "1m"), (15, "15m"), (60, "1h")])

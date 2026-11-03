@@ -109,7 +109,14 @@ def _validation_settings(settings, profile: SourceProfile, today: date) -> dict:
         "requirement_set": profile.requirement_set,
         "require_volume": bool(settings.requirement_sets[profile.requirement_set].get("require_volume")),
         "today": today.isoformat(),
+        "timeframe_sampling": _sampling(settings),
     }
+
+
+def _sampling(settings) -> dict:
+    from .timeframe_infer import DEFAULT_SAMPLING
+
+    return {**DEFAULT_SAMPLING, **(getattr(settings, "timeframe_sampling", None) or {})}
 
 
 # Settings that can change whether a file is accepted, or the content/quality_flags of a cleaned dataset.
@@ -118,8 +125,9 @@ def _validation_settings(settings, profile: SourceProfile, today: date) -> dict:
 #   today        - the run date moves the "not in the future" bound every day; including it would prevent all reuse.
 # Both are still recorded in validation_settings_json, and a difference in max_gap_days is reported on reuse.
 FINGERPRINT_KEYS = ("plausible_min_date", "plausible_max_days_ahead", "max_daily_move_pct", "min_rows",
-                    "requirement_set", "require_volume")
-FINGERPRINT_SCHEME = "vs1"  # change if FINGERPRINT_KEYS change, so old and new fingerprints never collide
+                    "requirement_set", "require_volume", "timeframe_sampling")
+FINGERPRINT_SCHEME = "vs2"  # change if FINGERPRINT_KEYS change, so old and new fingerprints never collide
+# vs2 (03-Nov-26, DQ-7): the timeframe-inference sampling settings can change the registered timeframe
 
 
 def config_fingerprint(vsettings: dict) -> str:

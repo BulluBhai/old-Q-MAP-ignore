@@ -134,8 +134,14 @@ def test_timeframe_from_the_file_name_with_an_explicit_map(src, run, db):
 
 
 def test_timeframe_supplied_at_ingest(src, run, db):
+    """Since DQ-7 (03-Nov-26) the interval is measured in the data; a supplied value is only a cross-check."""
     prof = make_profile(instrument={"timeframe": "ingest"})
     p = write_delimited(src / "tf.csv", HEADER, ROWS)
-    assert do_ingest(run, p, prof).outcome == "rejected"
+    res = do_ingest(run, p, prof)  # nothing supplied: measured
+    assert res.outcome == "accepted" and db.one("SELECT timeframe FROM datasets WHERE layer='cleaned'")[0] == "1D"
     res = do_ingest(run, p, make_profile(profile_id="tf2", instrument={"timeframe": "ingest"}), timeframe="1D")
-    assert res.outcome == "accepted"
+    assert res.outcome == "accepted" and not [c for c in res.checks if c.name == "timeframe_declared_differs"]
+    two_rows = write_delimited(src / "short.csv", HEADER, ROWS[:2])  # too short to measure: the supplied value is used
+    assert do_ingest(run, two_rows, make_profile(profile_id="tf3", instrument={"timeframe": "ingest"})).outcome == "rejected"
+    res = do_ingest(run, two_rows, make_profile(profile_id="tf4", instrument={"timeframe": "ingest"}), timeframe="1D")
+    assert res.outcome == "accepted" and [c for c in res.checks if c.name == "timeframe_not_measurable"]

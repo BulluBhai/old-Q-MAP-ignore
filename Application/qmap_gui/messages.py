@@ -67,6 +67,25 @@ CHECKS: dict[str, tuple[str, str, str]] = {
     "no_duplicate_timestamps": ("Two or more rows have the same date/time (older records)",
                                 "Before 03-Nov-26 a repeated date/time rejected the file.",
                                 "Load the file again: identical copies are now removed and differing ones kept."),
+    "timeframe_inferred": ("Timeframe measured from the data",
+                           "Q-MAP measured the bar interval in sampled parts of the file (no calendar, no file name).",
+                           "Nothing to do. If it is wrong, reject the file in Sources."),
+    "timeframe_declared_differs": ("The stated timeframe differs from the data",
+                                   "The file name, profile or typed value says one interval; the bars are spaced at "
+                                   "another. Q-MAP registered the interval the data actually have.",
+                                   "Check the source if you expected the stated timeframe."),
+    "mixed_intervals": ("Mixed bar intervals",
+                        "Different parts of the file have different bar intervals (for example 1-minute and 5-minute). "
+                        "The data are kept as one dataset with timeframe MIXED.",
+                        "Analyses that need one interval will say they cannot use it. Split the file if you need "
+                        "single-interval datasets."),
+    "timeframe_not_measurable": ("Timeframe could not be measured",
+                                 "The file is too short to measure the bar interval; the stated timeframe was used.",
+                                 "Check the timeframe is right."),
+    "period_has_conflicting_observations": ("Some periods are built from conflicting observations",
+                                            "The daily data have dates with more than one different value; the usual "
+                                            "rules were applied to all of them.",
+                                            "Resolve the conflicts in the daily data if these periods matter."),
     "exact_duplicates_removed": ("Identical copies of rows were removed",
                                  "Some rows were identical in every column to an earlier row. The standardised copy "
                                  "keeps one of each; your original file is unchanged.",

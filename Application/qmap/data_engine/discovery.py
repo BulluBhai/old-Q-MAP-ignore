@@ -39,7 +39,7 @@ from . import auto_interpret as A
 from .format_detect import EXTENSION_KIND
 from .ingest import _date_limit_retry, ingest_file
 from .instruments import normalise_exchange, normalise_symbol
-from .profiles import ALLOWED_TIMEFRAMES
+from .profiles import MIXED, canonical_timeframe
 from .overlap import check_new_datasets, write_overlap_report
 
 MODULE_CODE = "SCAN"
@@ -282,8 +282,12 @@ def record_answer(db: Database, source_id: int, relative_path: str, answers: dic
             clean["symbol"] = normalise_symbol(clean["symbol"])
     except QmapError as exc:
         raise SourceError(exc.message, action=exc.action) from None
-    if "timeframe" in clean and clean["timeframe"] not in ALLOWED_TIMEFRAMES:
-        raise SourceError(f"Timeframe {clean['timeframe']!r} is not one of {', '.join(ALLOWED_TIMEFRAMES)}.")
+    if "timeframe" in clean:
+        canon = canonical_timeframe(clean["timeframe"])
+        if canon is None or canon == MIXED:
+            raise SourceError(f"Timeframe {clean['timeframe']!r} is not a timeframe (examples: 1m, 5m, 75m, 1h, 2h, "
+                              "1D, 1W, 1M).")
+        clean["timeframe"] = canon
     earlier = latest_answer(db, source_id, relative_path)
     sig = state.interpretation.get("signature", "")
     merged = dict(json.loads(earlier["answers_json"])) if earlier and earlier["structure_signature"] == sig else {}

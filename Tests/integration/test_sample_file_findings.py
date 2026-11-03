@@ -125,12 +125,14 @@ def test_an_excel_workbook_with_a_csv_ending_is_read_by_its_content(src):
 
 
 # ---- E. A daily/weekly/monthly timeframe on finer data is reported ----------------------------------------
-def test_five_minute_bars_declared_daily_are_reported(src, run):
+def test_five_minute_bars_declared_daily_are_registered_as_5m_and_reported(src, run, db):
+    """DQ-7 (03-Nov-26): the data are authoritative; the declared 1D is reported, never used."""
     p = write_delimited(src / "five_min.csv", NET_HEADER, iso_rows(n=150))  # two sessions of 75 five-minute bars
     res = do_ingest(run, p, iso_profile(instrument={"timeframe": "1D"}))
-    chk = [c for c in res.checks if c.name == "one_bar_per_period"][0]
-    assert not chk.passed and chk.severity == "warning" and "finer than the declared timeframe 1D" in chk.detail
-    assert res.outcome == "accepted"  # report-only (owner decision pending); the timeframe is never changed
+    assert res.outcome == "accepted"
+    chk = [c for c in res.checks if c.name == "timeframe_declared_differs"][0]
+    assert not chk.passed and chk.severity == "warning" and "says 1D" in chk.detail and "registered as 5m" in chk.detail
+    assert db.one("SELECT timeframe FROM datasets WHERE layer='cleaned'")[0] == "5m"
 
 
 def test_one_bar_per_day_at_the_session_open_passes(src, run):
@@ -142,8 +144,9 @@ def test_one_bar_per_day_at_the_session_open_passes(src, run):
     assert [c for c in res.checks if c.name == "one_bar_per_period"][0].passed
 
 
-def test_two_bars_in_one_week_declared_weekly_are_reported(src, run):
-    rows = [[d.isoformat()] + r for d, r in zip([date(2026, 1, 5), date(2026, 1, 7), date(2026, 1, 12)], ohlcv(3))]
+def test_two_bars_in_one_week_of_weekly_data_are_reported(src, run):
+    days = [date(2026, 1, 5) + timedelta(days=7 * i) for i in range(10)] + [date(2026, 1, 7)]
+    rows = [[d.isoformat()] + r for d, r in zip(sorted(days), ohlcv(11))]
     p = write_delimited(src / "weekly.csv", HEADER, rows)
     res = do_ingest(run, p, make_profile(instrument={"timeframe": "1W"}))
     chk = [c for c in res.checks if c.name == "one_bar_per_period"][0]

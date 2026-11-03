@@ -294,11 +294,13 @@ def test_intraday_partial_sessions_and_wrong_timeframe_are_warnings(src, run, db
     assert res.outcome == "accepted", res.message
     partial = [c for c in res.checks if c.name == "partial_session"][0]
     assert not partial.passed and "120/375" in partial.detail
+    # DQ-7 (03-Nov-26): a declared 5m for 1-minute data is reported; the measured 1m is registered
     prof5 = make_profile(profile_id="five", instrument={"timeframe": "5m"},
                          datetime={"kind": "iso", "exchange_timezone": "Asia/Kolkata"})
     res5 = do_ingest(run, p, prof5)
-    spacing = [c for c in res5.checks if c.name == "timeframe_spacing"][0]
-    assert not spacing.passed and "5m" in spacing.detail
+    differs = [c for c in res5.checks if c.name == "timeframe_declared_differs"][0]
+    assert not differs.passed and "says 5m" in differs.detail and "registered as 1m" in differs.detail
+    assert [c for c in res5.checks if c.name == "timeframe_spacing"][0].passed
 
 
 def test_plausible_range_error_for_a_wrong_century_is_reported(src, run, db):

@@ -79,7 +79,8 @@ def _stored(settings, db, dataset_id):
 @pytest.mark.parametrize("stem, expected", [
     ("5PAISA_30min", "30m"), ("VERANDA_1min", "1m"), ("ABC_5min", "5m"), ("ABC_15min", "15m"),
     ("NSE_BANKNIFTY, 15", "15m"), ("ABC, 60", "1h"), ("ABC_4h", "4h"), ("ABC, 1D", "1D"),
-    ("ICICIBANK", None), ("OLAELEC", None), ("ABC_7min", None), ("ABC_minutes", None),
+    ("ICICIBANK", None), ("OLAELEC", None), ("ABC_7min", "7m"), ("ABC, 75", "75m"), ("ABC_2h", "2h"),
+    ("ABC_minutes", None), ("ABC_0min", None),
 ])
 def test_timeframe_tokens_in_file_names(stem, expected):
     assert A.timeframe_from_name(stem) == expected
@@ -110,16 +111,18 @@ def test_plain_name_is_suggested_when_the_folder_option_is_off_and_used_when_it_
     assert on.status == A.READY and on.overrides == {"exchange": "NSE", "symbol": sym, "timeframe": tf}
 
 
-def test_a_minute_token_in_the_name_is_evidence_that_agrees_or_is_asked(settings, src):
+def test_a_minute_token_in_the_name_is_a_cross_check_only(settings, src):
+    """DQ-7 (03-Nov-26): the data decide; a file name that disagrees is reported, never asked about or used."""
     ok = intraday_ist(src / "VERANDA_1min.csv", 30, 1)
     it = A.interpret_file(ok, settings, market_timezone="Asia/Kolkata", default_exchange="NSE",
                           symbol_from_filename=True)
     assert it.status == A.READY and it.overrides["timeframe"] == "1m"
-    assert any("the file name agrees (1m)" in e for e in it.evidence)
+    assert any("the file name agrees (1m)" in e for e in it.evidence) and not it.warnings
     bad = intraday_ist(src / "VERANDA_5min.csv", 30, 1)
-    q = next(q for q in A.interpret_file(bad, settings, market_timezone="Asia/Kolkata", default_exchange="NSE",
-                                         symbol_from_filename=True).questions if q.key == "timeframe")
-    assert set(q.options) == {"1m", "5m"}
+    it = A.interpret_file(bad, settings, market_timezone="Asia/Kolkata", default_exchange="NSE",
+                          symbol_from_filename=True)
+    assert it.status == A.READY and it.overrides["timeframe"] == "1m"
+    assert any("file name says 5m" in w and "data are 1m" in w for w in it.warnings)
 
 
 def test_explicit_identity_in_the_file_still_wins_over_a_plain_name(settings, src):
@@ -180,61 +183,62 @@ def test_the_symbol_option_never_turns_a_market_prefix_into_a_symbol(settings, s
     assert it.decisions["identity"] == {"symbol": "BTCUSD"} and [q.key for q in it.questions] == ["exchange"]
 
 
-def test_a_recorded_answer_that_contradicts_the_measured_interval_is_asked_again(settings, src):
+def test_a_recorded_answer_that_contradicts_the_measured_interval_is_not_used(settings, src):
     p, _ = three_hourly(src / "CRYPTO_BTCUSD.csv", step=60)
     it = A.interpret_file(p, settings, market_timezone="Asia/Kolkata",
                           answers={"exchange": "BINANCE", "timeframe": "4h"})
-    q = next(q for q in it.questions if q.key == "timeframe")
-    assert it.status == A.NEEDS_ANSWER and q.options == ("1h",) and "does not relabel" in q.text
-    assert A.interpret_file(p, settings, market_timezone="Asia/Kolkata",
-                            answers={"exchange": "BINANCE", "timeframe": "1h"}).status == A.READY
+    assert it.status == A.READY and it.overrides["timeframe"] == "1h"
+    assert any("earlier answer (4h) is not used" in w for w in it.warnings)
 
 
-def test_a_clear_but_unsupported_bar_interval_is_rejected_never_relabelled(settings, src, monkeypatch):
-    """Without a matching timeframe (e.g. if 3h were not approved), no answer can be valid: rejected with the reason."""
-    p, _ = three_hourly(src / "CRYPTO_RIVERUSD, 180.csv")
-    monkeypatch.setattr(A, "INTRADAY_STEPS", {k: v for k, v in A.INTRADAY_STEPS.items() if k != 180})
-    for answers in ({"exchange": "BINANCE"}, {"exchange": "BINANCE", "timeframe": "4h"}):
-        it = A.interpret_file(p, settings, market_timezone="Asia/Kolkata", answers=answers)
-        assert it.status == A.REJECTED and "180 minutes apart" in it.message and "does not relabel" in it.message
-    assert "would relabel them" in it.message
-
-
-def test_intraday_data_answered_as_daily_is_asked_again(settings, src):
+def test_intraday_data_answered_as_daily_is_registered_as_measured(settings, src):
     p = intraday_ist(src / "NSE_ABC.csv", 40, 5)
     it = A.interpret_file(p, settings, market_timezone="Asia/Kolkata", answers={"timeframe": "1D"})
-    assert [(q.key, q.options) for q in it.questions] == [("timeframe", ("5m",))]
+    assert it.status == A.READY and it.overrides["timeframe"] == "5m" and it.warnings
 
 
-def test_a_non_intraday_answer_to_a_name_versus_data_question_is_still_accepted(settings, src):
-    """The new contradiction check is limited to measured intraday intervals, so it cannot loop on daily data."""
+def test_daily_data_named_weekly_is_daily_with_a_warning(settings, src):
     p = daily(src / "NSE_ABC, 1W.csv", n=20)
     it = A.interpret_file(p, settings)
-    assert {q.key for q in it.questions} == {"timeframe"}
-    assert A.interpret_file(p, settings, answers={"timeframe": "1W"}).overrides["timeframe"] == "1W"
+    assert it.status == A.READY and it.overrides["timeframe"] == "1D"
+    assert any("file name says 1W" in w for w in it.warnings)
+    assert A.interpret_file(p, settings, answers={"timeframe": "1W"}).overrides["timeframe"] == "1D"
+
+
+def _old_rules(monkeypatch):
+    """Simulate the rules before DQ-7: no measurement, so a typed timeframe (4h) was registered as given."""
+    from qmap.data_engine import process as P
+    from qmap.data_engine.timeframe_infer import Inference
+
+    monkeypatch.setattr(A, "infer_from_parsed", lambda *_a, **_k: Inference("insufficient", None, reason="old rules"))
+
+    def declared_only(declared, parsed, profile, settings, overrides):
+        return declared, [], {"registered": declared}
+
+    monkeypatch.setattr(P, "_settle_timeframe", declared_only)
+    monkeypatch.setattr(A, "RULES_VERSION", 2)
 
 
 def test_the_owner_s_earlier_4h_answer_for_180_minute_bars_is_no_longer_used(settings, db, folder, monkeypatch):
-    """The owner's state before this fix: RIVERUSD registered as 4h from a recorded answer. After the fix the unchanged
-    file is interpreted again (rules version 3); the answer would relabel the bars, so it is not used, and the
-    earlier dataset is left exactly as it was (nothing is deleted or rewritten automatically)."""
+    """The owner's state before PR #9's fixes: RIVERUSD registered as 4h from a recorded answer. Since DQ-7 the file
+    is measured again (3h); the answer is reported as not used; the earlier dataset is left exactly as it was."""
     src = _source(settings, db, folder)
     p, _ = three_hourly(folder / "CRYPTO_RIVERUSD, 180.csv")
-    monkeypatch.setattr(A, "INTRADAY_STEPS", {k: v for k, v in A.INTRADAY_STEPS.items() if k != 180})
-    monkeypatch.setattr(A, "_measured_step", lambda *_a: None)  # the earlier rules did not check answers
-    monkeypatch.setattr(A, "RULES_VERSION", 2)
+    _old_rules(monkeypatch)
     scan(settings, db, src)
     D.record_answer(db, src.source_id, "CRYPTO_RIVERUSD, 180.csv", {"exchange": "CRYPTO", "timeframe": "4h"})
     scan(settings, db, src)
     (old,) = list_datasets(db)
-    assert old.timeframe == "4h" and any(w.startswith("timeframe_spacing") for w in old.warnings)
+    assert old.timeframe == "4h"
     old_row = dict(db.one("SELECT * FROM datasets WHERE dataset_id = ?", (old.dataset_id,)))
     monkeypatch.undo()  # the current rules
     rel, change, action, outcome, detail = result_for(scan(settings, db, src), "CRYPTO_RIVERUSD, 180.csv")
-    assert (change, action) == ("unchanged", "processed") and outcome in ("needs_answer", "rejected")
-    assert "4h" in detail and ("does not relabel" in detail or "would relabel" in detail)
+    assert (change, action, outcome) == ("unchanged", "processed", "imported"), detail
+    states = {s.relative_path: s for s in D.file_states(db, src.source_id)}
+    assert any("earlier answer (4h) is not used" in w
+               for w in states["CRYPTO_RIVERUSD, 180.csv"].interpretation["warnings"])
     assert dict(db.one("SELECT * FROM datasets WHERE dataset_id = ?", (old.dataset_id,))) == old_row  # untouched
-    assert [d.timeframe for d in list_datasets(db)] == ["4h"]  # no second dataset under a wrong label
+    assert sorted(d.timeframe for d in list_datasets(db)) == ["3h", "4h"]  # both kept; the user decides
 
 
 # =====================================================================================================================

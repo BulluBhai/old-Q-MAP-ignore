@@ -47,6 +47,18 @@ def _mask_result(out: list, collector: Collector, name: str, severity: str, mask
     out.append(CheckResult(name, severity, not rows, len(rows), "" if not rows else f"{len(rows)} row(s): {examples(rows)}"))
 
 
+def _distinct_in_order(dates: list, keys: list) -> list:
+    """(date, key) pairs in stored order, each distinct timestamp once (a repeated timestamp is one bar position).
+    Stored order, not a set: Counter.most_common breaks ties by first appearance, so the result must not depend on
+    hash order."""
+    seen, out = set(), []
+    for d, k in zip(dates, keys):
+        if d is not None and (d, k) not in seen:
+            seen.add((d, k))
+            out.append((d, k))
+    return out
+
+
 def validate_group(frame: dict, ctx: GroupContext, collector: Collector) -> ValidationOutput:
     out: list[CheckResult] = []
     o, h, lo, c = (np.asarray(frame[k], dtype=float) for k in ("open", "high", "low", "close"))
@@ -156,7 +168,7 @@ def validate_group(frame: dict, ctx: GroupContext, collector: Collector) -> Vali
         med = float(np.median(steps)) if steps else float(expected)
         out.append(CheckResult("timeframe_spacing", WARNING, med == expected, 0 if med == expected else len(steps),
                                "" if med == expected else f"Bars are typically {med:g} minute(s) apart but the profile declares {ctx.timeframe}."))
-        counts = Counter(d for d, _k in {(d, k) for d, k in zip(frame["session_date"], keys) if d is not None})
+        counts = Counter(d for d, _k in _distinct_in_order(frame["session_date"], keys))
         if len(counts) >= 2:
             mode = Counter(counts.values()).most_common(1)[0][0]
             partial = sorted((d, k) for d, k in counts.items() if k < mode)
@@ -168,7 +180,7 @@ def validate_group(frame: dict, ctx: GroupContext, collector: Collector) -> Vali
         # a repeated date is a conflict, reported separately.) Report-only: the timeframe is never changed here.
         # Distinct timestamps are counted, so conflicting observations of ONE timestamp do not look like finer data.
         unit, key = PERIOD_OF[ctx.timeframe]
-        per = Counter(key(d) for d, _k in {(d, k) for d, k in zip(frame["session_date"], keys) if d is not None})
+        per = Counter(key(d) for d, _k in _distinct_in_order(frame["session_date"], keys))
         multi = sorted(k for k, cnt in per.items() if cnt > 1)
         detail = ("" if not multi else f"{len(multi)} {unit}(s) have more than one bar (e.g. "
                   + "; ".join(f"{k}: {per[k]} bars" for k in multi[:5])
