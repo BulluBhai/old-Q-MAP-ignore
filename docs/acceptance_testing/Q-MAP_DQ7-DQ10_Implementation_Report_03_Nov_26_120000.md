@@ -270,7 +270,7 @@ Sampling result on the same timestamps (zone Asia/Kolkata, default configuration
 | 2 5m, 10 % missing | 9729 | consistent 5m | {'5m': 15} | 470 | 106325263972693 | 325, 858, 1879, 2122 ... 9104 (15) | nothing |
 | 2 5m, 25 % missing | 8164 | consistent 5m | {'5m': 15} | 470 | 7060488642778 | 259, 611, 1593, 1879 ... 7621 (15) | nothing |
 | 3 5m with 200 rows of 3m / 7m / 1m | 11000 | consistent 5m (section missed) | {'5m': 15} | 468 | 131435030026616 | 602, 1410, 1923, 2476 ... 10557 (15) | **detected**, with source rows |
-| 3b 5m with 300 rows of 3m, 1 % of them missing | 11297 | consistent 5m | — | — | — | — | **detected** |
+| 3b 5m with 300 rows of 3m, 1 % of them missing | 11097 | consistent 5m | {'5m': 15} | 470 | 63594099373784 | 242, 982, 1901, 2279 ... 10606 (15) | **detected** |
 | 4 5m sparse: 40 consecutive one-bar dates at varying times + scattered one-bar dates | 11682 | consistent 5m | {'5m': 15} | 455 | 137507532262368 | 6, 975, 2020, 2960 ... 11157 (15) | nothing; `partial_session` lists the dates |
 | 5 1m + 60 one-bar dates at 00:00 | 40560 | consistent 1m | {'1m': 20} | 620 | 189009869754661 | 329, 3074, 5890, 7005 ... 40304 (20) | **detected** (daily) |
 | 5 1m + 60 one-bar dates at 15:30 | 40560 | consistent 1m | {'1m': 20} | 620 | 196591891031131 | 1925, 3625, 4161, 7416 ... 39891 (20) | **detected** (daily) |
