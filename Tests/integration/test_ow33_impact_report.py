@@ -85,9 +85,20 @@ def _load_multi(src, run):
 
 
 def _fingerprint(settings) -> dict:
+    """Every stored file (datasets and stored originals) byte by byte, and the registry's complete content.
+    The registry's own files (main file, -wal, -shm journal) are excluded from the byte scan: on Windows the journal
+    files are locked while the registry is open. Its content is covered instead by a logical dump through a read-only
+    connection (which sees committed WAL content) plus the main file's bytes."""
+    db_names = settings.db_path.name
     files = {p.relative_to(settings.data_root).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
-             for p in sorted(settings.data_root.rglob("*")) if p.is_file()}
-    files["<registry>"] = hashlib.sha256(settings.db_path.read_bytes()).hexdigest()
+             for p in sorted(settings.data_root.rglob("*")) if p.is_file() and not p.name.startswith(db_names)}
+    conn = O.open_read_only(settings.db_path)
+    try:
+        files["<registry content>"] = hashlib.sha256("\n".join(conn.iterdump()).encode("utf-8")).hexdigest()
+    finally:
+        conn.close()
+    files["<registry file>"] = hashlib.sha256(settings.db_path.read_bytes()).hexdigest()
+    assert any(k.endswith(".parquet") for k in files)  # the scan really covers the stored datasets
     return files
 
 
