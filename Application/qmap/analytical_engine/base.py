@@ -64,6 +64,7 @@ class RunContext:
     params: dict
     stamp: str
     log: Callable[[str], None]
+    readiness_warnings: list[str] = field(default_factory=list)  # shown to the user before the run (NOTE lines)
 
     def output(self, name: str) -> Path:
         return self.run_dir / name
@@ -262,7 +263,7 @@ def run_analysis(settings: Settings, db: Database, spec: AnalysisSpec, dataset_i
                 conn.executemany("INSERT OR IGNORE INTO run_inputs(run_id, dataset_id) VALUES (?, ?)",
                                  [(run.run_id, i) for i in ids])
             ctx = RunContext(settings, db, run.run_id, run.dir, ids, readiness.params, stamp,
-                             lambda m: (run.logger.info(m), say(m)))
+                             lambda m: (run.logger.info(m), say(m)), list(readiness.warnings))
             outputs = list(spec.execute(ctx))
             meta = {
                 "run_id": run.run_id, "analysis_id": spec.analysis_id, "analysis_name": spec.name,

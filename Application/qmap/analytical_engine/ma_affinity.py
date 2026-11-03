@@ -32,7 +32,8 @@ import numpy as np
 import qlopb
 from qlopb.config import settings as qcfg
 
-from ..catalog import DataRequirement, FAIL, PASS, WARN, fmt_date, get_dataset, read_dataset
+from ..catalog import DataRequirement, FAIL, PASS, WARN, fmt_date, get_dataset, provenance, read_dataset
+from ..core.build import build_label, current_build
 from ..data_engine import canonical as C
 from .base import AnalysisSpec, Parameter, RunContext
 
@@ -154,6 +155,46 @@ def dataset_checks(settings, db, dataset_id: int, params: dict, report) -> None:
         report.add("ma_affinity_history", PASS, f"{len(frame)} bars are enough for the chosen MA range and windows.")
 
 
+class QmapDataNote:
+    """What QLOPB's reports call the data-quality report, filled with the Q-MAP facts about the registered dataset.
+
+    QLOPB's engine accepts such an object (`quality=`): it shows `inferred_frequency` as the bar size and writes
+    `to_text()` to the Excel sheet Data_Quality. Nothing in the calculation reads it.
+    """
+
+    def __init__(self, ctx: RunContext, info, frame) -> None:
+        self.inferred_frequency = f"{info.timeframe_label} (Q-MAP registered dataset; not re-aggregated)"
+        b = current_build()
+        period = (f"{fmt_date(ctx.params.get('date_from')) if ctx.params.get('date_from') else 'first bar'} to "
+                  f"{fmt_date(ctx.params.get('date_to')) if ctx.params.get('date_to') else 'last bar'}")
+        self.lines = [
+            "Q-MAP run and data record",
+            f"Run ID: {ctx.run_id}",
+            f"Code build: {build_label(b)}",
+            f"Source fingerprint: {b['source_fingerprint']}",
+            f"Method: {METHOD_SOURCE}",
+            f"Dataset: {dataset_label(info)}",
+            f"Dataset checksum (SHA-256): {info.sha256}",
+            f"Validation status: {info.validation_status}",
+            f"Requested period: {period}; bars used: {len(frame)} "
+            f"({fmt_date(frame.index[0].date())} to {fmt_date(frame.index[-1].date())})",
+            "Source file(s): " + (", ".join(info.source_files) or "-"),
+            "Lineage:",
+            *[f"  {line}" for line in provenance(ctx.db, info.dataset_id)],
+            "Dataset validation warnings:",
+            *([f"  {w}" for w in info.warnings] or ["  none"]),
+            "Readiness notes shown before the run:",
+            *([f"  {w}" for w in ctx.readiness_warnings] or ["  none"]),
+        ]
+
+    def to_text(self) -> str:
+        return "\n".join(self.lines)
+
+
+def dataset_label(info) -> str:
+    return f"{info.instrument} {info.timeframe_label} (dataset {info.dataset_id})"
+
+
 def _csv(path: Path, rows: list[dict]) -> Path:
     fields = list(dict.fromkeys(k for r in rows for k in r))
     with open(path, "w", newline="", encoding="utf-8") as fh:
@@ -173,12 +214,15 @@ def execute(ctx: RunContext) -> list[Path]:
     info = get_dataset(ctx.db, dataset_id)
     s = _settings(ctx.params)
     frame, _ = _frame(ctx.settings, ctx.db, dataset_id, ctx.params)
-    label = f"{info.instrument} {info.timeframe_label} (dataset {dataset_id})"
+    label = f"{dataset_label(info)}, Run {ctx.run_id}"
     ctx.log(f"MA Affinity on {label}: {len(frame)} bars, {fmt_date(frame.index[0].date())} to "
             f"{fmt_date(frame.index[-1].date())}. Method: {METHOD_SOURCE}.")
-    res = run_ma_affinity(frame, s, label=label, log=ctx.log)
+    res = run_ma_affinity(frame, s, label=label, log=ctx.log, quality=QmapDataNote(ctx, info, frame))
     for w in res.warnings:
         ctx.log(f"WARNING: {w}")
+    # The reports print res.warnings; the Q-MAP data notes shown before the run are added so that the Excel and PDF
+    # carry them too (Blueprint v1.35 8.5.5 / 8.5.11 E). Nothing in the calculation reads this list.
+    res.warnings.extend(f"Q-MAP data: {w}" for w in ctx.readiness_warnings)
     charts = make_charts(res, ctx.run_dir, ctx.stamp)
     outputs = [write_excel(res, ctx.run_dir, ctx.stamp, charts), write_pdf(res, ctx.run_dir, ctx.stamp, charts)]
     outputs += list(charts.values())

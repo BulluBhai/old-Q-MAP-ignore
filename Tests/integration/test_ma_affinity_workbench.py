@@ -286,6 +286,8 @@ def test_acceptance_file_conflictdaily_is_imported_and_refused_with_its_date(set
     name = "NSE_CONFLICTDAILY.csv"
     src = Path(__file__).resolve().parents[2] / "docs" / "acceptance_testing" / "v01_files_03_Nov_26" / name
     shutil.copy2(src, folder / name)
+    # exactly as in the guide: no market time zone, no default exchange (the exchange comes from the file name)
+    D.add_folder_source(settings, db, folder)
     res = _scan(settings, db, folder)
     assert [f[3] for f in res.files] == ["imported"], res.files
     (ds,) = list_datasets(db)
@@ -296,3 +298,51 @@ def test_acceptance_file_conflictdaily_is_imported_and_refused_with_its_date(set
     ok = check_analysis(settings, db, MA_AFFINITY, [ds.dataset_id], {"date_to": "26-07-24", "ma_end": "60"})
     assert ok.ready, [f.detail for r in ok.reports for f in r.failures]
     assert run_analysis(settings, db, DATASET_SUMMARY, [ds.dataset_id], {}).outcome == "completed"
+
+
+# ---- audit 03-Nov-26: repeatability and what the reports say -------------------------------------------------------
+def test_the_same_run_twice_gives_identical_results(settings, db, folder):
+    _long_daily(folder / "NSE_REPEAT.csv")
+    _scan(settings, db, folder)
+    (ds,) = list_datasets(db)
+    a = run_analysis(settings, db, MA_AFFINITY, [ds.dataset_id], {"ma_end": "60"})
+    b = run_analysis(settings, db, MA_AFFINITY, [ds.dataset_id], {"ma_end": "60"})
+    assert a.run_id != b.run_id and a.run_dir != b.run_dir  # a repeated run never overwrites the earlier one
+    for pattern in ("MA_Affinity_Candidates_*.csv", "MA_Affinity_Interactions_*.csv"):
+        assert next(a.run_dir.glob(pattern)).read_bytes() == next(b.run_dir.glob(pattern)).read_bytes()
+
+
+def test_reports_carry_run_build_dataset_and_the_q_map_data_notes(settings, db, folder):
+    import openpyxl
+
+    rows = ohlcv(400)
+    days = weekdays(400, date(2023, 1, 2))
+    write_delimited(folder / "NSE_REP.csv", HEADER, [[d.isoformat()] + r for d, r in zip(days, rows)])
+    _scan(settings, db, folder)
+    revised = [list(r) for r in rows]
+    revised[3][3] = round(revised[3][3] + 0.5, 2)
+    revised[3][1] = max(revised[3][1], revised[3][3])
+    write_delimited(folder / "NSE_REP provider2.csv", HEADER, [[d.isoformat()] + r for d, r in zip(days, revised)])
+    _scan(settings, db, folder)
+    warned = next(d for d in list_datasets(db)
+                  if any(w.startswith("conflicts_with_existing_dataset") for w in get_dataset(db, d.dataset_id).warnings))
+    res = run_analysis(settings, db, MA_AFFINITY, [warned.dataset_id], {"ma_end": "60"})
+    assert res.outcome == "completed", res.message
+    wb = openpyxl.load_workbook(next(res.run_dir.glob("QLOPB_MA_Affinity_*.xlsx")))
+    summary = [tuple(r[:2]) for r in wb["Summary"].iter_rows(values_only=True)]
+    text = " | ".join(str(v) for r in summary for v in r if v is not None)
+    assert f"Run {res.run_id}" in text and f"dataset {warned.dataset_id}" in text
+    assert "Q-MAP data:" in text and "conflicting observations" in text  # the overlap NOTE reaches the report
+    assert "Daily (Q-MAP registered dataset; not re-aggregated)" in text  # bar size, not "as loaded"
+    quality = " | ".join(str(v) for r in wb["Data_Quality"].iter_rows(values_only=True) for v in r if v is not None)
+    build = current_build()
+    assert build["source_fingerprint"] in quality and get_dataset(db, warned.dataset_id).sha256 in quality
+    assert res.run_id in quality and "Lineage:" in quality and "NSE_REP" in quality
+    # the calculation is unchanged by the notes: same candidates as a run on the same bars without them
+    from qlopb.core.research_engine import run_ma_affinity as engine
+    frame, _ = M._frame(settings, db, warned.dataset_id, {})
+    plain = engine(frame, MAResearchSettings(ma_end=60), label="x")
+    got = pd.read_csv(next(res.run_dir.glob("MA_Affinity_Candidates_*.csv")))
+    np.testing.assert_allclose(got["is_affinity_score"].astype(float),
+                               pd.DataFrame(plain.results)["is_affinity_score"].astype(float), rtol=0, atol=1e-12,
+                               equal_nan=True)
