@@ -530,11 +530,14 @@ def _interpret(path, settings, market_tz, default_exchange, symbol_from_filename
     tz = answers.get("market_timezone") or market_tz
     needs_zone = any(p.is_instant for p in probes)
     if needs_zone and not _valid_zone(tz):
-        # section 8: Asia/Kolkata is the default for timestamps without time-zone information (warned, correctable)
+        # section 8: Asia/Kolkata is the default market time zone. It is a material assumption (warned, correctable)
+        # only for timestamps WITHOUT time-zone information; values with their own offset or Unix times are read from
+        # the source, and the zone then only names the trading date.
         tz = DEFAULT_TIMEZONE
-        res.warnings.append(f"No market time zone was given; {DEFAULT_TIMEZONE} (the default) was used for the trading "
-                            "date and for times written without an offset. Correct it in Sources if that is wrong.")
-        res.decisions["timezone_assumed"] = True
+        if any(p.provenance.get("timezone_applied") is not None for p in probes):
+            res.warnings.append(f"The timestamps have no time zone and none was given for the folder; {DEFAULT_TIMEZONE} "
+                                "(the default) was used. Correct it in Sources if that is wrong.")
+            res.decisions["timezone_assumed"] = True
     if needs_zone:
         naive = any(p.provenance.get("timezone_applied") is not None for p in probes)
         evidence.append(f"A-7 market time zone {tz} ("

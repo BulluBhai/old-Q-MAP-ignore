@@ -145,8 +145,10 @@ class SourcesFrame(tk.Frame):
         self.hint = tk.Label(row, text="", anchor="w", justify="left", wraplength=640)
         self.hint.pack(side="left", padx=10)
         tk.Label(box, anchor="w", fg=MUTED_COLOR, justify="left", wraplength=940,
-                 text="Answer for the selected file (only the boxes its question needs are switched on). Answers are "
-                      "recorded and used by the next scan, as long as the file keeps the same layout.").pack(fill="x")
+                 text="Answer or correct the selected file(s): a file with a question switches on only the boxes it "
+                      "needs; for files already accepted you can correct the exchange, symbol, date layout or time zone "
+                      "(several files at once). Recorded and applied by the next scan, as long as the file keeps the same "
+                      "layout.").pack(fill="x")
         form = tk.Frame(box)
         form.pack(fill="x", pady=3)
         self.ans_exch, self.ans_sym = tk.StringVar(self), tk.StringVar(self)
