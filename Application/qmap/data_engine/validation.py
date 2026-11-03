@@ -11,6 +11,8 @@ from __future__ import annotations
 import math
 from collections import Counter
 from dataclasses import dataclass, field
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import numpy as np
 
@@ -60,20 +62,50 @@ def _distinct_in_order(dates: list, keys: list) -> list:
 
 
 CHANGE_RUN = 30  # consecutive steps (or trading dates) that make a section "another interval" (= one sample block)
+SAME_TIME_SHARE = 0.9  # share of one-bar dates at one time of day that makes a daily-like grid (= consistency_share)
 
 
-def _interval_changes(frame: dict, keys: list, src, expected: int, timeframe: str, collector: Collector) -> CheckResult:
-    """Full-file verification of the sampled timeframe (review 03-Nov-26). Sampling can miss a short section between
-    blocks; validation reads every row anyway, so it reports any section of at least CHANGE_RUN consecutive same-day
-    steps that all have ONE other interval, or of CHANGE_RUN consecutive trading dates with a single bar each (a daily
-    section in intraday data). Report only: the registered timeframe is not changed (owner decision DQ-14)."""
-    sections = []
+def _classify_step_run(step: float, expected: int) -> str:
+    """'definite' when missing bars cannot explain the step (it is not a whole multiple of the expected interval,
+    e.g. 3 or 7 minutes in 5-minute data, or anything finer); 'uncertain' when it is a whole multiple (2, 3 ... times
+    the interval): a REGULAR grid of k-times-the-interval steps is either another interval or bars systematically
+    missing at every k-th position, and the timestamps cannot tell these apart.
+    Randomly missing bars do not reach this function: with independent gaps a step of k intervals has probability
+    q(1-q)^(k-1) <= 0.25, so CHANGE_RUN = 30 identical steps in a row have probability <= 0.25^30 (about 1e-18)."""
+    ratio = step / expected
+    return "uncertain" if ratio > 1 and abs(ratio - round(ratio)) < 1e-9 else "definite"
+
+
+def _interval_changes(frame: dict, keys: list, src, expected: int, timeframe: str, collector: Collector,
+                      zone: str | None = None) -> list[CheckResult]:
+    """Full-file verification of the sampled timeframe (review 03-Nov-26, refined after the second review). Sampling
+    can miss a short section between blocks; validation reads every row anyway. Report only: the registered timeframe
+    is never changed here (owner decision DQ-14).
+
+    Sections found (unchanged detection):
+    - a run of at least CHANGE_RUN consecutive same-day steps that all have ONE other interval;
+    - a run of at least CHANGE_RUN consecutive trading dates with a single bar each, while the usual date has several.
+    Classification (second review): a section is ASSERTED as another interval (`interval_change_detected`) only when
+    missing observations cannot explain it; otherwise it is reported as UNCERTAIN (`interval_change_uncertain`), and
+    scattered sparse observations are not reported at all:
+    - steps that are not whole multiples of the interval -> detected;
+    - a regular grid of whole multiples (2m in 1m data, 10m in 5m data, a 5-minute tail in 1-minute data) -> uncertain;
+    - one-bar dates at one time of day (>= SAME_TIME_SHARE of them) outside the times of day the multi-bar dates use
+      (e.g. midnight-stamped daily bars) -> detected; at one time of day inside that range -> uncertain;
+    - one-bar dates at varying times of day -> a sparse instrument, not another interval: nothing reported here
+      (the dates remain in partial_session)."""
+    definite, uncertain = [], []
     run_val, run_start, run_len = None, None, 0
     dates = frame["session_date"]
 
     def close(end_row):
         if run_val is not None and run_val != expected and run_len >= CHANGE_RUN:
-            sections.append(f"source rows {run_start}-{end_row}: {run_len} consecutive steps of {run_val:g} minute(s)")
+            text = f"source rows {run_start}-{end_row}: {run_len} consecutive steps of {run_val:g} minute(s)"
+            if _classify_step_run(run_val, expected) == "definite":
+                definite.append(text)
+            else:
+                uncertain.append(text + f" (a whole multiple of {expected:g}: another interval, or bars present "
+                                        f"only every {round(run_val / expected)} intervals)")
 
     last_end = None
     for i in range(1, len(keys)):
@@ -88,28 +120,69 @@ def _interval_changes(frame: dict, keys: list, src, expected: int, timeframe: st
             run_val, run_start, run_len = step, int(src[i - 1]), 1
         last_end = i
     close(int(src[last_end]) if last_end is not None else None)
-    # daily section: consecutive trading dates with one bar each, while the usual date has many
-    per_date = Counter(d for d, _k in _distinct_in_order(dates, keys))
+
+    # daily-like section: consecutive trading dates with one bar each, while the usual date has many
+    distinct = _distinct_in_order(dates, keys)
+    per_date = Counter(d for d, _k in distinct)
     if per_date and Counter(per_date.values()).most_common(1)[0][0] > 1:
-        first_row = {}
+        tz = _zone(zone)
+        first_row, single_time = {}, {}
+        multi_times = set()
         for d, r in zip(dates, src):
             first_row.setdefault(d, int(r))
+        for d, k in distinct:
+            if not isinstance(k, datetime):
+                continue
+            t = k.astimezone(tz).time() if tz is not None else k.time()
+            if per_date[d] == 1:
+                single_time[d] = t
+            else:
+                multi_times.add(t)
+        lo_t, hi_t = (min(multi_times), max(multi_times)) if multi_times else (None, None)
         run = []
         for d in sorted(per_date) + [None]:
             if d is not None and per_date[d] == 1:
                 run.append(d)
                 continue
             if len(run) >= CHANGE_RUN:
-                sections.append(f"source rows {first_row[run[0]]}-{first_row[run[-1]]}: {len(run)} consecutive trading "
-                                f"dates with one bar each ({run[0]} to {run[-1]}), like daily data")
+                text = (f"source rows {first_row[run[0]]}-{first_row[run[-1]]}: {len(run)} consecutive trading "
+                        f"dates with one bar each ({run[0]} to {run[-1]})")
+                times = Counter(single_time.get(x) for x in run)
+                t, cnt = times.most_common(1)[0]
+                if t is None or cnt < SAME_TIME_SHARE * len(run):
+                    pass  # varying times of day: a sparse instrument (missing observations), not another interval
+                elif lo_t is not None and lo_t <= t <= hi_t:
+                    uncertain.append(text + f", all at {t.strftime('%H:%M')}, a time the intraday bars also use "
+                                            "(daily data, or only one intraday bar per date)")
+                else:
+                    definite.append(text + f", all at {t.strftime('%H:%M')}, outside the times of the intraday bars, "
+                                           "like daily data")
             run = []
-    detail = ""
-    if sections:
-        detail = (f"The sampled timeframe is {timeframe}, but the full file contains section(s) with another interval: "
-                  + "; ".join(sections[:5]) + (" ..." if len(sections) > 5 else "")
-                  + ". Treat results across these sections with care; consider splitting the file.")
-        collector.add("interval_change_detected", WARNING, None, "date", None, detail)
-    return CheckResult("interval_change_detected", WARNING, not sections, len(sections), detail)
+
+    out = []
+    for name, sections, lead, advice in (
+            ("interval_change_detected", definite, "the full file contains section(s) with another interval",
+             "Treat results across these sections with care; consider splitting the file."),
+            ("interval_change_uncertain", uncertain,
+             "the full file contains section(s) on a regular coarser grid; the timestamps cannot show whether this is "
+             "another interval or systematically missing bars",
+             "Check the source for these sections; the registered timeframe is unchanged.")):
+        detail = ""
+        if sections:
+            detail = (f"The sampled timeframe is {timeframe}, but {lead}: " + "; ".join(sections[:5])
+                      + (" ..." if len(sections) > 5 else "") + ". " + advice)
+            collector.add(name, WARNING, None, "date", None, detail)
+        out.append(CheckResult(name, WARNING, not sections, len(sections), detail))
+    return out
+
+
+def _zone(name: str | None):
+    if not name:
+        return None
+    try:
+        return ZoneInfo(name)
+    except Exception:  # noqa: BLE001 - an unknown zone falls back to UTC times of day (comparison stays consistent)
+        return None
 
 
 def validate_group(frame: dict, ctx: GroupContext, collector: Collector) -> ValidationOutput:
@@ -228,7 +301,8 @@ def validate_group(frame: dict, ctx: GroupContext, collector: Collector) -> Vali
             detail = "; ".join(f"{d}: {k}/{mode} bars" for d, k in partial[:10]) + (" ..." if len(partial) > 10 else "")
             out.append(CheckResult("partial_session", WARNING, not partial, len(partial), "" if not partial else
                                    f"Sessions with fewer bars than the usual {mode}: {detail}"))
-        out.append(_interval_changes(frame, keys, src, expected, ctx.timeframe, collector))
+        out.extend(_interval_changes(frame, keys, src, expected, ctx.timeframe, collector,
+                                     ctx.profile.datetime.exchange_timezone))
     elif ctx.timeframe in PERIOD_OF and (ctx.is_instant or ctx.timeframe != "1D"):
         # A daily/weekly/monthly dataset must have at most one bar per day/week/month. (Date-only daily data is already
         # a repeated date is a conflict, reported separately.) Report-only: the timeframe is never changed here.

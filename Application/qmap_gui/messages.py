@@ -83,6 +83,11 @@ CHECKS: dict[str, tuple[str, str, str]] = {
                                  "Reading every row found a section (listed with its source rows) whose bars are spaced "
                                  "differently from the rest, for example a 5-minute tail in a 1-minute file.",
                                  "Results across that section mix intervals. Split the file, or keep it in mind."),
+    "interval_change_uncertain": ("Part of the file may have another bar interval",
+                                  "Reading every row found a section (listed with its source rows) on a regular coarser "
+                                  "grid, for example every bar 2 minutes apart in 1-minute data. The timestamps cannot "
+                                  "show whether that part has another interval or has bars missing at regular positions.",
+                                  "Check the source for that section. The registered timeframe is unchanged."),
     "timeframe_not_measurable": ("Timeframe could not be measured",
                                  "The file is too short to measure the bar interval; the stated timeframe was used.",
                                  "Check the timeframe is right."),

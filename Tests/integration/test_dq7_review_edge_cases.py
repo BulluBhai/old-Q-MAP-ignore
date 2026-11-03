@@ -122,9 +122,13 @@ def test_short_sections_missed_by_sampling_are_reported_by_validation(src, run, 
     assert sampled.timeframe == "1m", _report(sampled)  # the known sampling limit: the section is not sampled
     res = _load(src, run, sorted(keys), case)
     assert res.outcome == "accepted", res.message
-    chk = next(c for c in res.checks if c.name == "interval_change_detected")
+    # second review: every section here is a REGULAR grid of whole multiples of 1 minute (5m, 7m, daily bars at
+    # 09:15 IST, a time the 1-minute bars also use), so it is still found, with its source rows, but reported as
+    # uncertain (another interval, or bars missing at regular positions) instead of asserted
+    chk = next(c for c in res.checks if c.name == "interval_change_uncertain")
     assert not chk.passed and chk.severity == "warning" and "source rows" in chk.detail
     assert ("one bar each" in chk.detail) if case == "daily_tail" else ("consecutive steps of" in chk.detail)
+    assert next(c for c in res.checks if c.name == "interval_change_detected").passed
 
 
 def test_the_full_file_check_does_not_fire_on_an_illiquid_but_uniform_file(src, run):
@@ -134,3 +138,4 @@ def test_the_full_file_check_does_not_fire_on_an_illiquid_but_uniform_file(src, 
     keys = [k for k in sess(1, date(2025, 1, 1), 40) if rnd.random() > 0.5]  # half of the minutes missing
     res = _load(src, run, keys, "illiquid")
     assert next(c for c in res.checks if c.name == "interval_change_detected").passed
+    assert next(c for c in res.checks if c.name == "interval_change_uncertain").passed
