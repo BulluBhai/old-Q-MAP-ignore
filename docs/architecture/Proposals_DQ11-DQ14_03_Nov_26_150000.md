@@ -1,5 +1,9 @@
 # Proposals DQ-11 to DQ-14 (PR #10 review, 03-Nov-26) — NOT implemented in PR #10
 
+> **Latest status (owner decisions on the second review, D5-40..D5-43):** DQ-11 approved in principle (category list
+> under review); DQ-12 approved in principle, source-specific; DQ-14 provisionally approved on stated terms; OW-33
+> deferred to a separate assessment. None implemented. See the separate proposal documents.
+>
 > **Status after the owner's review (03-Nov-26):** DQ-11 and DQ-12 approved in principle, NOT for PR #10; their
 > separate proposals are `Proposal_DQ11_Asset_Category_and_Venue_03_Nov_26_075552.md` and
 > `Proposal_DQ12_Technical_Export_Columns_03_Nov_26_075552.md`. DQ-13: the source file and its values are not changed;

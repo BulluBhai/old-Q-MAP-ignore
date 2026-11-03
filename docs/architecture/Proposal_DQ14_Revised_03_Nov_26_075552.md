@@ -1,8 +1,20 @@
 # DQ-14 (revised) — what the full-file interval check should do to the registered timeframe — NOT implemented
 
 Supersedes the DQ-14 section of `Proposals_DQ11-DQ14_03_Nov_26_150000.md`. Written after the second PR #10 review
-correction (commit `fad8d2f`). **Nothing below is built.** The registered timeframe stays the sampled one, as
-instructed; the full-file check only reports.
+correction (commit `fad8d2f`). **Nothing below is built.** The registered timeframe stays the sampled one; the
+full-file check only reports.
+
+> **Owner decision, 03-Nov-26 (D5-42): PROVISIONALLY APPROVED, not implemented.**
+> - 30-step minimum evidence and the 1 % materiality threshold (of distinct timestamps) for registering MIXED.
+> - A **detected** section covering >= 1 % of distinct timestamps may cause the dataset to be registered as MIXED.
+> - A **detected** section below 1 % is still reported as a warning; never silently ignored.
+> - An **uncertain** section never changes the registered timeframe automatically: the timeframe is kept and a clear
+>   warning/NOTE is shown, whatever its size.
+> - The 1 % threshold is an **operational classification rule**, not a claim that smaller sections are harmless for
+>   every analytical calculation.
+> - The optional sampling alignment (section 6, last paragraph) is **not** approved; it is assessed separately in
+>   `OW-33_Sampling_vs_Full_File_Assessment_03_Nov_26_075552.md` and must come back for approval.
+> - Implementation needs a separate go-ahead (outside PR #10 unless the owner says otherwise).
 
 ## 1. Today (after `fad8d2f`)
 
@@ -27,8 +39,10 @@ Two conditions, both required:
    k intervals has probability q(1-q)^(k-1) <= 0.25 (maximum at k = 2, q = 0.5), so 30 identical steps have
    probability <= 0.25^30 ≈ 8.7e-19 per position; across a 1,000,000-row file <= 1e-12. Random gaps therefore never
    form a section; only a systematic pattern does.
-2. **Size that matters for results:** the section (all its runs together) is at least **1 % of the dataset's distinct
-   timestamps**. Below 1 % it affects at most 1 % of bar-to-bar returns; it is reported but not material.
+2. **Size for the classification:** the section (all its runs together) is at least **1 % of the dataset's distinct
+   timestamps**. Below 1 % it is reported as a warning but does not change the label. This is an operational
+   classification rule: it does not claim that a smaller section is harmless for every calculation (a single
+   section can still matter, e.g. for an event study that lands in it), which is why the warning always stays.
 
 ## 3. Why 1 %: quantitative justification
 
@@ -74,20 +88,29 @@ interval, so sampling can register a sparse file MIXED (seed-dependent, recorded
 | Full-file finding | >= 1 % of timestamps | < 1 % |
 |---|---|---|
 | Detected (non-multiple, or daily bars outside intraday times) | **MIXED** (registered, with the section listed; same readiness rules as sampled MIXED) | warning only (today) |
-| Uncertain (regular multiple; daily bars at an intraday time) | **unresolved classification**: sampled timeframe kept, warning kept, readiness shows a NOTE "possible interval change in rows ..."; the owner decides by correction (split the file, or confirm) | warning only (today) |
+| Uncertain (regular multiple; daily bars at an intraday time) | **timeframe kept** (never changed automatically), warning kept, readiness shows a NOTE "possible interval change in rows ..."; the owner decides by correction (split the file, or confirm) | timeframe kept, warning (today) |
 | Sparse one-bar dates; random gaps | nothing | nothing |
 
-Optional, for consistency (separate decision, changes the approved sampling rule): make sampling treat a block that
-is a regular whole-multiple grid, or a block of one-bar dates at varying times, the same way (unresolved, not MIXED).
-Without it, sampled sections keep the stronger MIXED label.
+Optional, for consistency (separate decision, changes the approved sampling rule; **not approved**, assessed in
+`OW-33_Sampling_vs_Full_File_Assessment_03_Nov_26_075552.md`): make sampling treat a block that is a regular
+whole-multiple grid, or a block of one-bar dates at varying times, the same way. Without it, sampled sections keep
+the stronger MIXED label.
 
 Effects: a processing-rule version change (as with c2/vs2 in PR #10), so every dataset is processed once more (new numbers, old ones
 superseded, nothing deleted). Effort: about one day with tests. Risk: low; the label only becomes more cautious for
 detected sections and never changes for random gaps or sparse data.
 
-## 7. Decisions requested
+## 7. Supporting evidence retained
 
-1. Approve the 1 % materiality threshold and the 30-step run.
-2. Approve MIXED for material detected sections.
-3. Approve "unresolved" (keep timeframe, NOTE) for material uncertain sections.
-4. Decide whether sampling should be aligned (section 6, optional).
+- Simulation table in section 3 (200 seeds per share; 80,625 synthetic 1-minute rows; 5-minute tail).
+- Regression tests: `Tests/integration/test_dq7_full_file_classification.py` (16) and
+  `Tests/integration/test_dq7_review_edge_cases.py`; seeds, block positions and rows examined per case in the
+  implementation report, section 11.3.
+
+## 8. Decisions
+
+1. 30-step run and 1 % threshold — **provisionally approved** (D5-42).
+2. MIXED for detected sections >= 1 % — **provisionally approved**; below 1 % warning — **approved**.
+3. Uncertain sections keep the timeframe with a NOTE — **approved** (no automatic change).
+4. Sampling alignment — **deferred** (OW-33 assessment, separate approval).
+5. Implementation — **not authorised yet**.

@@ -327,3 +327,43 @@ Decision log D5-36 to D5-39.
   check of section 10.1 was **not repeated** for this change (to be covered by acceptance W1-W2).
 - CI (GitHub Actions, Ubuntu and Windows, Python 3.11): recorded on the PR for the latest commit.
 - Windows/IDLE acceptance W1-W12: **outstanding**.
+
+## 12. Owner decisions on the second review (03-Nov-26) and follow-up
+
+### 12.1 Decision status (decision log D5-40 to D5-45)
+
+| Item | Status | Implemented in PR #10? |
+|---|---|---|
+| `interval_change_detected` / `interval_change_uncertain` distinction | Accepted, retained | Yes (`fad8d2f`) |
+| DQ-11 category and venue | Principle approved; revised list (adds ETF, Fixed Income, Unclassified) awaits review; `CRYPTO` legacy identity key, never a venue | **No** (separate task) |
+| DQ-12 technical/export columns | Approved in principle, `index` first; revised to source-specific configuration (profile section or folder setting, no global list) | **No** (separate task) |
+| DQ-14 materiality | Provisionally approved: 30 steps; detected >= 1 % may register MIXED; detected < 1 % warning; uncertain never changes the timeframe; 1 % is an operational rule | **No** (separate go-ahead) |
+| OW-33 sampling vs full-file | Deferred; assessment written (options A/B/C, impact, reprocessing) | **No**; sampling unchanged |
+| DQ-13 AKZOINDIA | Unchanged: source and values untouched; rows 34185 and 34189 stay rejected | n/a |
+| Windows/IDLE acceptance W1-W18 | **Outstanding** | n/a |
+
+### 12.2 Detection gap fixed while preparing the acceptance files (D5-45)
+
+The daily-section check ran only when the most common number of bars per date was above one. A file whose one-bar
+dates outnumber its intraday dates (30 intraday dates + 35 daily bars) was therefore never checked, although sampling
+registered it as 5 minutes. The check now runs whenever any date has several bars (the branch runs only for an
+intraday sampled timeframe). Classification rules are unchanged. Test:
+`test_a_daily_section_with_more_dates_than_the_intraday_part_is_still_checked`. Remaining limitation: in such files
+`partial_session` (which compares with the most common bars per date) does not list the one-bar dates; recorded in
+the checklist.
+
+### 12.3 Acceptance checklist W13-W18 and pattern files
+
+Six synthetic 5-minute files in `docs/acceptance_testing/dq7_pattern_files_03_Nov_26/` (random gaps; every other bar
+missing for one day; one day of 3-minute bars; 35 sparse one-bar dates at varying times; 35 one-bar dates at 00:00;
+the same at 09:15). Each was generated so that sampling registers 5 minutes (15 blocks), so the full-file check is what
+reports the section. `Tests/integration/test_dq7_acceptance_pattern_files.py` scans exactly these files through the
+Sources path and checks the dataset warnings, the exception groups and the per-file problem reports that W13-W18 ask
+the owner to look at.
+
+### 12.4 Tests (local, Linux container, not CI)
+
+- Python 3.12 + Xvfb: **1119 passed, 0 failed, 0 skipped** (208 GUI tests).
+- Python 3.13 without tkinter: **998 passed, 0 failed, 95 skipped** (GUI tests, no display).
+- CI (Ubuntu and Windows): recorded on the PR for the latest commit.
+- The owner's eight files were not available; their behaviour after `fad8d2f` is **not re-verified**.

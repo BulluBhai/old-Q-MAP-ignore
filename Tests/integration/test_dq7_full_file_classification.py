@@ -212,3 +212,14 @@ def test_random_gaps_cannot_produce_a_run_of_identical_multiples():
     assert V._classify_step_run(2, 1) == "uncertain" and V._classify_step_run(10, 5) == "uncertain"
     assert V._classify_step_run(3, 5) == "definite" and V._classify_step_run(1, 5) == "definite"
     assert V._classify_step_run(7, 5) == "definite" and V._classify_step_run(7.5, 5) == "definite"
+
+
+def test_a_daily_section_with_more_dates_than_the_intraday_part_is_still_checked(src, run):
+    """Third review: 30 intraday dates and 35 one-bar dates at 00:00. The most common bars-per-date is 1, which
+    used to skip the daily-section check entirely; any multi-bar date now enables it."""
+    keys = sess(5, date(2024, 1, 1), 42) + [at(d, 0, 0) for d in weekdays(date(2024, 3, 4), 35)]
+    sampled = infer(keys)
+    assert (sampled.status, sampled.timeframe) == ("consistent", "5m"), _report(sampled)
+    det, unc = _checks(_load(src, run, keys, "daily_majority"))
+    assert not det.passed and "35 consecutive trading dates with one bar each" in det.detail and "00:00" in det.detail
+    assert unc.passed

@@ -1,6 +1,6 @@
 # Q-MAP data automation (DQ-7 to DQ-10): owner acceptance checklist, Windows and IDLE
 
-Prepared 03-Nov-26 for the branch `claude/friendly-babbage-8xyrgo`. **Status: not yet performed by the Project Owner.**
+Prepared 03-Nov-26 for the branch `claude/friendly-babbage-8xyrgo`; W13-W18 added the same day. **Status: OUTSTANDING — not yet performed by the Project Owner.**
 Only what a Linux container cannot establish is listed; everything else is covered by the automated tests (see the
 implementation report). Expected figures for your eight files are in
 `Q-MAP_DQ7-DQ10_Implementation_Report_03_Nov_26_120000.md`, section 5.
@@ -25,6 +25,28 @@ Result: **P** pass, **F** fail (write what you saw), **NT** not tested.
 | W10 | Datasets and Storage: select a dataset, **Reject (reversible)**, then **Restore** | State column shows "Rejected by you", then "Active"; nothing is moved or deleted | | |
 | W11 | Compare the size and Date modified of every file in your test folder with before | All identical: Q-MAP did not change any source file | | |
 | W12 | Close both applications with the window's X button | Both close at once, with no error and no black window | | |
+
+### Interval patterns (added 03-Nov-26 after the second and third reviews; W13-W18)
+
+These use six **synthetic** 5-minute files in the repository folder
+`docs/acceptance_testing/dq7_pattern_files_03_Nov_26/` (not market data; your eight files do not contain these
+patterns). Copy the six files into a NEW, separate test folder and add it in Sources. The same files are scanned by
+the automated test `Tests/integration/test_dq7_acceptance_pattern_files.py`, which confirms the outcomes below on
+Linux; this checklist confirms what you see on Windows/IDLE. In every case the detected timeframe stays **5 minutes**
+(the full-file check never changes it).
+
+| # | Step | Expected outcome | Result | Notes |
+|---|---|---|---|---|
+| W13 | Sources: add the pattern folder, **SCAN SELECTED FOLDER NOW** | 6 imported, no question; every file shows "Detected timeframe: 5 minutes" and "Validation: Consistent across 15 sampled block(s)" | | |
+| W14 | **Random missing bars**: select `NSE_RANDOMGAPS.csv` (about 10 % of bars missing at random) | No interval warning of either kind; only "Some days have fewer bars than usual". Not listed under either interval exception line | | |
+| W15 | **Regular missing-bar pattern (uncertain)**: select `NSE_EVERYOTHER.csv` (one day with every other bar missing, i.e. a 10-minute grid) | Warning "Part of the file may have another bar interval" with the source rows and the words "cannot show whether"; Exceptions line "A section may have another bar interval or regularly missing bars (full-file check)" lists the file; timeframe still 5 minutes | | |
+| W16 | **Genuine interval change (detected)**: select `NSE_GENUINE3M.csv` (one day of 3-minute bars) and `NSE_DAILY0000.csv` (35 one-bar dates at 00:00) | Warning "Part of the file has another bar interval" with the source rows (3 minute steps; "outside the times of the intraday bars, like daily data"); Exceptions line "A section of the file has another bar interval (found by the full-file check)" lists both | | |
+| W17 | **Daily-like bars at an intraday time (uncertain)**: select `NSE_DAILY0915.csv` (35 one-bar dates at 09:15) | Listed under the "may have another bar interval" line, not the "has another bar interval" line; the detail says "a time the intraday bars also use" | | |
+| W18 | **Sparse instrument**: select `NSE_SPARSE.csv` (35 consecutive dates with one bar each at varying times) | No interval warning of either kind; "Some days have fewer bars than usual" lists the one-bar dates. Then **Open run folder**: the per-file problem reports `issues_event<n>.csv` of the W15-W17 files contain the interval finding with its source rows (two `interval_change_uncertain`, two `interval_change_detected`); W14 and W18 have none; `Scan_Report_...csv` lists all six files as imported. Workbench: Dataset Summary on `NSE_EVERYOTHER` shows readiness "Validated with warnings: ... interval_change_uncertain ..." and runs | | |
+
+Known limitation seen in W16/W17: in the two `DAILY` files the one-bar dates outnumber the intraday dates, so
+"Some days have fewer bars than usual" is not shown for them (that check compares with the most common number of
+bars per date). The interval warnings are shown.
 
 **Record of the session**
 

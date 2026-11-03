@@ -1,6 +1,8 @@
 # DQ-11 — separate asset category and trading venue: migration and compatibility proposal — NOT implemented
 
-Status: the Project Owner approved the **principle** (03-Nov-26). Implementation is **not authorised inside PR #10**;
+Status: **principle approved** by the Project Owner (03-Nov-26; confirmed in the second decision note the same day,
+D5-40). Category list revised as requested (ETF, Fixed Income, Unclassified added): **awaiting the owner's review of the
+list**. **Not implemented**; implementation is **not authorised inside PR #10**;
 this is a separate task, to be built on its own branch after PR #10 when approved. Supersedes the DQ-11 section of
 `Proposals_DQ11-DQ14_03_Nov_26_150000.md` (same design, with the migration, compatibility and legacy-key rules made
 explicit).
@@ -22,8 +24,9 @@ explicit).
 Schema migration 11 (next number after 10) adds two nullable columns and one audit table; nothing else changes.
 
 ```sql
-ALTER TABLE instruments ADD COLUMN asset_category TEXT
-  CHECK (asset_category IS NULL OR asset_category IN ('equity','index','crypto','currency','commodity','derivative'));
+ALTER TABLE instruments ADD COLUMN asset_category TEXT NOT NULL DEFAULT 'unclassified'
+  CHECK (asset_category IN ('equity','etf','index','fixed_income','currency','commodity','derivative','crypto',
+                            'unclassified'));
 ALTER TABLE instruments ADD COLUMN venue TEXT
   CHECK (venue IS NULL OR (length(venue) > 0 AND venue = upper(trim(venue))));
 CREATE TABLE instrument_attribute_changes (          -- append-only history of category/venue edits
@@ -35,20 +38,35 @@ CREATE TABLE instrument_attribute_changes (          -- append-only history of c
 UPDATE instruments SET asset_category = 'crypto' WHERE exchange = 'CRYPTO';   -- recorded with origin 'migration'
 ```
 
-- `asset_category`: controlled list, NULL = not yet classified. Filled by the scan (`crypto` for `CRYPTO_` files;
-  `index` when the alias registry marks it, via an optional registry column) or by a user correction.
+- `asset_category`: controlled list, revised after the owner's review:
+
+  | Value | Meaning |
+  |---|---|
+  | `equity` | shares |
+  | `etf` | exchange-traded funds (kept apart from equity: an ETF tracks a basket, which matters for index comparisons) |
+  | `index` | indices (NIFTY 50, BANKNIFTY spot) |
+  | `fixed_income` | bonds, government securities, T-bills |
+  | `currency` | currency pairs and currency futures' underlyings |
+  | `commodity` | commodities |
+  | `derivative` | futures and options (the underlying's category is a later, separate question) |
+  | `crypto` | cryptocurrencies |
+  | `unclassified` | **default**: not yet classified, or not determinable. Every existing instrument starts here, except `CRYPTO` |
+
+  One explicit `unclassified` value (not NULL) so "unknown" is visible, filterable and auditable, and every row always
+  has a category. Filled by the scan (`crypto` for `CRYPTO_` files; a category from an optional alias-registry
+  column) or by a user correction. Never guessed from a symbol pattern. Extending the list later is a new migration.
 - `venue`: the real trading venue (`BINANCE`, `COINBASE`, `NSE` ...), NULL = unknown. Filled only from a `venue`
   column in the data or a user correction; never guessed from a file name.
 - Every change of either field is written to `instrument_attribute_changes` (old value, new value, origin, run).
 
-## 3. Identities and storage paths are preserved
+## 3. Identities and storage paths are preserved (owner condition, 03-Nov-26)
 
 - Identity stays **(exchange, symbol)**; the identity trigger is not touched; no instrument is renamed, merged or
   deleted; no dataset, file or path moves; `instrument_id` values are unchanged.
 - No re-processing: category and venue are not part of the processing identity, the cleaning code or the settings
   fingerprint, so no dataset gets a new number.
 
-## 4. The legacy `CRYPTO` key
+## 4. The legacy `CRYPTO` key (owner condition: retained for compatibility, never a venue)
 
 - `CRYPTO` remains the **exchange key** of existing (and new) crypto instruments, because it is part of their
   identity and storage path. It is documented and displayed as an **identity key for the asset category, not a
@@ -77,6 +95,6 @@ Risk: low (additive). Effort: about one day with tests and documentation (schema
 
 ## 6. Decisions requested
 
-1. Approve the controlled category list (or amend it).
+1. Approve the revised category list in section 2 (nine values, default `unclassified`), or amend it.
 2. Approve that `CRYPTO` stays as identity key and is reserved from the venue field.
 3. Approve that a venue column in the data creates a separate identity (no automatic merge).

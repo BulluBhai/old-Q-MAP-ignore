@@ -248,3 +248,17 @@ storage rule or analytical methodology was changed.
 | D5-37 | DQ-11 and DQ-12 approved in principle; implementation outside PR #10 (separate proposals) | Proposals written; not implemented |
 | D5-38 | DQ-13: AKZOINDIA source and values unchanged; rows 34185 and 34189 stay rejected until authoritative evidence; investigation separate from PR #10 | Settled |
 | D5-39 | DQ-14 not approved: the registered timeframe stays the sampled one; revised proposal written | Open (owner) |
+
+### Owner decisions on the second review (03-Nov-26)
+
+Status words: **Approved**, **Provisionally approved** (may be implemented later on the stated terms, after a
+separate go-ahead), **Deferred** (assessment first), **Not implemented** (nothing built).
+
+| Ref | Decision | Status |
+|---|---|---|
+| D5-40 | DQ-11: separate asset category and trading venue fields — principle **approved**. Category list to be reviewed before implementation; revised list adds ETF, Fixed Income and an explicit Unclassified state (default). `CRYPTO` retained as a legacy identity key, never a venue. Identities and storage paths unchanged | Approved in principle; list awaiting owner review; **not implemented** (separate task, not PR #10) |
+| D5-41 | DQ-12: controlled, auditable ignoring of technical/export columns for exact-duplicate comparison, `index` first — **approved**; configuration must be **source-specific** (source profile section or folder setting; no global list); protected fields never ignored; originals preserved; every ignored difference and removal audited | Approved in principle; proposal revised; **not implemented** (separate task, not PR #10) |
+| D5-42 | DQ-14: 30-step minimum evidence and 1 % (of distinct timestamps) materiality — **provisionally approved**. Detected >= 1 % may register MIXED; detected < 1 % stays a warning (never silently ignored); uncertain sections never change the timeframe automatically (timeframe kept, warning/NOTE); 1 % is an operational classification rule, not a statement that smaller sections are harmless | Provisionally approved; **not implemented**; simulation and tests retained in the proposal |
+| D5-43 | OW-33: the approved DQ-7 sampling method is **not changed** in PR #10; a technical assessment of a consistent classification (regular multiples, sparse one-bar dates) with impact and reprocessing analysis to come back for approval | **Deferred**; assessment written (`docs/architecture/OW-33_Sampling_vs_Full_File_Assessment_03_Nov_26_075552.md`); not implemented |
+| D5-44 | Acceptance: W1-W12 stay outstanding; W13-W18 added (regular missing-bar pattern, genuine change, uncertain cases, sparse instrument, reports) with six synthetic pattern files; the owner's eight files are not described as re-verified after `fad8d2f` | Checklist updated; owner acceptance **outstanding** |
+| D5-45 | Full-file daily-section check: enabled whenever the file has any multi-bar date (was: only when the most common date had several bars, which skipped files with more one-bar dates than intraday dates). Found while preparing W16 | Defect fixed in PR #10 (detection gap; classification rules unchanged), tested |

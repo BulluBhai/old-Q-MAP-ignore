@@ -84,7 +84,7 @@ def _interval_changes(frame: dict, keys: list, src, expected: int, timeframe: st
 
     Sections found (unchanged detection):
     - a run of at least CHANGE_RUN consecutive same-day steps that all have ONE other interval;
-    - a run of at least CHANGE_RUN consecutive trading dates with a single bar each, while the usual date has several.
+    - a run of at least CHANGE_RUN consecutive trading dates with a single bar each, while other dates have several.
     Classification (second review): a section is ASSERTED as another interval (`interval_change_detected`) only when
     missing observations cannot explain it; otherwise it is reported as UNCERTAIN (`interval_change_uncertain`), and
     scattered sparse observations are not reported at all:
@@ -121,10 +121,12 @@ def _interval_changes(frame: dict, keys: list, src, expected: int, timeframe: st
         last_end = i
     close(int(src[last_end]) if last_end is not None else None)
 
-    # daily-like section: consecutive trading dates with one bar each, while the usual date has many
+    # daily-like section: consecutive trading dates with one bar each, while other dates have several. (Until the
+    # third review this required the MOST COMMON date to have several bars, so a file with more one-bar dates than
+    # intraday dates was never checked; the branch only runs when sampling found an intraday interval.)
     distinct = _distinct_in_order(dates, keys)
     per_date = Counter(d for d, _k in distinct)
-    if per_date and Counter(per_date.values()).most_common(1)[0][0] > 1:
+    if per_date and any(v > 1 for v in per_date.values()):
         tz = _zone(zone)
         first_row, single_time = {}, {}
         multi_times = set()
