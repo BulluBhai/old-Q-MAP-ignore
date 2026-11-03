@@ -1,8 +1,13 @@
 # Q-MAP data automation (instruction DQ-7 to DQ-10): inspection, plan and design concerns
 
 Prepared 03-Nov-26 on branch `claude/friendly-babbage-8xyrgo` (head `67fc095`, stacked on PR #9 → PR #4 → #3 → #2 → #1).
-**Status: plan only. Nothing in this document is implemented yet.** Implementation starts after the decisions in
-section 4 are answered.
+**Status (updated 03-Nov-26): approved by the owner's final instruction and IMPLEMENTED** in commits `dbce7ef` (P1),
+`3e96bcc` (P2), `3876772` (P3), `66895cc` (P4) and the documentation commit; see
+`docs/acceptance_testing/Q-MAP_DQ7-DQ10_Implementation_Report_03_Nov_26_120000.md`. The owner's answers to section 4:
+conflicts kept and visible, analyses continue (1); MIXED files imported and classified (2); reversible
+`rejected_by_user` (3); columns first with a warning, file names ON for all folders (4); day-first and Asia/Kolkata
+defaults with warnings (5); crypto as a category with the venue unknown, proposal for separate fields (6); four
+commits stacked on PR #9 (7). Below is the original plan, unchanged.
 
 Note on numbering: the instruction reuses DQ-7 to DQ-10, which the 02-Nov-26 findings report used for other questions.
 The instruction's meanings supersede them: DQ-7 (3h approval) → general interval inference; DQ-8 (file-name option

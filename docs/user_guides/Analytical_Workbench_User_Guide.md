@@ -16,7 +16,16 @@ files. When data are missing, it tells you what to prepare in Database Manager.
 ## Run an analysis
 
 **1. Input.** Choose the analysis; its description and result type are shown. Select one or more prepared datasets.
-Deleted datasets are never offered; superseded ones only if you tick "Show superseded".
+Deleted datasets and datasets you **rejected** (Database Manager, reversible) are never offered; superseded ones only
+if you tick "Show superseded".
+
+What the readiness box tells you about data prepared automatically (03-Nov-26):
+- **Conflicting observations** (NOTE): some time stamps have more than one different value. The analysis still runs;
+  calculations that go bar by bar (such as returns) treat each stored row as a bar. Dataset Summary counts them in
+  its "Conflicting timestamps" column.
+- **MIXED intervals**: the dataset does not have one bar interval. Dataset Summary runs with a NOTE (its per-bar figures
+  mix intervals); an analysis that needs one interval refuses it with the reason.
+- Any timeframe can appear (for example 75 minutes or 2 hours); it is the interval measured in the data.
 
 **2. Output.** Each run gets its own folder, named by its **Run ID** (for example `DSUM_20261101_154719`), in
 `Q-MAP_OUTPUT/Research_Reports`. An earlier run is never overwritten.

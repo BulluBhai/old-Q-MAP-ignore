@@ -15,62 +15,68 @@ Database Manager prepares the data every analysis depends on. It **never changes
 
 ## Sources: automatic loading (the normal way to load data)
 
-Added 02-Nov-26 for Blueprint v1.3 §8.5. You do not choose profiles or type layouts here.
+Added 02-Nov-26 (Blueprint v1.3 §8.5); made automatic by default on 03-Nov-26 (owner instruction DQ-7 to DQ-10). You do
+not choose profiles, type layouts or confirm files one by one. Routine files are **accepted automatically**; anything
+material is listed once, grouped, in **Exceptions**, where you can reject, restore or correct many files at once.
 
-1. **Input - folders.** Press **Add folder...** and choose the folder that holds your files (any folder on this
-   computer, including a synchronised OneDrive or Google Drive folder; files must be downloaded, not "online only").
-   Before adding, set:
-   - **Market time zone** (for Indian exchanges `Asia/Kolkata`): used to work out each bar's trading date and for
-     times written without an offset. Leave it empty and Q-MAP asks for it when a file needs it.
-   - **Default exchange** (for example `NSE`), used when a file does not say its exchange.
-   - **File name is the symbol** (optional): `RELIANCE.csv` (or `RELIANCE_5min.csv`, `RELIANCE, 1D.csv`) is read as
-     symbol RELIANCE on the default exchange. Off by default, so a name like `prices.csv` is never taken as a symbol
-     without your confirmation. When it is off, Q-MAP still fills the name into the answer boxes as a suggestion: check
-     it and press **Save answer** (one click). A name such as `CRYPTO_RIVERUSD, 180.csv` gives the symbol RIVERUSD,
-     but never the default exchange: `CRYPTO` is a market, not an exchange, so the venue is always asked.
+1. **Input - folders.** Press **Add folder...** and choose the folder with your files (any folder on this computer,
+   including a synchronised OneDrive or Google Drive folder; files must be downloaded, not "online only"). Settings:
+   - **Market time zone**: leave empty for Indian data. Timestamps without a time zone are then read as Asia/Kolkata
+     (the default), and the files are listed under "Time zone assumed" so you can see it. Timestamps with their own
+     offset (`+05:30`) and Unix times are read as they are.
+   - **Default exchange**: leave empty for NSE (the default). Cryptocurrency files (`CRYPTO_...`) are never NSE: they
+     are stored under the category CRYPTO with the trading venue unknown, which you can correct.
+   - **Identify the instrument from the file name**: ON by default, for new and existing folders. `RELIANCE.csv`,
+     `RELIANCE (1).csv`, `RELIANCE - Copy.csv` and `RELIANCE_Copy.csv` are all RELIANCE. Switch it off only if a
+     folder's file names say nothing about the instrument; Q-MAP then asks for the symbol.
    - **Include sub-folders** and **Skip files matching** (for example `*backup*`).
-   Q-MAP's own data, output and program folders are refused as sources. To change settings later, select the folder,
-   edit the boxes and press **Save settings of selected folder**. **Stop using selected folder** stops scanning; it
-   deletes nothing.
-2. **Output - files.** After a scan, every file in the folder is listed with its result: *Imported*, *Already
-   loaded*, *Needs your answer*, *Rejected* (with the reason), *Ignored* (not a data file type), *Failed* (for example
-   unreadable) or *No longer in the folder*. Select a file to see exactly how Q-MAP read it (separator, header,
-   which column is which, date layout, time zone, instrument, timeframe) and any question. Each scan also writes a
-   `Scan_Report_<dd_Mmm_yy_hhmmss>.csv` into its run folder in `Q-MAP_OUTPUT/Data_Management`.
-3. **Options - scan and answer.** **SCAN SELECTED FOLDER NOW** looks at the folder. For a file that needs an answer,
-   select it: only the boxes its question needs are switched on (exchange and symbol, timeframe, date layout, or market
-   time zone). What Q-MAP already knows or can suggest is filled in; nothing is saved until you press **Save answer**.
-   Then scan again. An answer is reused only while the file keeps the same layout. A timeframe answer that does not
-   match the measured spacing of the bars is not used (Q-MAP never relabels, for example, 180-minute bars as 4 hours).
+2. **Output - files.** Each file is listed with its result, **detected timeframe**, **instrument** (and how it was
+   found: registry, alias, file name, provisional), change and datasets. Select a file to see, for example:
 
-What a scan does, and does not do:
+       Detected timeframe: 5 minutes
+       Validation: Consistent across 15 sampled blocks (470 of 20000 rows examined)
+       Status: Accepted by default
 
-- Files that have not changed since the last scan are skipped (same size, time and checksum). Scanning twice never
-  creates duplicates; the same content under two names is loaded once.
-- A changed file is loaded as a new version. If its bars overlap an existing dataset of the same instrument and
-  timeframe, identical bars are noted, and **different values are shown as a warning** on the new dataset. Neither
-  dataset is changed and nothing is merged: you choose which one to analyse (your decision DQ-1, 02-Nov-26: report only).
-- Every loaded file goes through exactly the same checks as Data Management. A file that fails a check is rejected
-  and never becomes available to the Workbench. A file rejected only because its last dates are in the future is
-  loaded again automatically by a scan on or after the date that allows them.
+   followed by every warning. Below the list, **Exceptions found** groups everything that needs your attention:
+   files not loaded (data errors), mixed bar intervals, a file name whose timeframe differs from the data, conflicting
+   observations, bars that differ from another dataset, names not in the alias registry, ambiguous names, file name
+   and file columns that disagree, crypto venue unknown, assumed day-first dates, assumed time zone, and files you
+   rejected. Each scan also writes, in its run folder in `Q-MAP_OUTPUT/Data_Management`: `Scan_Report_...csv`,
+   `Identification_Exceptions_...csv` and, when there are overlaps, `Overlap_Report_...csv`.
+3. **Options - scan, review and correct.**
+   - **SCAN SELECTED FOLDER NOW**; **Stop scan** stops safely: the file being read is finished, the rest is listed as
+     "not processed" in the scan report, and everything already done is kept. Scan again to continue.
+   - Select one or more files (Ctrl+click, Shift+click), then:
+     - **Reject selected**: the data are kept unchanged but no longer offered to analyses. It is recorded with your
+       reason and is **reversible**: **Restore selected** undoes it. Nothing is ever deleted.
+     - **Save answer / correction**: correct the exchange, symbol, date layout or time zone of the selected files. The
+       next scan registers the corrected data as new datasets; the earlier ones stay (reject them if you wish).
+     - **Add selected names to alias registry**: type the canonical name (for example `RELIANCE`) and press the
+       button; the selected files' cleaned names become its aliases. A backup of the registry is kept. The next scan
+       identifies these files, and future files with these names, again.
+
+**How Q-MAP reads a file automatically** (details: `docs/architecture/Blueprint_v1.3_Implementation_Audit.md`,
+section 6, and `docs/acceptance_testing/Q-MAP_DQ7-DQ10_Implementation_Report_03_Nov_26_120000.md`):
+
+- **Timeframe** is measured from the time stamps, never taken from a list, the file name or a typed value. Q-MAP
+  looks at the first rows, then at blocks of rows spread over the whole file (20 blocks for 1-minute data ... 5 for
+  daily), chosen the same way every time. Missing bars, nights, weekends and holidays do not change the interval; no
+  exchange calendar is used. Any interval works (3 minutes, 75 minutes, 2 hours, 3 hours ...). If different parts of a
+  file have different intervals, the file is kept as one dataset with timeframe **MIXED** and listed; analyses that
+  need one interval say they cannot use it. A file-name timeframe that disagrees is reported; the data win.
+- **Instrument**: an `exchange` / `symbol` column in the file comes first (never overridden by the file name; a
+  disagreement is listed with both values). Otherwise the cleaned file name is matched against the **alias
+  registry** `Q-MAP_DATA/Reference_Files/Instrument_Aliases.csv` (first column the canonical name, then its aliases;
+  edit it with Excel or Notepad). No match: the cleaned name is used as a **provisional** instrument and listed.
+  A bare number stays part of the name (`NIFTY 50`, `NIFTY_50`); `(1)`, `- Copy`, `_download` and dates are removed.
+- **Dates**: when a date could be day-first or month-first, day-first is used (the Indian default) and listed; you
+  can choose the other layout for the file. Two-digit years: 00-68 = 2000-2068, 69-99 = 1969-1999.
+- **Repeated rows**: rows identical in every column are kept once (the copies are counted in the problem report;
+  your file is not changed). Rows with the same time stamp but different values are **all kept**, flagged and listed
+  as conflicting observations; Q-MAP never chooses between them, and you can still analyse the data.
+- **Overlaps** with data already loaded (same instrument and timeframe) are reported, never merged or overwritten.
+- Files that have not changed are skipped on the next scan; the same content under two names is loaded once.
 - Nothing in your folder is ever created, changed, moved or deleted.
-
-How layouts are recognised (rules A-1 to A-9, in `docs/architecture/Blueprint_v1.3_Implementation_Audit.md`,
-section 6): column names such as `date`/`time`, `open`, `high`, `low`, `close`, `volume`; files without a header only
-when columns 2-5 behave like open, high, low, close on every row (or columns 3-6, when column 2 is the time of day on
-every row, as in `2024-01-20,12:10:00,589.9,...`); dates in ISO, `25-02-26`, `25/02/2026`, `25-Feb-26`,
-`20260225`, Unix seconds or milliseconds, or spreadsheet date cells. When two date readings both fit (for example
-day-first and month-first) and the order of the rows does not settle it, Q-MAP asks. Two-digit years: 00-68 =
-2000-2068, 69-99 = 1969-1999. Instrument from `exchange`/`symbol` columns in the file first, then your answer, then a file name such as
-`NSE_NIFTY, 1D.csv`. A file whose name contradicts its own exchange or symbol column is rejected, never read with the
-name's value (your decision DQ-2). If only the exchange is missing, only the exchange is asked. Timeframe from the spacing of the bars (1, 5, 15, 30, 60 or 240 minutes, daily, weekly, monthly; 180 minutes = `3h`
-only if the owner approves it, DQ-7); a file name that disagrees with the data is asked about (`, 15`, `_5m` and
-`_30min` are all understood). A file whose bars are evenly spaced at an interval Q-MAP has no timeframe for is rejected
-with that reason.
-
-A rejected file never becomes a dataset. Typical reasons with real exports: the same day appears twice (two downloads
-appended), or a bar whose low is above its open. Q-MAP does not remove or choose between rows: correct the file (or
-keep one copy of each day) and scan again.
 
 ## Data Management: loading files with a chosen profile
 
