@@ -77,7 +77,8 @@ MODULES: tuple[ModuleInfo, ...] = (
                "Combine market, sector, stock and price-behaviour conditions to find candidates.",
                COMING_SOON, "Roadmap Stage 8 (historical Opportunity Scanner).", _W),
     ModuleInfo("price_behaviour_lab", "Price Behaviour Lab", "Test how price behaves around moving averages and other events.",
-               COMING_SOON, "Roadmap Stage 6 (Price Behaviour: QLOPB migration).", _W),
+               COMING_SOON, "Roadmap Stage 6. MA Affinity (QLOPB) already runs as a research module; this combined window is "
+               "not built.", _W),
     ModuleInfo("strategy_lab", "Strategy Backtesting Lab", "Test complete trading rules on history.",
                COMING_SOON, "Roadmap Stage 9.", _W),
     ModuleInfo("portfolio_risk", "Portfolio and Risk", "Position sizing, exposure and drawdown.",
@@ -88,9 +89,14 @@ MODULES: tuple[ModuleInfo, ...] = (
     ModuleInfo("market_intelligence", "Market Intelligence (MIQP)", "Market regime, breadth, sector and stock intelligence.",
                COMING_SOON, "Roadmap Stage 5. MIQP is specified in documents outside this repository; no MIQP code "
                "exists yet.", _R),
-    ModuleInfo("ma_research", "MA Research (QLOPB)", "Moving-average interactions and affinity.",
-               COMING_SOON, "Roadmap Stage 6. The QLOPB source code is not in this repository yet, so nothing has been "
-               "migrated.", _R),
+    ModuleInfo("ma_research", "MA Research: MA Affinity (QLOPB)",
+               "How price behaved around moving averages: interactions, forward returns and an affinity score, ranked "
+               "in-sample and checked out-of-sample.",
+               READY,
+               "Working now: QLOPB MA Affinity Scanner V2 (calculations unchanged) on daily, weekly or monthly datasets, "
+               "with Excel, PDF and chart reports. Pending owner review: Directed IR and the weight scheme. Not built "
+               "yet: pivots, CPR and other references.",
+               "Available now", ANALYTICAL_WORKBENCH, "analysis"),
     ModuleInfo("cpr_pivot", "CPR and Pivot Research", "Central Pivot Range and pivot-level behaviour.",
                COMING_SOON, "Roadmap Stage 6.", _R),
     ModuleInfo("stage_analysis", "Stage Analysis (Weinstein)", "Classify instruments into price stages.",

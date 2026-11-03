@@ -82,6 +82,12 @@ class AnalysisSpec:
     min_datasets: int = 1
     max_datasets: int = 50
     kind_note: str = ""  # what kind of result this is, shown to the user (e.g. "descriptive statistics only")
+    # Optional, analysis-specific: (parsed params) -> (cleaned params, problems). Runs after the per-parameter parsing.
+    check_params: Callable[[dict], tuple[dict, list[str]]] | None = None
+    # Optional, analysis-specific readiness items for ONE dataset that passed the shared checks:
+    # (settings, db, dataset_id, cleaned params, report) -> None; adds items to the report with report.add(...).
+    dataset_checks: Callable[[Settings, Database, int, dict, ReadinessReport], None] | None = None
+    method_source: str = ""  # where the method comes from (recorded in Run_Metadata)
 
 
 INVALID_INPUT, NO_ELIGIBLE_DATA, NOT_READY, READY = "invalid_input", "no_eligible_data", "not_ready", "ready"
@@ -106,6 +112,7 @@ class AnalysisReadiness:
     params: dict = field(default_factory=dict)  # cleaned parameter values
     input_problems: list[str] = field(default_factory=list)  # dates / parameters
     selection_problems: list[str] = field(default_factory=list)  # number of datasets
+    parameter_problems: list[str] = field(default_factory=list)  # analysis-specific (not date) parameters; also in input_problems
 
     @property
     def warnings(self) -> list[str]:
@@ -190,6 +197,10 @@ def check_analysis(settings: Settings, db: Database, spec: AnalysisSpec, dataset
     start, end = res.params.get("date_from"), res.params.get("date_to")
     if start and end and start > end:
         res.input_problems.append(f"The start date ({format_long(start)}) is after the end date ({format_long(end)}).")
+    if spec.check_params is not None and not res.input_problems:
+        res.params, extra = spec.check_params(dict(res.params))
+        res.input_problems.extend(extra)
+        res.parameter_problems.extend(extra)
     ids = list(dict.fromkeys(int(i) for i in dataset_ids))
     if len(ids) < spec.min_datasets:
         res.selection_problems.append(f"Select at least {spec.min_datasets} dataset(s).")
@@ -202,7 +213,10 @@ def check_analysis(settings: Settings, db: Database, spec: AnalysisSpec, dataset
     if start or end:
         req = DataRequirement(**{**asdict(req), "date_from": start, "date_to": end})
     for i in ids:
-        res.reports.append(check_readiness(settings, db, i, req, verify_checksum=verify_checksum))
+        report = check_readiness(settings, db, i, req, verify_checksum=verify_checksum)
+        if spec.dataset_checks is not None and report.ready:
+            spec.dataset_checks(settings, db, i, res.params, report)
+        res.reports.append(report)
     res.ready = not res.problems and all(r.ready for r in res.reports) and bool(ids)
     return res
 
@@ -224,7 +238,8 @@ def run_analysis(settings: Settings, db: Database, spec: AnalysisSpec, dataset_i
     readiness = check_analysis(settings, db, spec, dataset_ids, raw_params)
     if not readiness.ready:
         reasons = readiness.problems + [f"{r.label}: {f.detail}" for r in readiness.reports for f in r.failures]
-        lead = {INVALID_INPUT: "The dates entered are not valid, so nothing was run:",
+        lead = {INVALID_INPUT: "The parameters entered are not valid, so nothing was run:" if readiness.parameter_problems
+                else "The dates entered are not valid, so nothing was run:",
                 NO_ELIGIBLE_DATA: "The dates are valid, but the selected data have no bars in that period, so nothing "
                                   "was run:"}.get(readiness.state, "The analysis cannot run reliably:")
         if readiness.partial_period_note:
@@ -251,7 +266,7 @@ def run_analysis(settings: Settings, db: Database, spec: AnalysisSpec, dataset_i
             outputs = list(spec.execute(ctx))
             meta = {
                 "run_id": run.run_id, "analysis_id": spec.analysis_id, "analysis_name": spec.name,
-                "analysis_version": spec.version, "result_kind": spec.kind_note,
+                "analysis_version": spec.version, "result_kind": spec.kind_note, "method_source": spec.method_source,
                 "qmap_version": __version__, "cleaning_code_version": CLEANING_CODE_VERSION, "build": current_build(),
                 "created_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
                 "parameters": params["parameters"], "readiness_warnings": readiness.warnings,

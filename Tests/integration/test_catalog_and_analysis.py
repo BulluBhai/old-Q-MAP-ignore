@@ -88,8 +88,11 @@ def test_read_dataset_returns_only_quantitative_columns_for_a_window(settings, d
 
 # ---- analytical runs --------------------------------------------------------------------------------------------
 def test_only_genuinely_runnable_analyses_are_registered():
-    assert list(ANALYSES) == ["dataset_summary"]
+    # 03-Nov-26 (owner approval): MA Affinity, the QLOPB MA Affinity Scanner V2 migrated unchanged, is the first research
+    # analysis. Nothing else is registered.
+    assert list(ANALYSES) == ["dataset_summary", "ma_affinity"]
     assert "not a research methodology" in DATASET_SUMMARY.description
+    assert "calculations unchanged" in ANALYSES["ma_affinity"].method_source
 
 
 def test_analysis_run_writes_outputs_and_reproducibility_metadata(settings, db, run, daily):
