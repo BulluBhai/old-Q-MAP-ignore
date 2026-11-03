@@ -85,3 +85,33 @@ Yes, for either B or C (read from the code; not tested):
 1. Choose A (keep), B (full alignment) or C (sparse-only alignment).
 2. If B or C: approve the read-only impact report as step 1, and the identity change (`vs3` with a one-off
    reprocessing) as step 2.
+
+## 7. Step 1 — the read-only impact report (authorised by D5-49; prepared outside PR #10)
+
+Branch `claude/youthful-babbage-d71hnl` (stacked on PR #10's branch; no pull request opened). **Option C is not
+applied**; sampling (`timeframe_infer.py`) is unchanged; no `vs3`, no reprocessing.
+
+- `Application/qmap/data_engine/ow33_impact.py`: for every **active MIXED** cleaned dataset it rebuilds the file-order
+  timestamps from the stored data (`src_row`) and the recorded exact-duplicate removals, **verifies that the recorded
+  sampling seed and result are reproduced exactly**, then evaluates Option C on the same blocks. If anything cannot be
+  reproduced the dataset is "not evaluable" with the reason (nothing is guessed). The registry is opened read-only
+  (SQLite `mode=ro`).
+- Option C as evaluated: a sampled block whose dates all have one bar each at varying local times of day (< 90 % at
+  one time) is treated as missing observations, **only if another block of the same file measures a minute
+  interval** (so a daily file stamped at varying times is never affected). Regular-multiple blocks and one-time-of-day
+  daily blocks are unchanged (still MIXED).
+- `ow33_impact_report.py` (top level): open in IDLE, press F5. It uses the Q-MAP_DATA / Q-MAP_OUTPUT folders the Q-MAP
+  applications remember (asks if none), and saves `Q-MAP_OUTPUT\OW33_Impact\OW33_Impact_Report_<dd_Mmm_yy_hhmmss>.csv`
+  and a summary `.txt`; a message shows the counts.
+- Report columns: dataset id, instrument, display name, source file, current classification, proposed classification
+  under Option C, would change (yes/no/unknown), reason, recorded seed, seed reproduced, blocks, excluded blocks,
+  derived datasets, runs using the dataset, processing and lineage implications (re-registration under a new
+  timeframe and path, old dataset superseded and kept, derived datasets not rebuilt (OW-32), earlier runs keep their
+  inputs; unchanged datasets would still be processed once more under a `vs3` change).
+- Tests: `Tests/integration/test_ow33_impact_report.py` (6): Option C changes only sparse one-bar blocks; regular
+  multiples and fixed-time daily bars stay MIXED; a file without a minute block is untouched; the report lists the
+  MIXED datasets, reproduces the seed and leaves the registry byte-identical; a missing stored file gives "not
+  evaluable"; report file names; sampling unchanged. The IDLE script was smoke-run headless against a synthetic
+  registry (1 MIXED dataset, 1 would change); not run on Windows.
+- **The report on the owner's real registry has not been produced**: it must be run on the owner's computer, where the
+  registry is. The result is then reviewed before any further step.
