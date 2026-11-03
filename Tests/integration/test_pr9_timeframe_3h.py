@@ -75,13 +75,11 @@ def test_3h_is_a_registered_intraday_timeframe():
     assert ALLOWED_TIMEFRAMES.index("1h") < ALLOWED_TIMEFRAMES.index("3h") < ALLOWED_TIMEFRAMES.index("4h")
 
 
-def test_180_minute_bars_are_kept_as_3h_never_4h_and_the_crypto_venue_is_asked(settings, run, db, src):
+def test_180_minute_bars_are_kept_as_3h_never_4h_and_crypto_is_never_nse(settings, run, db, src):
     p, times = three_hourly(src / "CRYPTO_RIVERUSD, 180.csv")
     it = A.interpret_file(p, settings, market_timezone="Asia/Kolkata", default_exchange="NSE")
-    assert it.status == A.NEEDS_ANSWER and [q.key for q in it.questions] == ["exchange"]  # NOT NSE
-    assert "CRYPTO_ prefix" in it.questions[0].text and it.overrides == {}
-    assert any("default exchange (NSE) is not applied" in e for e in it.evidence)
-    assert it.decisions["timeframe"] == "3h" and it.decisions["identity"] == {"symbol": "RIVERUSD"}
+    assert it.status == A.READY and it.overrides == {"exchange": "CRYPTO", "symbol": "RIVERUSD", "timeframe": "3h"}
+    assert it.decisions["identification"]["venue"] == "unknown"
     it = A.interpret_file(p, settings, market_timezone="Asia/Kolkata", default_exchange="NSE",
                           answers={"exchange": "BINANCE"})
     assert it.status == A.READY and it.overrides == {"exchange": "BINANCE", "symbol": "RIVERUSD", "timeframe": "3h"}
@@ -102,7 +100,7 @@ def test_the_symbol_option_never_turns_the_prefix_of_a_180_minute_file_into_a_sy
     p, _ = three_hourly(src / "CRYPTO_RIVERUSD, 180.csv")
     it = A.interpret_file(p, settings, market_timezone="Asia/Kolkata", default_exchange="NSE",
                           symbol_from_filename=True)
-    assert it.decisions["identity"] == {"symbol": "RIVERUSD"} and [q.key for q in it.questions] == ["exchange"]
+    assert it.overrides["symbol"] == "RIVERUSD" and it.overrides["exchange"] == "CRYPTO"
 
 
 def test_a_recorded_4h_answer_for_180_minute_bars_is_not_used(settings, src):

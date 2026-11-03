@@ -408,6 +408,13 @@ CREATE TRIGGER trg_answers_no_delete BEFORE DELETE ON source_answers
 BEGIN SELECT RAISE(ABORT,'source_answers is append-only'); END;
 """
 
+# Migration 9 (03-Nov-26, owner decision DQ-8): identification from the file name is ON by default, for folders added
+# before as well as new ones. Existing folders were stored with the old default (off); the owner decided that they,
+# too, use file names unless the user switches it off again (the folder setting remains editable).
+MIGRATION_9 = """
+UPDATE data_sources SET symbol_from_filename = 1, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now');
+"""
+
 # (version, description, sql)
 MIGRATIONS = [
     (1, "Stage 2 foundation: instruments, runs, registry, ingest provenance, quality checks", MIGRATION_1),
@@ -423,6 +430,7 @@ MIGRATIONS = [
      MIGRATION_7),
     (8, "Folder sources, scans, per-file scan observations and recorded interpretation answers (Blueprint v1.3)",
      MIGRATION_8),
+    (9, "File-name identification ON for every folder source (owner decision DQ-8)", MIGRATION_9),
 ]
 
 LATEST_VERSION = MIGRATIONS[-1][0]

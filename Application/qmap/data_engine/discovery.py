@@ -40,6 +40,7 @@ from .format_detect import EXTENSION_KIND
 from .ingest import _date_limit_retry, ingest_file
 from .instruments import normalise_exchange, normalise_symbol
 from .profiles import MIXED, canonical_timeframe
+from .instrument_names import ensure_registry_template, load_registry, registry_path
 from .overlap import check_new_datasets, write_overlap_report
 
 MODULE_CODE = "SCAN"
@@ -107,6 +108,8 @@ class ScanResult:
     report_path: Path | None = None
     overlaps: list = field(default_factory=list)  # OverlapFinding for every dataset registered by this scan
     overlap_report_path: Path | None = None
+    identification_report_path: Path | None = None
+    registry_problems: list = field(default_factory=list)  # alias-registry problems (conflicting aliases ...)
 
     def summary(self) -> str:
         parts = [f"{n} {OUTCOME_LABELS.get(k, k).lower()}" for k, n in sorted(self.counts.items()) if n]
@@ -145,7 +148,7 @@ def _check_settings(market_timezone, default_exchange, exclude_patterns) -> tupl
 
 def add_folder_source(settings: Settings, db: Database, location: str | os.PathLike, *, label: str | None = None,
                       include_subfolders: bool = False, exclude_patterns=(), market_timezone: str | None = None,
-                      default_exchange: str | None = None, symbol_from_filename: bool = False) -> FolderSource:
+                      default_exchange: str | None = None, symbol_from_filename: bool = True) -> FolderSource:
     folder = Path(location).expanduser()
     if not folder.is_dir():
         raise SourceError(f"The folder {folder} does not exist or is not a folder.")
@@ -159,8 +162,7 @@ def add_folder_source(settings: Settings, db: Database, location: str | os.PathL
         raise SourceError("This folder is inside the Q-MAP application folder.",
                           action="Keep source files outside the application folder.")
     tz, exch, pats = _check_settings(market_timezone, default_exchange, exclude_patterns)
-    if symbol_from_filename and not exch:
-        raise SourceError("Reading the symbol from file names needs a default exchange for this folder.")
+    # (DQ-8: file-name identification no longer needs a folder exchange; NSE is used when none is given)
     existing = db.one("SELECT * FROM data_sources WHERE location = ?", (str(folder),))
     if existing is not None and existing["status"] == "active":
         raise SourceError(f"This folder is already a source ('{existing['label']}').")
@@ -195,8 +197,6 @@ def update_folder_source(db: Database, source_id: int, **changes) -> FolderSourc
         raise ValueError(f"unknown source setting(s): {sorted(unknown)}")
     merged.update(changes)
     tz, exch, pats = _check_settings(merged["market_timezone"], merged["default_exchange"], merged["exclude_patterns"])
-    if merged["symbol_from_filename"] and not exch:
-        raise SourceError("Reading the symbol from file names needs a default exchange for this folder.")
     with db.transaction() as conn:
         conn.execute("UPDATE data_sources SET label = ?, include_subfolders = ?, exclude_patterns_json = ?, "
                      "market_timezone = ?, default_exchange = ?, symbol_from_filename = ?, updated_at = ? "
@@ -265,8 +265,11 @@ def record_answer(db: Database, source_id: int, relative_path: str, answers: dic
     """Record the user's answers for one file. They apply to the next scan, and only while the file keeps the
     structure it had when the question was asked (the signature of its latest interpretation)."""
     state = next((s for s in file_states(db, source_id) if s.relative_path == relative_path), None)
-    if state is None or state.outcome != "needs_answer":
-        raise SourceError("This file has no open question.")
+    # DQ-8 (03-Nov-26): a correction can be recorded for any file Q-MAP has read (bulk corrections of imported files
+    # included); it applies from the next scan, which registers the corrected data as a new dataset (nothing is
+    # changed or deleted in place).
+    if state is None or state.outcome in ("missing", "ignored", "unsupported"):
+        raise SourceError("This file is not in the folder any more, or is not a data file.")
     clean = {k: str(v).strip() for k, v in answers.items() if k in ANSWER_KEYS and v is not None and str(v).strip()}
     unknown = set(answers) - set(ANSWER_KEYS)
     if unknown:
@@ -331,7 +334,9 @@ def list_candidate_files(settings: Settings, src: FolderSource) -> tuple[list[Pa
 
 def _inputs_fingerprint(src: FolderSource, answer_row, settings: Settings) -> str:
     """Everything outside the file that can change how it is interpreted or validated."""
-    payload = {"rules": A.RULES_VERSION, "tz": src.market_timezone, "exch": src.default_exchange,
+    reg = registry_path(settings)
+    aliases = hashlib.sha256(reg.read_bytes()).hexdigest()[:16] if reg.is_file() else None
+    payload = {"rules": A.RULES_VERSION, "tz": src.market_timezone, "exch": src.default_exchange, "aliases": aliases,
                "sym_from_name": src.symbol_from_filename, "answer": answer_row["answer_id"] if answer_row else None,
                "validation": [str(settings.plausible_min_date), settings.plausible_max_days_ahead,
                               settings.max_daily_move_pct, settings.min_rows, settings.max_gap_days]}
@@ -375,6 +380,11 @@ def scan_source(run: Run, source_id: int, *, today: date | None = None, progress
                           "synchronised).", action="Reconnect the drive or check the folder, then scan again.")
     scan_id = _start_scan(run, src)
     result = ScanResult(scan_id, run.run_id, source_id)
+    ensure_registry_template(settings)
+    registry = load_registry(settings)  # once per scan: every file is matched against the same registry
+    result.registry_problems = [p.text for p in registry.problems]
+    for text in result.registry_problems:
+        log.warning("Alias registry: %s", text)
     today = today or datetime.now(timezone.utc).date()
     try:
         files, result.excluded = list_candidate_files(settings, src)
@@ -387,7 +397,7 @@ def scan_source(run: Run, source_id: int, *, today: date | None = None, progress
                 progress(n - 1, len(files), rel)
             try:
                 outcome, change, action, detail = _scan_one(run, src, scan_id, path, rel, latest.get(rel), today,
-                                                            result.overlaps)
+                                                            result.overlaps, registry)
             except Exception as exc:  # one bad file never stops the scan; it is recorded as failed
                 log.error("Scan of %s failed: %s\n%s", rel, exc, traceback.format_exc())
                 detail = f"Unexpected problem: {type(exc).__name__}: {exc}"
@@ -407,6 +417,7 @@ def scan_source(run: Run, source_id: int, *, today: date | None = None, progress
             progress(len(files), len(files), "")
         result.report_path = _write_report(run, src, result)
         result.overlap_report_path = write_overlap_report(run, result.overlaps)
+        result.identification_report_path = _write_identification_report(run, db, source_id, result)
         status, err = "completed", None
     except BaseException as exc:
         status, err = "failed", f"{type(exc).__name__}: {exc}"
@@ -422,7 +433,7 @@ def scan_source(run: Run, source_id: int, *, today: date | None = None, progress
 
 
 def _scan_one(run: Run, src: FolderSource, scan_id: int, path: Path, rel: str, last, today: date,
-              overlaps: list | None = None):
+              overlaps: list | None = None, registry=None):
     db, settings = run.db, run.settings
     sid = src.source_id
     if path.suffix.lower() not in SUPPORTED_EXTENSIONS:
@@ -474,7 +485,7 @@ def _scan_one(run: Run, src: FolderSource, scan_id: int, path: Path, rel: str, l
     # ---- interpret (answers apply only to the structure they were given for) ------------------------------------
     answers = json.loads(answer["answers_json"]) if answer else {}
     kwargs = dict(market_timezone=src.market_timezone, default_exchange=src.default_exchange,
-                  symbol_from_filename=src.symbol_from_filename)
+                  symbol_from_filename=src.symbol_from_filename, registry=registry)
     interp = A.interpret_file(path, settings, answers=answers, **kwargs)
     note = ""
     if answer and interp.signature and interp.signature != answer["structure_signature"]:
@@ -527,6 +538,49 @@ def _scan_one(run: Run, src: FolderSource, scan_id: int, path: Path, rel: str, l
 
 
 REPORT_COLUMNS = ("File", "Change", "Action", "Result", "Detail")
+IDENT_COLUMNS = ("Exception", "Cleaned name", "Identity used", "Possible matches", "Files", "File names", "Explanation")
+IDENT_LABELS = {"provisional": "Not in the alias registry (provisional identity)",
+                "ambiguous": "Ambiguous: alias of more than one instrument",
+                "name_column_disagreement": "File name and file columns disagree (column used)",
+                "crypto_venue_unknown": "Cryptocurrency, trading venue unknown"}
+
+
+def identification_exceptions(states: list) -> list[dict]:
+    """Identification exceptions of the files' CURRENT state, grouped by kind and cleaned name (so "RELIANCE.csv",
+    "RELIANCE (1).csv" and "RELIANCE - Copy.csv" are one line). Used by the scan report and the Sources screen."""
+    groups: dict = {}
+    for st in states:
+        ident = (st.interpretation.get("decisions") or {}).get("identification") or {}
+        kind = ident.get("exception")
+        if not kind or st.outcome in ("missing", "ignored", "unsupported"):
+            continue
+        cleaned = (ident.get("cleaned") or {}).get("cleaned", "")
+        match = ident.get("match") or {}
+        key = (kind, cleaned)
+        g = groups.setdefault(key, {"kind": kind, "label": IDENT_LABELS.get(kind, kind), "cleaned": cleaned,
+                                    "identity": match.get("symbol") or "", "candidates": match.get("candidates") or [],
+                                    "files": [], "explanation": match.get("method") or ""})
+        g["files"].append(st.relative_path)
+        if kind == "name_column_disagreement":
+            g["explanation"] = next((w for w in st.interpretation.get("warnings", []) if "column" in w), g["explanation"])
+    return sorted(groups.values(), key=lambda g: (g["kind"], g["cleaned"]))
+
+
+def _write_identification_report(run: Run, db: Database, source_id: int, result: ScanResult) -> Path | None:
+    groups = identification_exceptions(file_states(db, source_id, include_missing=False))
+    if not groups and not result.registry_problems:
+        return None
+    stamp = datetime.now().strftime("%d_%b_%y_%H%M%S")
+    path = run.output_path(f"Identification_Exceptions_{stamp}.csv")
+    with open(path, "x", newline="", encoding="utf-8") as fh:
+        w = csv.writer(fh)
+        w.writerow(IDENT_COLUMNS)
+        for g in groups:
+            w.writerow((g["label"], g["cleaned"], g["identity"], "; ".join(g["candidates"]), len(g["files"]),
+                        "; ".join(g["files"]), g["explanation"]))
+        for text in result.registry_problems:
+            w.writerow(("Alias registry problem", "", "", "", 0, str(registry_path(run.settings)), text))
+    return path
 
 
 def _write_report(run: Run, src: FolderSource, result: ScanResult) -> Path:

@@ -31,6 +31,7 @@ from ..core.config import Settings
 from ..core.errors import IngestError
 from .datetime_parse import parse_times
 from .format_detect import PARQUET, TEXT, XLS, XLSX, detect_format
+from .instrument_names import AliasRegistry, Match, clean_filename, load_registry, symbol_from_name
 from .instruments import normalise_exchange, normalise_symbol
 from .mapping import SourceTable
 from .numeric import OK, parse_number
@@ -40,7 +41,10 @@ from .timeframe_infer import CONSISTENT, DEFAULT_SAMPLING, MIXED_STATUS, infer_f
 from .readers import read_source
 from .results import Collector
 
-RULES_VERSION = 4  # bump when any rule below changes how the same file would be interpreted
+RULES_VERSION = 5  # bump when any rule below changes how the same file would be interpreted
+# 5 (03-Nov-26, DQ-8): file-name cleaning + alias registry; file-name identification ON by default; provisional
+#   identities and name/column disagreements are warnings (DQ-2: the column is still used); crypto = category CRYPTO
+#   with the venue unknown; NSE when no exchange is given.
 # 4 (03-Nov-26, DQ-7): the timeframe is measured by sampling (timeframe_infer.py), any interval, MIXED; file-name
 #   tokens and recorded answers are cross-checks; asked only when the data are too short to measure.
 # 2 (02-Nov-26, owner decision DQ-2): an exchange column is always used, and a file name that contradicts an exchange
@@ -79,6 +83,8 @@ KNOWN_EXCHANGES = ("NSE", "BSE", "MCX", "NFO", "BFO", "CDS", "NCDEX", "NYSE", "N
 # Market prefixes ("CRYPTO_RIVERUSD, 180.csv"): the name gives the symbol, but NOT the exchange or venue, and the
 # folder's default exchange (an equity exchange such as NSE) is never applied to them: the venue is always asked.
 MARKET_PREFIXES = ("CRYPTO",)
+CRYPTO_CATEGORY = "CRYPTO"  # stored in the exchange field until category and venue have their own fields (proposal)
+DEFAULT_EXCHANGE = "NSE"    # DQ-8 section 9: used when an exchange is required and none is given
 _NAME_ID = re.compile(r"^(?P<exchange>[A-Za-z]+)_(?P<symbol>[A-Za-z0-9&-]+)(?=$|[,_ .(])")
 _PLAIN_SYMBOL = re.compile(r"^[A-Za-z0-9&-]+$")
 # A-9: timeframe token in a file name: ", 1D", ", 5", "_5m", "_1h" ... (evidence only, never decisive).
@@ -400,18 +406,6 @@ def market_prefix_from_name(stem: str) -> tuple[str, str] | None:
     return m.group("exchange").upper(), m.group("symbol").upper()
 
 
-def _plain_symbol(stem: str) -> str | None:
-    """The whole name as a symbol: 'ICICIBANK', '5PAISA_30min', 'VERANDA_1min', 'NIFTY, 1D'. Only when what follows
-    the first word is nothing but a timeframe token, so 'CRYPTO_RIVERUSD, 180' or 'csv headers std' give no symbol."""
-    parts = re.split(r"(?=[, _(])", stem, maxsplit=1)
-    head, rest = parts[0], (parts[1] if len(parts) > 1 else "")
-    if not head or not _PLAIN_SYMBOL.match(head) or head.isdigit():
-        return None
-    if rest and not re.fullmatch(r"(?:, ?|_| )\d{1,3}(?:min|[mhHdDwWM])?(?: ?\(\d+\))?", rest):
-        return None
-    return head.upper()
-
-
 # ---------------------------------------------------------------------------------------------------------------
 # main entry point
 # ---------------------------------------------------------------------------------------------------------------
@@ -427,8 +421,8 @@ def _valid_zone(name: str | None) -> bool:
 
 
 def interpret_file(path: str | Path, settings: Settings, *, market_timezone: str | None = None,
-                   default_exchange: str | None = None, symbol_from_filename: bool = False,
-                   answers: dict | None = None) -> Interpretation:
+                   default_exchange: str | None = None, symbol_from_filename: bool = True,
+                   answers: dict | None = None, registry: AliasRegistry | None = None) -> Interpretation:
     """Work out how to read `path`. Returns READY with a generated profile, NEEDS_ANSWER with questions, or
     REJECTED with a reason. `answers` holds the user's earlier answers for this file (keys as Question.key, plus
     'exchange', 'symbol', 'timeframe', 'date_format', 'market_timezone')."""
@@ -437,13 +431,16 @@ def interpret_file(path: str | Path, settings: Settings, *, market_timezone: str
     evidence: list[str] = []
     res = Interpretation(status=REJECTED, evidence=evidence)
     try:
-        return _interpret(path, settings, market_timezone, default_exchange, symbol_from_filename, answers, res)
+        if registry is None:
+            registry = load_registry(settings)
+        return _interpret(path, settings, market_timezone, default_exchange, symbol_from_filename, answers, res,
+                          registry)
     except _Reject as exc:
         res.status, res.message = REJECTED, str(exc)
         return res
 
 
-def _interpret(path, settings, market_tz, default_exchange, symbol_from_filename, answers, res):
+def _interpret(path, settings, market_tz, default_exchange, symbol_from_filename, answers, res, registry=None):
     evidence = res.evidence
     detected = detect_format(path, max_size_bytes=settings.max_file_size_mb * 1024 * 1024)
     if not detected.supported:
@@ -579,78 +576,101 @@ def _interpret(path, settings, market_tz, default_exchange, symbol_from_filename
             res.questions.append(Question("timeframe", f"The bar interval cannot be measured ({reason}). What is the "
                                                        "timeframe?", ALLOWED_TIMEFRAMES))
 
-    # ---- A-8 identity ----------------------------------------------------------------------------------------
-    # Precedence (owner decision DQ-2, 02-Nov-26): explicit columns in the file > the user's recorded answer > the
-    # file name pattern EXCHANGE_SYMBOL > the source's settings. A file name that CONTRADICTS a column is never used
-    # silently: the file is rejected with the reason.
+    # ---- A-8 identity (DQ-2 precedence kept; DQ-8, 03-Nov-26) --------------------------------------------------
+    # Symbol: explicit column > the user's recorded correction > the file name (EXCHANGE_SYMBOL / CRYPTO_SYMBOL patterns,
+    # or the CLEANED name matched against the alias registry; no match = provisional identity, warned). Exchange:
+    # column > correction > file-name exchange > crypto category > the folder's default > NSE. A file name that
+    # disagrees with a column is reported with both values; the column is used (never silently overridden).
     overrides: dict = {}
     instrument: dict = {}
     name_id = identity_from_name(stem)
     prefix_id = None if name_id else market_prefix_from_name(stem)
     exch_ans, sym_ans = answers.get("exchange"), answers.get("symbol")
+    cleaned = clean_filename(path.name, prefix=(name_id or prefix_id or (None,))[0])
+    registry = registry if registry is not None else AliasRegistry()
+    match = None
+    if name_id or prefix_id:
+        # EXCHANGE_SYMBOL / CRYPTO_SYMBOL (approved pattern, D5-15): the symbol is the token after the prefix
+        # ("NSE_ABC provider2.csv" -> ABC); the registry may map it to a canonical name. Not a provisional identity.
+        token = (name_id or prefix_id)[1]
+        match = registry.match(clean_filename(token))
+        if match.status == "provisional":
+            match = Match("pattern", token, normalise_symbol(token),
+                          f"the file-name pattern {(name_id or prefix_id)[0]}_SYMBOL")
+    elif symbol_from_filename:
+        match = registry.match(cleaned)
+    ident = {"original_filename": path.name, "cleaned": cleaned.as_dict(),
+             "match": match.as_dict() if match else None, "exception": None,
+             "asset_category": "crypto" if prefix_id else None}
+    # the name's identity only counts as EVIDENCE when it is recognisable (pattern or registry), not provisional
+    name_symbol = match.symbol if match and match.status in ("canonical", "alias", "pattern") else None
     col_values = {}
     for f in ("exchange", "symbol"):
         if f in mapping:
             norm = normalise_exchange if f == "exchange" else normalise_symbol
             col_values[f] = {norm(v) for v in columns[mapping[f]] if not _is_blank(v)}
-    if name_id:
-        for f, from_name in (("exchange", name_id[0]), ("symbol", name_id[1])):
-            if f in col_values and from_name not in col_values[f]:
-                found = ", ".join(sorted(col_values[f])[:5])
-                raise _Reject(f"The file name says {f} {from_name}, but the file's {f} column says {found}. File "
-                              "contents are never overridden by a file name; rename the file or correct the data.")
+    for f, from_name in (("exchange", name_id[0] if name_id else None), ("symbol", name_symbol)):
+        if from_name and f in col_values and from_name not in col_values[f]:
+            found = ", ".join(sorted(col_values[f])[:5])
+            res.warnings.append(f"The file name says {f} {from_name}, but the file's {f} column says {found}. The "
+                                f"column is used; correct the file or its name if the column is wrong.")
+            ident["exception"] = "name_column_disagreement"
     # exchange
     if "exchange" in mapping:
         instrument.update(exchange_from="column", exchange_column=mapping["exchange"])
         evidence.append(f"A-8 exchange from the column {names[mapping['exchange']]!r}.")
     else:
-        # a market prefix (CRYPTO_) says the folder's default exchange does not apply: the venue must be given
-        exch = exch_ans or (name_id[0] if name_id else None) or (None if prefix_id else default_exchange)
-        if prefix_id and not exch_ans and default_exchange:
-            evidence.append(f"A-8 the file name starts with the market prefix {prefix_id[0]}_, which names no exchange "
-                            f"or venue, so the folder's default exchange ({normalise_exchange(default_exchange)}) "
-                            "is not applied.")
-        if exch:
-            instrument["exchange_from"] = "ingest"
-            overrides["exchange"] = normalise_exchange(exch)
-            evidence.append(f"A-8 exchange {overrides['exchange']}: " + (
-                "given by the user." if exch_ans else "from the file name." if name_id
-                else "the source's default exchange."))
+        if exch_ans:
+            exch, why = exch_ans, "given by the user"
+        elif name_id:
+            exch, why = name_id[0], "from the file name"
+        elif prefix_id:
+            # crypto is an asset category, not an exchange: accepted automatically with the venue unknown
+            exch, why = CRYPTO_CATEGORY, ("asset category CRYPTO from the file name; trading venue unknown (correct it "
+                                          "in Sources if you know it)")
+            ident["venue"] = "unknown"
+            res.warnings.append(f"Cryptocurrency data: stored under the category {CRYPTO_CATEGORY}; the trading venue "
+                                "is unknown.")
+            ident["exception"] = ident["exception"] or "crypto_venue_unknown"
+        elif default_exchange:
+            exch, why = default_exchange, "the folder's default exchange"
+        else:
+            exch, why = DEFAULT_EXCHANGE, "Q-MAP's default exchange (none was given)"
+        instrument["exchange_from"] = "ingest"
+        overrides["exchange"] = normalise_exchange(exch)
+        evidence.append(f"A-8 exchange {overrides['exchange']}: {why}.")
     # symbol
     if "symbol" in mapping:
         instrument.update(symbol_from="column", symbol_column=mapping["symbol"])
-        evidence.append(f"A-8 symbol from the column {names[mapping['symbol']]!r}"
-                        + (" (the file name is consistent with it but is not used)." if name_id else "."))
+        evidence.append(f"A-8 symbol from the column {names[mapping['symbol']]!r}.")
     else:
         instrument["symbol_from"] = "ingest"
-        sym = None
+        sym = why = None
         if sym_ans:
-            sym, why = sym_ans, "given by the user"
-        elif name_id:
-            sym, why = name_id[1], "from the file name pattern EXCHANGE_SYMBOL"
-        elif prefix_id:
-            sym, why = prefix_id[1], f"from the file name pattern {prefix_id[0]}_SYMBOL"
-        elif symbol_from_filename and _plain_symbol(stem) and (overrides.get("exchange") or "exchange" in mapping):
-            sym, why = _plain_symbol(stem), "the file name (enabled for this source)"
+            sym, why = sym_ans, "given by the user (recorded correction)"
+        elif match is not None and match.symbol:
+            sym = match.symbol
+            why = f"from the file name: {match.method}"
+            if cleaned.removed:
+                why += f" (removed from the name: {', '.join(repr(r) for r in cleaned.removed)})"
+            if match.status in ("provisional", "ambiguous"):
+                ident["exception"] = ident["exception"] or match.status
+                extra = (f" Possible matches: {', '.join(match.candidates)}." if match.candidates else "")
+                res.warnings.append((f"Provisional instrument {match.symbol}: {match.method}." if match.status ==
+                                     "provisional" else f"Ambiguous name: {match.method}.") + extra)
         if sym:
-            overrides["symbol"] = normalise_symbol(sym)
-            evidence.append(f"A-8 symbol {overrides['symbol']}: {why}.")
-    need_exch = "exchange_from" not in instrument
+            try:
+                overrides["symbol"] = normalise_symbol(sym)
+            except IngestError:
+                sym = None
+            else:
+                evidence.append(f"A-8 symbol {overrides['symbol']}: {why}.")
+    res.decisions["identification"] = ident
     need_sym = instrument.get("symbol_from") == "ingest" and "symbol" not in overrides
-    # A plain file name ("ICICIBANK.txt") is only a SUGGESTION unless the folder's option "symbol from the file name"
-    # is on (decision D5-06): the Sources screen fills it in, and the user confirms it with Save answer.
-    suggest = (_plain_symbol(stem),) if need_sym and _plain_symbol(stem) else ()
-    hint = (f" The file name suggests {suggest[0]} (confirm it, or switch on 'symbol from the file name' for this "
-            "folder)." if suggest else "")
-    if need_exch and need_sym:
-        res.questions.append(Question("identity", "Which instrument is this (exchange and symbol)? Q-MAP could not "
-                                                  "read it from the file or its name." + hint, suggest))
-    elif need_exch:
-        res.questions.append(Question("exchange", (
-            f"Which exchange or venue is {overrides.get('symbol', 'this')} traded on? The file does not say, and the "
-            f"{prefix_id[0]}_ prefix in its name is a market, not a venue." if prefix_id
-            else "Which exchange is this traded on? The file does not say.")))
-    elif need_sym:
+    if need_sym:  # only when file-name identification is switched off for this folder, or the name is unusable
+        suggest = (symbol_from_name(cleaned.cleaned),) if cleaned.cleaned and symbol_from_name(cleaned.cleaned) else ()
+        hint = (f" The file name suggests {suggest[0]} (confirm it, or switch on 'symbol from the file name' for this "
+                "folder)." if suggest else "")
         res.questions.append(Question("identity", "Which symbol is this? Q-MAP could not read it from the file or "
                                                   "its name." + hint, suggest))
 

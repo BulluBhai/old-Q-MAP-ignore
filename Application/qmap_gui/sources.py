@@ -77,13 +77,14 @@ class SourcesFrame(tk.Frame):
         form = tk.Frame(box)
         form.pack(fill="x", pady=3)
         self.tz_var, self.exch_var = tk.StringVar(self, value="Asia/Kolkata"), tk.StringVar(self, value="NSE")
-        self.symname_var, self.sub_var = tk.BooleanVar(self, value=False), tk.BooleanVar(self, value=False)
+        self.symname_var, self.sub_var = tk.BooleanVar(self, value=True), tk.BooleanVar(self, value=False)
         self.exclude_var = tk.StringVar(self, value="")
         tk.Label(form, text="Market time zone:").grid(row=0, column=0, sticky="w")
         ttk.Combobox(form, textvariable=self.tz_var, values=ss.COMMON_ZONES, width=18).grid(row=0, column=1, sticky="w")
         tk.Label(form, text="Default exchange:").grid(row=0, column=2, sticky="w", padx=(10, 0))
         tk.Entry(form, textvariable=self.exch_var, width=8).grid(row=0, column=3, sticky="w")
-        tk.Checkbutton(form, text="File name is the symbol (e.g. RELIANCE.csv)", variable=self.symname_var).grid(
+        tk.Checkbutton(form, text="Identify the instrument from the file name (RELIANCE (1).csv -> RELIANCE)",
+                       variable=self.symname_var).grid(
             row=0, column=4, sticky="w", padx=(10, 0))
         tk.Checkbutton(form, text="Include sub-folders", variable=self.sub_var).grid(row=1, column=0, columnspan=2,
                                                                                      sticky="w")

@@ -199,31 +199,41 @@ def test_unreadable_dates_are_rejected_with_the_supported_layouts(settings, src)
 # ---- A-8, A-9: identity and timeframe -------------------------------------------------------------------------------
 
 def test_identity_is_asked_when_neither_the_file_nor_its_name_gives_it(settings, src):
+    """With file-name identification switched OFF for the folder, an unidentified file is asked about. With it ON (the
+    default since DQ-8), the cleaned name is a provisional identity with a warning."""
     p = write_delimited(src / "csv headers std.csv", HEADER, [[d.isoformat()] + r for d, r in zip(weekdays(10), ohlcv(10))])
-    it = A.interpret_file(p, settings)
+    it = A.interpret_file(p, settings, symbol_from_filename=False)
     assert [q.key for q in it.questions] == ["identity"]
-    assert A.interpret_file(p, settings, answers={"exchange": "nse", "symbol": "nifty"}).overrides["symbol"] == "NIFTY"
+    assert A.interpret_file(p, settings, symbol_from_filename=False,
+                            answers={"exchange": "nse", "symbol": "nifty"}).overrides["symbol"] == "NIFTY"
+    it = A.interpret_file(p, settings)
+    assert it.status == A.READY and it.overrides["symbol"] == "CSV_HEADERS_STD"
+    assert any(w.startswith("Provisional instrument CSV_HEADERS_STD") for w in it.warnings)
 
 
 def test_unknown_exchange_prefix_in_a_name_is_not_identity(settings, src):
     p = write_delimited(src / "CSV_HEADERS.csv", HEADER, [[d.isoformat()] + r for d, r in zip(weekdays(10), ohlcv(10))])
-    assert A.interpret_file(p, settings).questions[0].key == "identity"
+    assert A.interpret_file(p, settings, symbol_from_filename=False).questions[0].key == "identity"
+    it = A.interpret_file(p, settings)  # "CSV" is never taken as an exchange; the whole name is provisional
+    assert it.overrides["exchange"] == "NSE" and it.overrides["symbol"] == "CSV_HEADERS" and it.warnings
 
 
 def test_plain_symbol_file_names_only_when_enabled_for_the_source(settings, src):
     p = write_delimited(src / "RELIANCE.csv", HEADER, [[d.isoformat()] + r for d, r in zip(weekdays(10), ohlcv(10))])
-    assert A.interpret_file(p, settings, default_exchange="NSE").status == A.NEEDS_ANSWER
-    it = A.interpret_file(p, settings, default_exchange="NSE", symbol_from_filename=True)
+    assert A.interpret_file(p, settings, default_exchange="NSE", symbol_from_filename=False).status == A.NEEDS_ANSWER
+    it = A.interpret_file(p, settings, default_exchange="NSE")  # ON by default since DQ-8
     assert it.status == A.READY and it.overrides["symbol"] == "RELIANCE"
 
 
-def test_symbol_column_is_content_and_a_contradicting_name_is_rejected(settings, src):
+def test_symbol_column_is_content_and_a_contradicting_name_is_reported(settings, src):
     rows = [[d.isoformat(), "INFY"] + r for d, r in zip(weekdays(10), ohlcv(10))]
     ok = write_delimited(src / "data.csv", ["date", "symbol", "open", "high", "low", "close", "volume"], rows)
     it = A.interpret_file(ok, settings, default_exchange="NSE")
     assert it.status == A.READY and it.overrides == {"exchange": "NSE", "timeframe": "1D"}
     bad = write_delimited(src / "NSE_TCS.csv", ["date", "symbol", "open", "high", "low", "close", "volume"], rows)
-    assert A.interpret_file(bad, settings).status == A.REJECTED
+    it = A.interpret_file(bad, settings)  # DQ-8: reported with both values, the column is used (never overridden)
+    assert it.status == A.READY and "symbol" not in it.overrides
+    assert any("says symbol TCS" in w and "INFY" in w for w in it.warnings)
 
 
 def test_a_file_name_timeframe_that_contradicts_the_data_is_reported_not_used(settings, src):

@@ -47,8 +47,8 @@ def checksums(folder):
             if p.is_file()}
 
 
-def test_schema_8_is_the_latest():
-    assert LATEST_VERSION == 8
+def test_schema_9_is_the_latest():
+    assert LATEST_VERSION == 9  # 9: file-name identification ON (DQ-8, 03-Nov-26)
 
 
 # ---- sources ---------------------------------------------------------------------------------------------------
@@ -64,9 +64,8 @@ def test_q_map_own_folders_and_bad_settings_are_refused(settings, db, tmp_path):
     ok.mkdir()
     with pytest.raises(D.SourceError):
         D.add_folder_source(settings, db, ok, market_timezone="Mars/Olympus")
-    with pytest.raises(D.SourceError):
-        D.add_folder_source(settings, db, ok, symbol_from_filename=True)  # needs a default exchange
-    D.add_folder_source(settings, db, ok)
+    # DQ-8 (03-Nov-26): file-name identification no longer needs a folder exchange (NSE is the default)
+    assert D.add_folder_source(settings, db, ok).symbol_from_filename  # ON by default, no exchange needed
     with pytest.raises(D.SourceError):
         D.add_folder_source(settings, db, ok)  # already a source
 
@@ -237,7 +236,7 @@ def test_readiness_still_applies_per_analysis(settings, db, source, folder):
 # ---- questions and answers -------------------------------------------------------------------------------------------
 
 def test_a_question_is_recorded_answered_and_the_answer_reused_only_for_the_same_structure(settings, db, folder):
-    src = D.add_folder_source(settings, db, folder)
+    src = D.add_folder_source(settings, db, folder, symbol_from_filename=False)  # questions only arise with it off
     p = daily(folder / "prices.csv")
     r = scan(settings, db, src)
     assert outcome_of(r, "prices.csv")[3] == "needs_answer" and list_datasets(db) == []
@@ -262,7 +261,7 @@ def test_a_question_is_recorded_answered_and_the_answer_reused_only_for_the_same
 
 
 def test_changing_the_source_settings_reprocesses_waiting_files(settings, db, folder):
-    src = D.add_folder_source(settings, db, folder, default_exchange="NSE")
+    src = D.add_folder_source(settings, db, folder, default_exchange="NSE", symbol_from_filename=False)
     daily(folder / "RELIANCE.csv")
     assert outcome_of(scan(settings, db, src), "RELIANCE.csv")[3] == "needs_answer"
     D.update_folder_source(db, src.source_id, symbol_from_filename=True)

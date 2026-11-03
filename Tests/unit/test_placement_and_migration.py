@@ -92,16 +92,16 @@ def test_a_version_1_database_is_upgraded_in_place_and_keeps_its_data(tmp_path):
     path = tmp_path / "old.sqlite"
     _v1_database(path)
     db = open_database(path)
-    assert db.current_version() == LATEST_VERSION == 8
-    assert [r["version"] for r in db.query("SELECT version FROM schema_version ORDER BY version")] == [1, 2, 3, 4, 5, 6, 7, 8]
+    assert db.current_version() == LATEST_VERSION == 9
+    assert [r["version"] for r in db.query("SELECT version FROM schema_version ORDER BY version")] == list(range(1, 10))
     assert db.one("SELECT content_text FROM source_profiles")["content_text"] == "text"
     cols = {r["name"] for r in db.query("PRAGMA table_info(ingest_attempts)")}
     assert {"validation_settings_json", "config_fingerprint"} <= cols
     assert "config_fingerprint" in {r["name"] for r in db.query("PRAGMA table_info(datasets)")}
     with pytest.raises(sqlite3.IntegrityError):
         db.connection().execute("UPDATE source_profiles SET content_text='changed'")
-    assert open_database(path).current_version() == 8  # re-opening changes nothing
-    assert len(db.query("SELECT * FROM schema_version")) == 8
+    assert open_database(path).current_version() == 9  # re-opening changes nothing
+    assert len(db.query("SELECT * FROM schema_version")) == 9
 
 
 def test_foreign_keys_are_enforced_on_every_connection(tmp_path):

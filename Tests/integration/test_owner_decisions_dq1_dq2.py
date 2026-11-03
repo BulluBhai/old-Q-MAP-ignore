@@ -243,19 +243,26 @@ def test_dq2_columns_that_agree_with_the_name_are_used(settings, src):
     assert it.profile.instrument.symbol_from == "column" and "exchange" not in it.overrides
 
 
-@pytest.mark.parametrize("name, cols, values, field", [
-    ("NSE_TCS.csv", ["symbol"], lambda i: ["INFY"], "symbol"),
-    ("NSE_TCS.csv", ["exchange", "symbol"], lambda i: ["BSE", "TCS"], "exchange"),
-    ("NSE_TCS.csv", ["exchange"], lambda i: ["BSE"], "exchange"),  # was silently read as NSE before 02-Nov-26
-    ("NSE_TCS.csv", ["symbol"], lambda i: ["INFY" if i % 2 else "WIPRO"], "symbol"),  # several symbols, none TCS
+@pytest.mark.parametrize("name, cols, values, field, expected", [
+    ("NSE_TCS.csv", ["symbol"], lambda i: ["INFY"], "symbol", {"NSE:INFY"}),
+    ("NSE_TCS.csv", ["exchange", "symbol"], lambda i: ["BSE", "TCS"], "exchange", {"BSE:TCS"}),
+    ("NSE_TCS.csv", ["exchange"], lambda i: ["BSE"], "exchange", {"BSE:TCS"}),  # was silently NSE before 02-Nov-26
+    ("NSE_TCS.csv", ["symbol"], lambda i: ["INFY" if i % 2 else "WIPRO"], "symbol", {"NSE:INFY", "NSE:WIPRO"}),
 ])
-def test_dq2_a_name_that_contradicts_the_file_is_rejected_never_used(settings, db, source, folder, name, cols, values,
-                                                                     field):
+def test_dq2_a_name_that_contradicts_the_file_never_overrides_it(settings, db, source, folder, name, cols, values,
+                                                                  field, expected):
+    """DQ-2 kept; DQ-8 (03-Nov-26): the contradiction is a WARNING showing both identities, and the file's own column
+    is used (before 03-Nov-26 the file was rejected). The name never replaces the column."""
     _with_id_columns(folder / name, cols, values)
     res = scan(settings, db, source)
     rel, change, action, outcome, detail = result_for(res, name)
-    assert outcome == "rejected" and f"says {field}" in detail and "never overridden" in detail
-    assert list_datasets(db) == []
+    assert outcome == "imported", detail
+    (state,) = D.file_states(db, source.source_id)
+    warning = next(w for w in state.interpretation["warnings"] if f"says {field}" in w)
+    assert "column is used" in warning
+    assert {d.instrument for d in list_datasets(db)} == expected  # the file's own columns, never the name's values
+    groups = D.identification_exceptions(D.file_states(db, source.source_id))
+    assert [g["kind"] for g in groups] == ["name_column_disagreement"]
 
 
 def test_dq2_exchange_column_with_symbol_from_the_name(settings, db, source, folder):
@@ -265,22 +272,24 @@ def test_dq2_exchange_column_with_symbol_from_the_name(settings, db, source, fol
     assert [d.instrument for d in list_datasets(db)] == ["BSE:TCS"]
 
 
-def test_dq2_symbol_column_without_an_exchange_asks_only_for_the_exchange(settings, db, source, folder):
+def test_dq2_symbol_column_without_an_exchange_uses_nse_and_can_be_corrected(settings, db, source, folder):
+    """DQ-8 section 9 (03-Nov-26): NSE is the default exchange; nothing is asked; the user can correct it."""
     _with_id_columns(folder / "prices.csv", ["symbol"], lambda i: ["INFY"])
     res = scan(settings, db, source)
-    assert result_for(res, "prices.csv")[3] == "needs_answer"
-    state = D.file_states(db, source.source_id)[0]
-    assert [q["key"] for q in state.questions] == ["exchange"]
-    D.record_answer(db, source.source_id, "prices.csv", {"exchange": "NSE"})
-    assert result_for(scan(settings, db, source), "prices.csv")[3] == "imported"
+    assert result_for(res, "prices.csv")[3] == "imported"
     assert [d.instrument for d in list_datasets(db)] == ["NSE:INFY"]
+    D.record_answer(db, source.source_id, "prices.csv", {"exchange": "BSE"})  # a correction of an imported file
+    assert result_for(scan(settings, db, source), "prices.csv")[3] == "imported"
+    assert sorted(d.instrument for d in list_datasets(db)) == ["BSE:INFY", "NSE:INFY"]  # nothing changed in place
 
 
-def test_dq2_unrecognised_name_prefix_is_never_identity(settings, src):
+def test_dq2_unrecognised_name_prefix_is_never_an_exchange(settings, src):
     p = daily_file(src / "DATA_PRICES.csv", ohlcv(10))
     it = A.interpret_file(p, settings)
-    assert [q.key for q in it.questions] == ["identity"]
-    assert json.dumps(it.as_dict())  # the question is serialisable for the scan record
+    assert it.overrides["exchange"] == "NSE" and it.overrides["symbol"] == "DATA_PRICES"  # provisional, warned
+    assert it.decisions["identification"]["exception"] == "provisional"
+    assert json.dumps(it.as_dict())  # serialisable for the scan record
+    assert [q.key for q in A.interpret_file(p, settings, symbol_from_filename=False).questions] == ["identity"]
 
 
 def test_source_files_are_unchanged_by_all_of_the_above(settings, db, source, folder):

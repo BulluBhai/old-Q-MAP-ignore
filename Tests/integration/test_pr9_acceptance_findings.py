@@ -88,27 +88,32 @@ def test_timeframe_tokens_in_file_names(stem, expected):
 
 @pytest.mark.parametrize("stem, symbol", [
     ("ICICIBANK", "ICICIBANK"), ("OLAELEC", "OLAELEC"), ("AKZOINDIA", "AKZOINDIA"), ("5PAISA_30min", "5PAISA"),
-    ("VERANDA_1min", "VERANDA"), ("M&M, 1D", "M&M"), ("BAJAJ-AUTO_5", "BAJAJ-AUTO"),
-    # not a plain symbol name: something other than a timeframe token follows the first word
-    ("CRYPTO_RIVERUSD, 180", None), ("BINANCE_BTCUSDT", None), ("csv headers std", None), ("12345", None),
+    ("VERANDA_1min", "VERANDA"), ("M&M, 1D", "M&M"),
+    # DQ-8 (03-Nov-26): a bare number after "_" or a space is part of the name ("NIFTY_50"), never a timeframe token
+    ("BAJAJ-AUTO_5", "BAJAJ-AUTO_5"),
+    # names that are not one word become PROVISIONAL identities (warned), never a prefix taken as the symbol
+    ("BINANCE_BTCUSDT", "BINANCE_BTCUSDT"), ("csv headers std", "CSV_HEADERS_STD"),
 ])
-def test_plain_symbol_only_when_the_rest_of_the_name_is_a_timeframe_token(stem, symbol):
-    assert A._plain_symbol(stem) == symbol
+def test_cleaned_file_name_symbols(stem, symbol):
+    from qmap.data_engine.instrument_names import clean_filename, symbol_from_name
+
+    assert symbol_from_name(clean_filename(stem + ".csv").cleaned) == symbol
 
 
 @pytest.mark.parametrize("name, step, tf", [("ICICIBANK.csv", None, "1D"), ("5PAISA_30min.csv", 30, "30m"),
                                             ("VERANDA_1min.csv", 1, "1m"), ("OLAELEC.csv", 1, "1m")])
-def test_plain_name_is_suggested_when_the_folder_option_is_off_and_used_when_it_is_on(settings, src, name, step, tf):
+def test_plain_name_is_used_by_default_and_suggested_when_the_folder_option_is_off(settings, src, name, step, tf):
     p = daily(src / name) if step is None else intraday_ist(src / name, 40, step)
     sym = name.split("_")[0].split(".")[0]
     kw = dict(default_exchange="NSE", market_timezone="Asia/Kolkata")
-    it = A.interpret_file(p, settings, **kw)
+    it = A.interpret_file(p, settings, symbol_from_filename=False, **kw)  # the folder switched it off
     assert it.status == A.NEEDS_ANSWER and [(q.key, q.options) for q in it.questions] == [("identity", (sym,))]
-    assert f"suggests {sym}" in it.message and it.overrides == {}
-    it = A.interpret_file(p, settings, answers={"symbol": sym}, **kw)  # the user confirms
+    assert f"suggests {sym}" in it.message
+    it = A.interpret_file(p, settings, symbol_from_filename=False, answers={"symbol": sym}, **kw)  # the user confirms
     assert it.status == A.READY and it.overrides["symbol"] == sym
-    on = A.interpret_file(p, settings, symbol_from_filename=True, **kw)
+    on = A.interpret_file(p, settings, **kw)  # ON by default since DQ-8
     assert on.status == A.READY and on.overrides == {"exchange": "NSE", "symbol": sym, "timeframe": tf}
+    assert on.decisions["identification"]["exception"] == "provisional"  # not in the (empty) alias registry
 
 
 def test_a_minute_token_in_the_name_is_a_cross_check_only(settings, src):
@@ -117,7 +122,8 @@ def test_a_minute_token_in_the_name_is_a_cross_check_only(settings, src):
     it = A.interpret_file(ok, settings, market_timezone="Asia/Kolkata", default_exchange="NSE",
                           symbol_from_filename=True)
     assert it.status == A.READY and it.overrides["timeframe"] == "1m"
-    assert any("the file name agrees (1m)" in e for e in it.evidence) and not it.warnings
+    assert any("the file name agrees (1m)" in e for e in it.evidence)
+    assert not [w for w in it.warnings if "timeframe" in w or "file name says" in w]
     bad = intraday_ist(src / "VERANDA_5min.csv", 30, 1)
     it = A.interpret_file(bad, settings, market_timezone="Asia/Kolkata", default_exchange="NSE",
                           symbol_from_filename=True)
@@ -135,7 +141,7 @@ def test_explicit_identity_in_the_file_still_wins_over_a_plain_name(settings, sr
 def test_the_sources_screen_fills_in_the_suggestion_without_saving_it(settings, db, folder):
     from qmap_gui import source_services as ss
 
-    src = _source(settings, db, folder)
+    src = _source(settings, db, folder, symbol_from_filename=False)  # the suggestion applies when it is off
     daily(folder / "ICICIBANK.txt")
     scan(settings, db, src)
     (state,) = D.file_states(db, src.source_id)
@@ -162,13 +168,14 @@ def three_hourly(path, n=40, seed=2, step=180):
 
 def test_a_crypto_prefix_gives_the_symbol_but_never_the_default_exchange(settings, run, db, src):
     p, times = three_hourly(src / "CRYPTO_BTCUSD, 60.csv", step=60)
+    # DQ-8 section 9 (03-Nov-26): crypto is accepted automatically under the category CRYPTO, venue unknown
     it = A.interpret_file(p, settings, market_timezone="Asia/Kolkata", default_exchange="NSE")
-    assert it.status == A.NEEDS_ANSWER and [q.key for q in it.questions] == ["exchange"]  # NOT NSE
-    assert "CRYPTO_ prefix" in it.questions[0].text and it.overrides == {}
-    assert any("default exchange (NSE) is not applied" in e for e in it.evidence)
-    assert it.decisions["timeframe"] == "1h" and it.decisions["identity"] == {"symbol": "BTCUSD"}
+    assert it.status == A.READY and it.overrides == {"exchange": "CRYPTO", "symbol": "BTCUSD", "timeframe": "1h"}
+    ident = it.decisions["identification"]
+    assert ident["asset_category"] == "crypto" and ident["venue"] == "unknown"
+    assert any("venue is unknown" in w for w in it.warnings)  # never NSE
     it = A.interpret_file(p, settings, market_timezone="Asia/Kolkata", default_exchange="NSE",
-                          answers={"exchange": "BINANCE"})
+                          answers={"exchange": "BINANCE"})  # a correction by the user
     assert it.status == A.READY and it.overrides == {"exchange": "BINANCE", "symbol": "BTCUSD", "timeframe": "1h"}
     res = _load(run, p, it)
     ds = get_dataset(db, res.dataset_ids[0])
@@ -178,9 +185,10 @@ def test_a_crypto_prefix_gives_the_symbol_but_never_the_default_exchange(setting
 
 def test_the_symbol_option_never_turns_a_market_prefix_into_a_symbol(settings, src):
     p, _ = three_hourly(src / "CRYPTO_BTCUSD, 60.csv", step=60)
-    it = A.interpret_file(p, settings, market_timezone="Asia/Kolkata", default_exchange="NSE",
-                          symbol_from_filename=True)
-    assert it.decisions["identity"] == {"symbol": "BTCUSD"} and [q.key for q in it.questions] == ["exchange"]
+    for on in (True, False):
+        it = A.interpret_file(p, settings, market_timezone="Asia/Kolkata", default_exchange="NSE",
+                              symbol_from_filename=on)
+        assert it.overrides["symbol"] == "BTCUSD" and it.overrides["exchange"] == "CRYPTO"
 
 
 def test_a_recorded_answer_that_contradicts_the_measured_interval_is_not_used(settings, src):
@@ -211,6 +219,7 @@ def _old_rules(monkeypatch):
     from qmap.data_engine.timeframe_infer import Inference
 
     monkeypatch.setattr(A, "infer_from_parsed", lambda *_a, **_k: Inference("insufficient", None, reason="old rules"))
+    monkeypatch.setattr(A, "timeframe_from_name", lambda *_a: None)  # the old rules had no 180-minute token
 
     def declared_only(declared, parsed, profile, settings, overrides):
         return declared, [], {"registered": declared}
@@ -326,7 +335,7 @@ def test_the_original_rejection_message_no_longer_applies_to_the_owner_layout(se
 # =====================================================================================================================
 
 def test_rules_upgrade_reuses_datasets_of_unchanged_files_and_keeps_answers(settings, db, folder, monkeypatch):
-    src = _source(settings, db, folder)
+    src = _source(settings, db, folder, symbol_from_filename=False)  # so "custom name.csv" waits for an answer
     daily(folder / "NSE_ABC.csv")
     daily(folder / "custom name.csv", seed=3)
     scan(settings, db, src)
