@@ -8,10 +8,10 @@ files. When data are missing, it tells you what to prepare in Database Manager.
 ## Home
 
 - **Your folders**: the same remembered folders as Database Manager.
-- **Available now**: analyses that genuinely work (currently **Dataset Summary**).
+- **Available now**: analyses that genuinely work: **MA Research: MA Affinity (QLOPB)** and **Dataset Summary**.
 - **Planned application windows** and **Planned research modules**: everything else is marked **COMING SOON**, with
-  the reason. That includes Market Intelligence (MIQP) and MA Research (QLOPB): their code is not in the repository
-  yet. Stage Analysis (Weinstein) is listed as planned; it needs approved rules first.
+  the reason. That includes Market Intelligence (MIQP), which is outside Q-MAP v0.1. Stage Analysis (Weinstein) is
+  listed as planned; it needs approved rules first.
 
 ## Run an analysis
 
@@ -20,9 +20,9 @@ Deleted datasets and datasets you **rejected** (Database Manager, reversible) ar
 if you tick "Show superseded".
 
 What the readiness box tells you about data prepared automatically (03-Nov-26):
-- **Conflicting observations** (NOTE): some time stamps have more than one different value. The analysis still runs;
-  calculations that go bar by bar (such as returns) treat each stored row as a bar. Dataset Summary counts them in
-  its "Conflicting timestamps" column.
+- **Conflicting observations** (NOTE): some time stamps have more than one different value. Dataset Summary still
+  runs; calculations that go bar by bar (such as returns) treat each stored row as a bar, and it counts them in its
+  "Conflicting timestamps" column. **MA Affinity refuses** such a dataset (it needs one bar per time; see below).
 - **MIXED intervals**: the dataset does not have one bar interval. Dataset Summary runs with a NOTE (its per-bar figures
   mix intervals); an analysis that needs one interval refuses it with the reason.
 - Any timeframe can appear (for example 75 minutes or 2 hours); it is the interval measured in the data.
@@ -40,7 +40,38 @@ What the readiness box tells you about data prepared automatically (03-Nov-26):
   - If the folder has since been moved or deleted, or Windows refuses to open it, a message explains what happened
     instead.
 
-**3. Options.** The analysis's parameters. For Dataset Summary: an optional **Start date** and **End date**.
+**3. Options.** The analysis's parameters. For Dataset Summary: an optional **Start date** and **End date**. For MA
+Affinity, see the next section.
+
+## MA Affinity (QLOPB)
+
+QLOPB's **MA Affinity Scanner V2**, brought into Q-MAP with its calculations unchanged (Project Owner approval
+03-Nov-26). It describes how price behaved around moving averages in the past. It is **not** a trading signal.
+
+- **Data:** one registered **daily, weekly or monthly** dataset per run. Weekly and monthly datasets are the ones made
+  in Database Manager (Datasets and Storage, Derive). The Workbench never builds weekly or monthly bars itself, and
+  never uses another timeframe instead. Intraday and quarterly datasets are not offered in v0.1.
+- **Options** (shown with QLOPB's defaults; change only what you need): MA types (SMA, EMA, WMA, HMA, RMA), MA start and
+  end, proximity %, cooldown bars, forward windows (the first is the primary window), minimum interactions, IS split %,
+  regime MA, Top-N, the four affinity weights (divided by their sum), OOS scope, minimum OOS outcomes, and an optional
+  start and end date. Wrong values are listed under **INVALID PARAMETERS** and nothing runs. Weights must be finite
+  numbers, not negative, and not all 0 (safeguard S-2).
+- **The dataset is refused (NOT READY), with the reason and the dates, when:**
+  - it holds **conflicting observations** in the chosen period (the same time with different values, which Q-MAP has
+    not resolved), or weekly/monthly bars built from such days. Load a corrected source file, or choose a period that
+    leaves those dates out;
+  - its timeframe is **MIXED**;
+  - it is too short for the chosen MA range and forward windows (QLOPB's own rule), or prices are not usable.
+- **It still runs, with a NOTE, when:** another dataset overlaps it with different values (that is about the other
+  dataset), the interval finding was uncertain, or there are gaps or incomplete first/last periods. Exact duplicate rows
+  were already removed when the data were loaded and never stop the analysis.
+- **Results** (in the run folder): `QLOPB_MA_Affinity_<date>.xlsx` (all tables and the limitations),
+  `QLOPB_MA_Affinity_Report_<date>.pdf`, PNG charts, `MA_Affinity_Candidates_<date>.csv` and
+  `MA_Affinity_Interactions_<date>.csv` (for independent checking), the run log and `Run_Metadata_<date>.json` (input
+  dataset and its checksum, every setting, the code build and the QLOPB source commit).
+- **Read with care:** rankings describe the past; many candidates are tested, so some look good by chance (p-values
+  are not corrected); Directed IR and the weight scheme are **pending owner review**; small out-of-sample samples are
+  weak evidence. These limitations are printed in every report.
 
 ### Entering dates
 
