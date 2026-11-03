@@ -44,7 +44,9 @@ analytical use** by the Project Owner after Windows/IDLE acceptance. **Not produ
   look-ahead). For exact boundaries, start on the first trading day of a week or month. Dataset Summary behaves the
   same way.
 - The standalone QLOPB program in its own repository (`main`) does not contain safeguards S-1..S-3; they are on its
-  branch `claude/youthful-bardeen-11wtok` and in Q-MAP. Its results on clean data are the same.
+  branch `claude/youthful-bardeen-11wtok` and in Q-MAP. Its results on clean data are the same. Its own file loader
+  keeps the first row of a repeated timestamp and lists the others as rejected; Q-MAP never does this (conflicting
+  rows are kept, flagged and block MA Affinity). On files with repeated timestamps the two can therefore differ.
 - QLOPB's three safeguards (S-1 infinite prices, S-2 weights, S-3 extra CSV values) have **not been independently
   reviewed** yet. S-3 applies to QLOPB's own file loader, which Q-MAP keeps (with its tests) but does not use.
 - The migrated engine was developed on pandas 2; this candidate was tested with pandas 3.1, which prints deprecation
