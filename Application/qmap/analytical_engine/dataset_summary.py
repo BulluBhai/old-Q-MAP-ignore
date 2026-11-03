@@ -20,12 +20,13 @@ from pathlib import Path
 import numpy as np
 
 from ..catalog import DataRequirement, TIMEFRAME_ORDER, fmt_date, get_dataset, read_dataset
+from ..data_engine import canonical as C
 from .base import AnalysisSpec, Parameter, RunContext
 
 COLUMNS = ("Dataset", "Instrument", "Timeframe", "Storage", "Validation", "Bars", "First bar", "Last bar",
            "Calendar days covered", "Longest gap (days)", "First close", "Last close", "Change first-last close %",
            "Returns counted", "Mean return %", "Std dev return %", "Smallest return %", "Largest return %",
-           "Bars with quality flags", "Bars with volume", "Average volume")
+           "Bars with quality flags", "Conflicting timestamps", "Bars with volume", "Average volume")
 
 
 def _r(x, nd=4):
@@ -42,6 +43,11 @@ def summarise(ctx: RunContext, dataset_id: int) -> dict:
     vol_ok = np.asarray(vol.is_valid().to_numpy(zero_copy_only=False), dtype=bool)
     flags = np.asarray(t.column("quality_flags").to_numpy(zero_copy_only=False), dtype=np.int64)
     n = len(dates)
+    # DQ-10: rows sharing a timestamp with different values are all kept; they are counted here, never resolved.
+    # The statistics below are unchanged: they treat every stored row as a bar.
+    keys = t.column("timestamp_utc").to_pylist() if "timestamp_utc" in t.column_names else dates
+    keys = [k if k is not None else d for k, d in zip(keys, dates)]
+    conflicted = {k for k, f in zip(keys, flags) if f & C.FLAG_CONFLICTING_OBSERVATION}
     rets = (close[1:] / close[:-1] - 1.0) * 100.0 if n > 1 else np.array([])
     gaps = [(b - a).days for a, b in zip(dates, dates[1:]) if a and b]
     volumes = np.asarray(vol.to_numpy(zero_copy_only=False), dtype=float)[vol_ok] if vol_ok.any() else np.array([])
@@ -58,7 +64,8 @@ def summarise(ctx: RunContext, dataset_id: int) -> dict:
         "Std dev return %": _r(rets.std(ddof=1)) if rets.size > 1 else "",
         "Smallest return %": _r(rets.min()) if rets.size else "",
         "Largest return %": _r(rets.max()) if rets.size else "",
-        "Bars with quality flags": int((flags != 0).sum()), "Bars with volume": int(vol_ok.sum()),
+        "Bars with quality flags": int((flags != 0).sum()), "Conflicting timestamps": len(conflicted),
+        "Bars with volume": int(vol_ok.sum()),
         "Average volume": _r(volumes.mean(), 2) if volumes.size else "",
     }
 

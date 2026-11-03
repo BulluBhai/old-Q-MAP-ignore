@@ -21,7 +21,7 @@ from .instruments import instrument_key, normalise_exchange, normalise_symbol
 from .mapping import SourceTable, resolve_column, safe_extra_name
 from .numeric import INVALID, parse_number
 from .profiles import ALLOWED_TIMEFRAMES, SourceProfile
-from .results import ERROR, WARNING, CheckResult, Collector, Issue, examples
+from .results import ERROR, INFO, WARNING, CheckResult, Collector, Issue, examples
 from .validation import GroupContext, merge_results, validate_group
 from .volume import apply_volume
 
@@ -241,6 +241,7 @@ def process_table(table: SourceTable, profile: SourceProfile, settings: Settings
 
     groups: list[GroupResult] = []
     per_group_results: list = []
+    all_removed: list = []  # (removed source row, kept source row), 1-based
     for ex_sym in order_of_groups:
         idx = members[ex_sym]
         label = instrument_key(*ex_sym)
@@ -249,6 +250,11 @@ def process_table(table: SourceTable, profile: SourceProfile, settings: Settings
         order = sorted(range(len(idx)), key=lambda p: (keys_src[p] is None, keys_src[p] if keys_src[p] is not None else 0))
         moved = [order[p] != p for p in range(len(idx))]
         gi = [idx[p] for p in order]
+        # repeated timestamps (DQ-10): drop exact duplicates, keep and flag conflicting observations
+        keep, removed, conflicts = _repeated_timestamps(table, [keys_src[p] for p in order], gi)
+        moved = [moved[r] for r in keep]
+        gi = [gi[r] for r in keep]
+        all_removed.extend(removed)
 
         frame: dict = {
             "session_date": [parsed.session_dates[i] for i in gi],
@@ -267,13 +273,16 @@ def process_table(table: SourceTable, profile: SourceProfile, settings: Settings
                 flags[p] |= C.FLAG_DATE_ORDER_UNVERIFIED
             if moved[p]:
                 flags[p] |= C.FLAG_MOVED_BY_SORT
+            if i in conflicts:
+                flags[p] |= C.FLAG_CONFLICTING_OBSERVATION
         frame["_sort_keys"] = [(parsed.ts_utc[i] if parsed.is_instant else parsed.session_dates[i]) for i in gi]
 
         gctx = GroupContext(label=label, settings=settings, profile=profile, timeframe=timeframe,
                             is_instant=parsed.is_instant, volume_status=vol.status, require_volume=require_volume,
                             source_inversions=inversions, invalid_ohlc=invalid[gi])
         out = validate_group(frame, gctx, collector)
-        per_group_results.append((label, out.results))
+        per_group_results.append((label, out.results + _repeat_checks(table, removed, conflicts, ohlc, vol, extra_idx,
+                                                                      parsed, collector)))
         if out.large_move is not None and len(out.large_move) == len(gi):
             flags[out.large_move] |= C.FLAG_LARGE_MOVE
         frame["quality_flags"] = flags
@@ -288,10 +297,12 @@ def process_table(table: SourceTable, profile: SourceProfile, settings: Settings
             volume_source_columns=[extra_names[j] for j in vol.source_indices if j in extra_names]))
 
     # --- row accounting: every source row appears exactly once in the standardised output ---------
-    seen = sorted(int(r) for g in groups for r in g.frame["src_row"])
+    # every source row is either in the standardised output or recorded as a removed exact duplicate
+    seen = sorted([int(r) for g in groups for r in g.frame["src_row"]] + [r for r, _k in all_removed])
     accounted = seen == list(range(1, n + 1))
     checks_pre.append(CheckResult("row_accounting", ERROR, accounted, 0 if accounted else abs(n - len(seen)),
-                                  f"{n} source row(s) read, {len(seen)} in the standardised output" if not accounted else ""))
+                                  f"{n} source row(s) read, {len(seen) - len(all_removed)} in the standardised output, "
+                                  f"{len(all_removed)} removed as exact duplicates" if not accounted else ""))
 
     checks = checks_pre + _parse_check_results(collector) + merge_results(per_group_results)
     error_rows = sorted({i.row for i in collector.issues if i.severity == ERROR and i.row is not None})
@@ -300,13 +311,95 @@ def process_table(table: SourceTable, profile: SourceProfile, settings: Settings
     return ProcessResult(
         accepted=accepted, groups=groups, checks=checks, issues=list(collector.issues), rows_read=n,
         rows_flagged=rows_flagged, rows_accepted=n - rows_flagged,
-        transformations=list(table.transformations) + _transformations(parsed, groups, per_group_results),
+        transformations=list(table.transformations) + _transformations(parsed, groups, per_group_results)
+        + ([{"step": "exact_duplicates_removed", "rule": C.DUPLICATE_RULE, "count": len(all_removed),
+             "removed_source_row_and_kept_source_row": sorted(all_removed)}] if all_removed else []),
         source_columns=table.describe_columns(),
         column_mapping={k: {"position": v, "name": table.names[v]} for k, v in mapping.items()},
         datetime_rules={"profile": {k: getattr(profile.datetime, k) for k in profile.datetime.__dataclass_fields__},
                         "applied": parsed.provenance, "timeframe": timeframe, "sort_rule": C.SORT_RULE},
         volume_rule={"profile_rule": profile.volume.rule, "status": vol.status, **vol.provenance},
         field_provenance=_field_provenance(table, mapping, parsed, vol, extra_names, groups, profile))
+
+
+def _cell(v):
+    """A source cell for exact comparison: NaN equals NaN, everything else as read."""
+    return None if isinstance(v, float) and v != v else v
+
+
+def _repeated_timestamps(table: SourceTable, keys_sorted: list, gi: list) -> tuple[list, list, set]:
+    """For one instrument's rows in time order: (positions to keep, removed exact duplicates as (row, kept row),
+    source indices of conflicting observations). Exact duplicate = EVERY source column identical."""
+    keep, removed, conflicts = [], [], set()
+    p, n = 0, len(gi)
+    while p < n:
+        q = p
+        while q + 1 < n and keys_sorted[p] is not None and keys_sorted[q + 1] == keys_sorted[p]:
+            q += 1
+        if q == p:
+            keep.append(p)
+        else:
+            first_of: dict = {}
+            kept_here = []
+            for r in range(p, q + 1):  # stable sort: source order inside one timestamp
+                sig = tuple(_cell(table.columns[j][gi[r]]) for j in range(table.n_cols))
+                if sig in first_of:
+                    removed.append((gi[r] + 1, gi[first_of[sig]] + 1))
+                else:
+                    first_of[sig] = r
+                    kept_here.append(r)
+            keep.extend(kept_here)
+            if len(kept_here) > 1:
+                conflicts.update(gi[r] for r in kept_here)
+        p = q + 1
+    return keep, removed, conflicts
+
+
+def _when(k) -> str:
+    return k.isoformat() if hasattr(k, "isoformat") else str(k)
+
+
+def _repeat_checks(table, removed, conflicts, ohlc, vol, extra_idx, parsed, collector) -> list[CheckResult]:
+    """exact_duplicates_removed (info) and conflicting_observations (warning, never an error: DQ-10)."""
+    for r, kept in removed:
+        collector.add("exact_duplicates_removed", INFO, r, "row", None,
+                      f"Identical to source row {kept} in every column; removed from the standardised copy only.")
+    dup = CheckResult("exact_duplicates_removed", INFO, True, len(removed),
+                      "" if not removed else f"{len(removed)} exact duplicate row(s) removed from the standardised copy "
+                      f"(the source file is unchanged): {examples([r for r, _k in removed])}")
+    if not conflicts:
+        return [dup, CheckResult("conflicting_observations", WARNING, True, 0, "")]
+    key_of = (lambda i: parsed.ts_utc[i]) if parsed.is_instant else (lambda i: parsed.session_dates[i])
+    by_key: dict = {}
+    for i in sorted(conflicts):
+        by_key.setdefault(key_of(i), []).append(i)
+    fields_seen: set = set()
+    extra_only = 0  # timestamps whose observations differ only in preserved extra columns, not in prices or volume
+    shown = []
+    for k in sorted(by_key):
+        rows = by_key[k]
+        diffs = []
+        for name, values in [(f, [float(ohlc[f][i]) for i in rows]) for f in OHLC] + \
+                [("volume", [None if vol.values is None else _cell(vol.values[i]) for i in rows])] + \
+                [(table.names[j] or f"column {j + 1}", [_cell(table.columns[j][i]) for i in rows]) for j in extra_idx]:
+            if len({repr(v) for v in values}) > 1:
+                diffs.append((name, values))
+                fields_seen.add(name)
+        if diffs and all(name not in (*OHLC, "volume") for name, _v in diffs):
+            extra_only += 1
+        text = ", ".join(f"{name} " + " / ".join("" if v is None else f"{v:g}" if isinstance(v, float) else str(v)
+                                                 for v in values) for name, values in diffs)
+        msg = f"{_when(k)}: {len(rows)} observations (source rows {', '.join(str(i + 1) for i in rows)}) differ in {text}."
+        for i in rows:
+            collector.add("conflicting_observations", WARNING, i + 1, ", ".join(n for n, _v in diffs), None, msg)
+        if len(shown) < 3:
+            shown.append(msg)
+    detail = (f"{len(by_key)} timestamp(s) have {len(conflicts)} conflicting observations (differing: "
+              f"{', '.join(sorted(fields_seen))}). "
+              + (f"{extra_only} of these timestamp(s) differ only in preserved extra column(s), not in open, high, "
+                 "low, close or volume. " if extra_only else "")
+              + f"All are kept and flagged; Q-MAP has not chosen between them. E.g. {' '.join(shown)}")
+    return [dup, CheckResult("conflicting_observations", WARNING, False, len(conflicts), detail)]
 
 
 def _build_failed(collector, checks_pre, table, n, mapping, profile) -> ProcessResult:

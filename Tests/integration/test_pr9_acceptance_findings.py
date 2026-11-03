@@ -296,15 +296,19 @@ def test_headerless_date_and_time_layouts_that_are_not_unambiguous_are_still_rej
     assert it.status == A.REJECTED and words in it.message
 
 
-def test_a_repeated_day_is_rejected_never_deduplicated(settings, db, folder):
-    """UJJIVAN.txt repeats 26-Mar-24 (75 identical bars twice): validation rejects it; nothing is dropped."""
+def test_a_repeated_identical_day_is_imported_once_with_the_copy_recorded(settings, db, folder):
+    """UJJIVAN.txt repeats 26-Mar-24 (75 identical bars twice). Since DQ-10 (03-Nov-26) the identical copies are
+    exact duplicates: removed from the standardised copy, recorded, the source file untouched."""
     rows, _ = _ujjivan_rows(n=150)
     p = write_delimited(folder / "UJJIVAN.txt", None, rows[:75] + rows[:75] + rows[75:])
     before = p.read_bytes()
     src = _source(settings, db, folder, symbol_from_filename=True)
     rel, change, action, outcome, detail = result_for(scan(settings, db, src), "UJJIVAN.txt")
-    assert outcome == "rejected" and "no_duplicate_timestamps: 150 row(s) share a timestamp" in detail
-    assert list_datasets(db) == [] and p.read_bytes() == before
+    assert outcome == "imported", detail
+    (ds,) = list_datasets(db)
+    assert ds.row_count == 150 and p.read_bytes() == before
+    a = db.one("SELECT * FROM quality_checks WHERE check_name = 'exact_duplicates_removed'")
+    assert a["rows_failed"] == 75 and a["passed"] == 1
 
 
 def test_the_original_rejection_message_no_longer_applies_to_the_owner_layout(settings, src):

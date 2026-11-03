@@ -64,9 +64,19 @@ CHECKS: dict[str, tuple[str, str, str]] = {
                             "for it."),
     "instrument_registered": ("New instrument added", "This exchange and symbol were seen for the first time.",
                               "Nothing to do. Check the spelling if it is not what you expected."),
-    "no_duplicate_timestamps": ("Two or more rows have the same date/time",
-                                "Each date/time may appear only once. Q-MAP will not choose between duplicates.",
-                                "Remove or correct the duplicates in the source."),
+    "no_duplicate_timestamps": ("Two or more rows have the same date/time (older records)",
+                                "Before 03-Nov-26 a repeated date/time rejected the file.",
+                                "Load the file again: identical copies are now removed and differing ones kept."),
+    "exact_duplicates_removed": ("Identical copies of rows were removed",
+                                 "Some rows were identical in every column to an earlier row. The standardised copy "
+                                 "keeps one of each; your original file is unchanged.",
+                                 "Nothing to do. The removed rows are listed in the problem report."),
+    "conflicting_observations": ("Some dates/times have more than one different value",
+                                 "Rows with the same date/time disagree (for example two different closes). Q-MAP keeps "
+                                 "all of them and does not choose. Analyses still run; calculations that go bar by bar "
+                                 "treat each row as a bar.",
+                                 "Check the listed rows in the source. Correct the file and load it again, or analyse "
+                                 "the data knowing about the conflict."),
     "source_order": ("Rows were not in date order", "Q-MAP stored a sorted copy and kept each row's original position.",
                      "Nothing is lost. Check the source if the order matters to you."),
     "date_order_unverified": ("Day/month order could not be proven",

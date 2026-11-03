@@ -32,6 +32,7 @@ TIMEFRAME_ORDER = tuple(TIMEFRAME_LABELS)
 INTRADAY_TIMEFRAMES = ("1m", "5m", "15m", "30m", "1h", "3h", "4h")
 LAYER_LABELS = {"raw": "Original file", "cleaned": "Standardised", "timeframe": "Derived timeframe"}
 VALIDATION_LABELS = {"passed": "Passed", "passed_with_warnings": "Passed with warnings"}
+CONFLICT_CHECKS = ("conflicting_observations", "conflicts_with_existing_dataset", "period_has_conflicting_observations")
 READ_COLUMNS = ("session_date", "timestamp_utc", "open", "high", "low", "close", "volume", "quality_flags")
 
 
@@ -323,6 +324,12 @@ def check_readiness(settings: Settings, db: Database, dataset_id: int, req: Data
         rep.add("volume", PASS, "Volume is available.")
     rep.add("validation", WARN if info.warnings else PASS,
             ("Validated with warnings: " + "; ".join(info.warnings[:4])) if info.warnings else "Validation passed.")
+    if any(w.startswith(CONFLICT_CHECKS) for w in info.warnings):
+        # DQ-10 (03-Nov-26): unresolved conflicts never block an analysis; the limitation is shown where data are used
+        rep.add("conflicts", WARN, "Unresolved conflicting observations: some timestamps have more than one different "
+                                   "value (in this dataset, or compared with another dataset). Q-MAP has not chosen "
+                                   "between them. Calculations that go bar by bar (such as returns) treat each stored "
+                                   "row as a bar.")
     if info.storage_class == "temporary":
         rep.add("storage", WARN, "Temporary dataset: results will reference it, but you may delete it later.")
 

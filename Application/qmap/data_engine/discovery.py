@@ -40,7 +40,7 @@ from .format_detect import EXTENSION_KIND
 from .ingest import _date_limit_retry, ingest_file
 from .instruments import normalise_exchange, normalise_symbol
 from .profiles import ALLOWED_TIMEFRAMES
-from .overlap import record_overlaps
+from .overlap import check_new_datasets, write_overlap_report
 
 MODULE_CODE = "SCAN"
 MODULE_NAME = "Folder scan (Database Manager)"
@@ -105,6 +105,8 @@ class ScanResult:
     files: list = field(default_factory=list)  # (relative_path, change, action, outcome, detail)
     excluded: int = 0
     report_path: Path | None = None
+    overlaps: list = field(default_factory=list)  # OverlapFinding for every dataset registered by this scan
+    overlap_report_path: Path | None = None
 
     def summary(self) -> str:
         parts = [f"{n} {OUTCOME_LABELS.get(k, k).lower()}" for k, n in sorted(self.counts.items()) if n]
@@ -380,7 +382,8 @@ def scan_source(run: Run, source_id: int, *, today: date | None = None, progress
             if progress:
                 progress(n - 1, len(files), rel)
             try:
-                outcome, change, action, detail = _scan_one(run, src, scan_id, path, rel, latest.get(rel), today)
+                outcome, change, action, detail = _scan_one(run, src, scan_id, path, rel, latest.get(rel), today,
+                                                            result.overlaps)
             except Exception as exc:  # one bad file never stops the scan; it is recorded as failed
                 log.error("Scan of %s failed: %s\n%s", rel, exc, traceback.format_exc())
                 detail = f"Unexpected problem: {type(exc).__name__}: {exc}"
@@ -399,6 +402,7 @@ def scan_source(run: Run, source_id: int, *, today: date | None = None, progress
         if progress:
             progress(len(files), len(files), "")
         result.report_path = _write_report(run, src, result)
+        result.overlap_report_path = write_overlap_report(run, result.overlaps)
         status, err = "completed", None
     except BaseException as exc:
         status, err = "failed", f"{type(exc).__name__}: {exc}"
@@ -413,7 +417,8 @@ def scan_source(run: Run, source_id: int, *, today: date | None = None, progress
     return result
 
 
-def _scan_one(run: Run, src: FolderSource, scan_id: int, path: Path, rel: str, last, today: date):
+def _scan_one(run: Run, src: FolderSource, scan_id: int, path: Path, rel: str, last, today: date,
+              overlaps: list | None = None):
     db, settings = run.db, run.settings
     sid = src.source_id
     if path.suffix.lower() not in SUPPORTED_EXTENSIONS:
@@ -506,15 +511,11 @@ def _scan_one(run: Run, src: FolderSource, scan_id: int, path: Path, rel: str, l
         if retry_on:
             detail += f" It will be loaded again automatically by a scan on or after {retry_on.isoformat()}."
     if outcome == "imported":
-        notes = []
-        for ds in res.dataset_ids:
-            for f in record_overlaps(settings, db, run.run_id, ds):
-                if f.conflicting:
-                    notes.append(f"dataset {ds}: {f.conflicting} bar(s) differ from dataset {f.other_dataset_id}")
-                elif f.identical:
-                    notes.append(f"dataset {ds}: {f.identical} bar(s) identical to dataset {f.other_dataset_id}")
-        if notes:
-            detail += " Overlap with existing data: " + "; ".join(notes) + "."
+        found = check_new_datasets(run, res.dataset_ids)
+        if overlaps is not None:
+            overlaps.extend(found)
+        if found:
+            detail += " Overlap with existing data: " + "; ".join(f.note() for f in found) + "."
     _observe(db, scan_id, sid, rel, action="processed", outcome=outcome, event_id=res.event_id,
              attempt_id=res.attempt_id, dataset_ids_json=list(res.dataset_ids),
              retry_on=retry_on.isoformat() if retry_on else None, detail=detail.strip(), **base)

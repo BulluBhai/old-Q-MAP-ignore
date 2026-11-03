@@ -165,21 +165,23 @@ def test_parquet_naive_timestamps_clean_variant_is_accepted_with_the_stray_colum
 
 
 def test_parquet_with_duplicates_unsorted_rows_and_bad_ohlc_is_rejected_with_a_full_report(src, run, settings, db):
+    """DQ-10 (03-Nov-26): the appended block is identical in every column, so its 20 rows are exact duplicates
+    (recorded, not an error); the file is still rejected for the impossible OHLC rows."""
     p = write_sample_like_parquet(src / "ONESOURCE_bad.parquet", defects=True)
     res = ingest(run, p, "parquet_hdr_naivedt", exchange="NSE", symbol="ONESRC")
     assert res.outcome == "rejected"
-    assert {"no_duplicate_timestamps", "low_le_open_close"} <= failed_names(res)
+    assert "low_le_open_close" in failed_names(res) and "conflicting_observations" not in failed_names(res)
     with open(res.issues_report, newline="") as fh:
         report = list(csv.DictReader(fh))
     checks = {r["check"] for r in report}
-    assert {"no_duplicate_timestamps", "low_le_open_close", "source_order"} <= checks
-    dup_rows = {int(r["source_row"]) for r in report if r["check"] == "no_duplicate_timestamps"}
-    assert len(dup_rows) == 40  # every row of the 20 repeated timestamps is listed, nothing dropped
+    assert {"exact_duplicates_removed", "low_le_open_close", "source_order"} <= checks
+    dup_rows = {int(r["source_row"]) for r in report if r["check"] == "exact_duplicates_removed"}
+    assert len(dup_rows) == 20  # one row of each repeated pair is listed as the removed copy
     assert {int(r["source_row"]) for r in report if r["check"] == "low_le_open_close"} >= {501, 502, 504}
     assert not db.query("SELECT 1 FROM datasets WHERE layer='cleaned'")
     assert db.one("SELECT file_format FROM datasets WHERE layer='raw'")["file_format"] == "parquet"
     a = db.one("SELECT rows_read, rows_flagged FROM ingest_attempts")
-    assert a["rows_read"] == 770 and a["rows_flagged"] >= 43
+    assert a["rows_read"] == 770 and a["rows_flagged"] == 3  # only the impossible OHLC rows are errors now
 
 
 def test_parquet_naive_timestamps_without_the_zone_declared_cannot_be_read(src, run, db):

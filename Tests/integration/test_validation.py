@@ -116,13 +116,54 @@ def test_non_finite_numbers_inside_excel_and_parquet_cells(src, run, db):
 
 
 # ---- timestamps: duplicates and order ------------------------------------------------------------------------
-def test_duplicate_timestamps_reject_the_file_and_nothing_is_dropped(src, run, db):
+def test_conflicting_observations_are_kept_flagged_and_warned_never_rejected(src, run, settings, db):
+    """DQ-10 (03-Nov-26): same timestamp, different values -> both rows kept, flagged, WARNING; not rejected."""
     rows = [list(r) for r in ROWS]
     rows[4][0] = rows[3][0]
     res = ingest_rows(src, run, rows)
-    assert_rejected_cleanly(db, res, "no_duplicate_timestamps")
-    assert [r["source_row"] for r in issue_rows(res) if r["check"] == "no_duplicate_timestamps"] == ["4", "5"]
-    assert res.checks and [c for c in res.checks if c.name == "row_accounting"][0].passed  # all rows accounted for
+    assert res.outcome == "accepted", res.message
+    assert [r["source_row"] for r in issue_rows(res) if r["check"] == "conflicting_observations"] == ["4", "5"]
+    chk = [c for c in res.checks if c.name == "conflicting_observations"][0]
+    assert chk.severity == "warning" and not chk.passed and chk.rows_failed == 2 and "not chosen" in chk.detail
+    assert [c for c in res.checks if c.name == "row_accounting"][0].passed  # all rows accounted for
+    g = read_group(settings, db, res.dataset_ids[0])
+    assert g["src_row"] == [1, 2, 3, 4, 5, 6, 7, 8]  # both observations, in source order
+    assert [bool(f & 32) for f in g["quality_flags"]] == [False, False, False, True, True, False, False, False]
+    assert g["open"][3:5] == [rows[3][1], rows[4][1]]  # the values of both, unchanged
+
+
+def test_exact_duplicate_rows_are_removed_from_the_copy_and_recorded(src, run, settings, db):
+    rows = [list(r) for r in ROWS]
+    rows.insert(5, list(rows[4]))  # source row 6 repeats source row 5 in every column
+    p = write_delimited(src / "dups.csv", HEADER, rows)
+    before = sha256_file(p)
+    res = do_ingest(run, p)
+    assert res.outcome == "accepted", res.message
+    assert sha256_file(p) == before  # the source file is never modified
+    g = read_group(settings, db, res.dataset_ids[0])
+    assert g["src_row"] == [1, 2, 3, 4, 5, 7, 8, 9] and not any(f & 32 for f in g["quality_flags"])
+    chk = [c for c in res.checks if c.name == "exact_duplicates_removed"][0]
+    assert chk.severity == "info" and chk.rows_failed == 1
+    assert [r["source_row"] for r in issue_rows(res) if r["check"] == "exact_duplicates_removed"] == ["6"]
+    notes = json.loads(db.one("SELECT transformations_json FROM ingest_attempts")[0])
+    step = next(n for n in notes if n["step"] == "exact_duplicates_removed")
+    assert step["count"] == 1 and step["removed_source_row_and_kept_source_row"] == [[6, 5]]
+    assert db.one("SELECT row_count FROM datasets WHERE layer='cleaned'")[0] == 8
+    assert [c for c in res.checks if c.name == "row_accounting"][0].passed
+
+
+def test_a_row_differing_only_in_volume_or_an_extra_column_is_a_conflict_not_a_duplicate(src, run, settings, db):
+    rows = [list(r) + ["a"] for r in ROWS]
+    rows.insert(3, list(rows[2]))
+    rows[3][5] += 1  # volume differs
+    rows.insert(6, list(rows[5]))
+    rows[6][6] = "b"  # only the extra column differs
+    res = do_ingest(run, write_delimited(src / "v.csv", HEADER + ["note"], rows))
+    assert res.outcome == "accepted", res.message
+    g = read_group(settings, db, res.dataset_ids[0])
+    assert len(g["src_row"]) == 10 and sum(bool(f & 32) for f in g["quality_flags"]) == 4
+    detail = [c for c in res.checks if c.name == "conflicting_observations"][0].detail
+    assert "volume" in detail and "note" in detail
 
 
 def test_unsorted_rows_are_warned_sorted_in_the_copy_and_keep_their_source_position(src, run, settings, db):
@@ -152,12 +193,14 @@ def test_unsorted_source_can_be_made_an_error_by_the_profile(src, run, db):
     assert_rejected_cleanly(db, res, "source_order")
 
 
-def test_unsorted_and_duplicated_is_still_rejected(src, run, db):
+def test_unsorted_and_conflicting_rows_are_sorted_and_both_kept_in_source_order(src, run, settings, db):
     rows = [list(r) for r in ROWS]
     rows[1], rows[5] = rows[5], rows[1]
     rows[6][0] = rows[0][0]
     res = ingest_rows(src, run, rows)
-    assert_rejected_cleanly(db, res, "no_duplicate_timestamps")
+    assert res.outcome == "accepted", res.message
+    g = read_group(settings, db, res.dataset_ids[0])
+    assert g["src_row"][:2] == [1, 7] and g["session_date"] == sorted(g["session_date"])
 
 
 def test_intraday_sorting_uses_the_utc_instant(src, run, settings, db):
@@ -206,7 +249,8 @@ def test_the_dataset_level_error_checks_are_all_stored_for_audit(src, run, db):
     res = ingest_rows(src, run, with_row(0, low=500))
     names = {r["check_name"] for r in db.query("SELECT check_name FROM quality_checks WHERE attempt_id=?", (res.attempt_id,))}
     assert {"low_le_open_close", "high_ge_open_close", "low_le_high", "prices_positive", "volume_non_negative",
-            "no_missing_values", "no_duplicate_timestamps", "row_accounting", "not_empty"} <= names
+            "no_missing_values", "conflicting_observations", "exact_duplicates_removed", "row_accounting",
+            "not_empty"} <= names
 
 
 # ---- warnings that must not reject ------------------------------------------------------------------------

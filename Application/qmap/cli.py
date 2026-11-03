@@ -15,6 +15,7 @@ from .core.errors import QmapError
 from .core.logging_setup import configure_console
 from .core.runs import run_context
 from .data_engine.ingest import ingest_file
+from .data_engine.overlap import check_new_datasets, write_overlap_report
 from .data_engine.preview import preview_file
 from .data_engine.profiles import check_profile_against_settings, find_profile
 from .storage.db import open_database
@@ -95,6 +96,7 @@ def main(argv: list[str] | None = None) -> int:
         with run_context(settings, db, "FOUND", area="Ingestion", module_name="Foundation",
                          params={"command": "ingest", "profile": profile.profile_id,
                                  "files": [str(f) for f in args.files]}) as run:
+            overlaps = []
             for f in args.files:
                 res = ingest_file(run, f, profile, source_label=args.source_label, note=args.note,
                                   force_reason=args.force_reason, exchange=args.exchange, symbol=args.symbol,
@@ -102,8 +104,16 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"{res.outcome.upper():11s} {f}\n            {res.message}")
                 if res.issues_report:
                     print(f"            issues report: {res.issues_report}")
+                if res.outcome == "accepted":  # report-only overlap check (DQ-9), as in a folder scan
+                    found = check_new_datasets(run, res.dataset_ids)
+                    overlaps.extend(found)
+                    for o in found:
+                        print(f"            overlap: {o.note()}")
                 if not res.ok:
                     exit_code = 1
+            report = write_overlap_report(run, overlaps)
+            if report:
+                print(f"Overlap report: {report}")
             print(f"Run {run.run_id}  outputs: {run.dir}")
         return exit_code
     except QmapError as exc:

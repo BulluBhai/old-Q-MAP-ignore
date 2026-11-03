@@ -10,6 +10,7 @@ import pytest
 from fixtures.builders import (HEADER, daily_rows, standard_columns, weekdays, write_delimited, write_parquet,
                                write_xlsx)
 from fixtures.profiles import do_ingest, failed_names, make_profile, read_group
+from qmap import CLEANING_CODE_VERSION
 from qmap.storage.files import sha256_file
 
 ROWS = daily_rows(10)
@@ -399,7 +400,7 @@ def test_original_is_untouched_raw_is_registered_and_cleaned_links_to_it(src, ru
     cleaned = db.one("SELECT * FROM datasets WHERE layer='cleaned'")
     assert raw["sha256"] == before and cleaned["parent_dataset_id"] == raw["dataset_id"]
     assert cleaned["created_by_attempt_id"] == res.attempt_id
-    assert cleaned["processing_version"] == "test_profile@1+c1" and cleaned["row_count"] == 10
+    assert cleaned["processing_version"] == f"test_profile@1+{CLEANING_CODE_VERSION}" and cleaned["row_count"] == 10
     assert (cleaned["date_from"], cleaned["date_to"]) == ("2026-01-05", "2026-01-16")
     assert db.one("SELECT run_id FROM run_inputs")["run_id"] == run.run_id
 

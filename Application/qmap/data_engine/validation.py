@@ -121,15 +121,9 @@ def validate_group(frame: dict, ctx: GroupContext, collector: Collector) -> Vali
                       "The standardised copy is sorted; src_row keeps the original positions.")
     out.append(CheckResult("source_order", severity, inv == 0, inv, "" if inv == 0 else f"{inv} out-of-order step(s) in the source"))
 
-    dup_rows: list[int] = []
-    for i in range(1, n):
-        if keys[i] is not None and keys[i] == keys[i - 1]:
-            dup_rows.extend([int(src[i - 1]), int(src[i])])
-    dup_rows = sorted(set(dup_rows))
-    for r in dup_rows:
-        collector.add("no_duplicate_timestamps", ERROR, r, "date", None, "Another row has the same timestamp/date.")
-    out.append(CheckResult("no_duplicate_timestamps", ERROR, not dup_rows, len(dup_rows),
-                           "" if not dup_rows else f"{len(dup_rows)} row(s) share a timestamp: {examples(dup_rows)}"))
+    # Repeated timestamps (instruction DQ-10, 03-Nov-26): exact duplicate rows were removed before validation and
+    # rows that share a timestamp with different values are kept and reported as conflicting_observations (both done
+    # in process.py). Neither rejects the file. The checks below count DISTINCT timestamps where that matters.
 
     # --- warnings about coverage and plausibility ----------------------------------------
     dates = [d for d in frame["session_date"] if d is not None]
@@ -157,11 +151,12 @@ def validate_group(frame: dict, ctx: GroupContext, collector: Collector) -> Vali
     if ctx.timeframe in INTRADAY_MINUTES and ctx.is_instant:
         expected = INTRADAY_MINUTES[ctx.timeframe]
         steps = [(keys[i] - keys[i - 1]).total_seconds() / 60.0 for i in range(1, n)
-                 if keys[i] is not None and keys[i - 1] is not None and frame["session_date"][i] == frame["session_date"][i - 1]]
+                 if keys[i] is not None and keys[i - 1] is not None and keys[i] != keys[i - 1]
+                 and frame["session_date"][i] == frame["session_date"][i - 1]]
         med = float(np.median(steps)) if steps else float(expected)
         out.append(CheckResult("timeframe_spacing", WARNING, med == expected, 0 if med == expected else len(steps),
                                "" if med == expected else f"Bars are typically {med:g} minute(s) apart but the profile declares {ctx.timeframe}."))
-        counts = Counter(d for d in frame["session_date"] if d is not None)
+        counts = Counter(d for d, _k in {(d, k) for d, k in zip(frame["session_date"], keys) if d is not None})
         if len(counts) >= 2:
             mode = Counter(counts.values()).most_common(1)[0][0]
             partial = sorted((d, k) for d, k in counts.items() if k < mode)
@@ -170,9 +165,10 @@ def validate_group(frame: dict, ctx: GroupContext, collector: Collector) -> Vali
                                    f"Sessions with fewer bars than the usual {mode}: {detail}"))
     elif ctx.timeframe in PERIOD_OF and (ctx.is_instant or ctx.timeframe != "1D"):
         # A daily/weekly/monthly dataset must have at most one bar per day/week/month. (Date-only daily data is already
-        # covered by no_duplicate_timestamps.) Report-only: the declared timeframe is never changed or inferred.
+        # a repeated date is a conflict, reported separately.) Report-only: the timeframe is never changed here.
+        # Distinct timestamps are counted, so conflicting observations of ONE timestamp do not look like finer data.
         unit, key = PERIOD_OF[ctx.timeframe]
-        per = Counter(key(d) for d in frame["session_date"] if d is not None)
+        per = Counter(key(d) for d, _k in {(d, k) for d, k in zip(frame["session_date"], keys) if d is not None})
         multi = sorted(k for k, cnt in per.items() if cnt > 1)
         detail = ("" if not multi else f"{len(multi)} {unit}(s) have more than one bar (e.g. "
                   + "; ".join(f"{k}: {per[k]} bars" for k in multi[:5])

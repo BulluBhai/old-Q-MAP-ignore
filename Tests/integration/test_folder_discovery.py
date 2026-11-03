@@ -196,7 +196,8 @@ def test_a_file_that_disappears_is_reported_and_its_data_kept(settings, db, sour
 
 @pytest.mark.parametrize("mutate, check", [
     (lambda rows: rows.__setitem__(3, rows[3][:1] + ["abc"] + rows[3][2:]), "numeric_types"),
-    (lambda rows: rows.__setitem__(4, [rows[3][0]] + rows[4][1:]), "duplicate"),
+    (lambda rows: rows.__setitem__(4, [rows[4][0], rows[4][1], rows[4][2], rows[4][1] * 2, rows[4][4], rows[4][5]]),
+     "low_le_open_close"),  # was a repeated date: since DQ-10 that is a conflict (kept, warned), not a rejection
     (lambda rows: rows.__setitem__(2, [rows[2][0], rows[2][1], rows[2][2] * 0.5, rows[2][3], rows[2][4], rows[2][5]]),
      "high_ge_open_close"),
 ])
