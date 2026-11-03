@@ -143,7 +143,19 @@ series with no minute block is never affected.
   afterwards; NOT EVALUABLE for a source row stored twice, a stored row missing, matching seed but a changed block step
   count, missing and incomplete duplicate lineage, and missing stored files (tampering only on copies).
 
-### 7.5 Known limitations
+### 7.5 Test and CI results
+
+- Local (Linux container, not CI), commit `4482118` plus the test-only fixes: Python 3.12 + Xvfb **1132 passed, 0 failed,
+  0 skipped**; Python 3.13 without tkinter **1011 passed, 0 failed, 95 skipped**; `test_ow33_impact_report.py`
+  13 passed after each fix.
+- CI (Ubuntu and Windows, Python 3.11): `4482118` and `b1e27f0` **failed on Windows only**. Two of the new tests
+  hashed files that Windows keeps locked while open: the registry's journal files, then the open test run's msvcrt
+  lock in `Metadata/run_locks`. The tool itself did not fail. `76a39f9` excludes `Metadata` from the byte scan (the
+  registry is still covered by a read-only logical dump plus its main file) and **passed on both Ubuntu and Windows**
+  (run 41662539515).
+- IDLE runner: smoke-run headless against a synthetic registry (3 MIXED datasets, all verified); not run on Windows.
+
+### 7.6 Known limitations
 
 - Not run on Windows and not on the owner's registry; the owner's report has not been produced.
 - Datasets registered before the timeframe-inference record existed (no `timeframe_inference` or sampling
