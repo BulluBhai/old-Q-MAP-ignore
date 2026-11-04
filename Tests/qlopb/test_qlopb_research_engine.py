@@ -1,4 +1,5 @@
 import ast
+import hashlib
 import re
 import sys
 import tempfile
@@ -310,6 +311,10 @@ class Reports(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             src = Path(d) / "my data.csv"
             _helpers.synthetic_ohlc(300).to_csv(src)
+            # captured BEFORE the run (review 04-Nov-26, D7): the source must be byte-identical afterwards
+            original_bytes = src.read_bytes()
+            original_sha = hashlib.sha256(original_bytes).hexdigest()
+            original_mtime = src.stat().st_mtime_ns
             out = run_full_pipeline(src, MAResearchSettings(ma_start=10, ma_end=250, min_interactions=3),
                                    output_root=Path(d) / "o")
             self.assertIn(out["status"], ("SUCCESS", "COMPLETED WITH WARNINGS"))
@@ -336,7 +341,9 @@ class Reports(unittest.TestCase):
                     self.assertIsNone(row[i_score])               # missing is EMPTY, never 0
             self.assertTrue(seen_none, "test data should include candidates with no interactions")
             self.assertTrue(all("₹" not in str(c.value) for row in rk.iter_rows(min_row=2) for c in row))
-            self.assertEqual(src.read_bytes(), src.read_bytes())
+            self.assertEqual(src.read_bytes(), original_bytes)
+            self.assertEqual(hashlib.sha256(src.read_bytes()).hexdigest(), original_sha)
+            self.assertEqual(src.stat().st_mtime_ns, original_mtime)
 
     def test_failed_input_is_reported_not_crashed(self):
         with tempfile.TemporaryDirectory() as d:

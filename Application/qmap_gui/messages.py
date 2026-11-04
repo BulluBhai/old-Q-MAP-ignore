@@ -79,6 +79,17 @@ CHECKS: dict[str, tuple[str, str, str]] = {
                         "The data are kept as one dataset with timeframe MIXED.",
                         "Analyses that need one interval will say they cannot use it. Split the file if you need "
                         "single-interval datasets."),
+    "instrument_timeframes_differ": ("Instruments in the file have different bar intervals",
+                                     "The file holds several instruments, and measured on its own rows at least one "
+                                     "has another bar interval than the file as a whole. Nothing was registered.",
+                                     "Split the file into one file per instrument (or per timeframe) and load those."),
+    "instrument_timeframe_not_verified": ("An instrument's bar interval could not be checked on its own",
+                                          "The file holds several instruments; one has too few rows to measure its own "
+                                          "interval, so the file's interval was used for it.",
+                                          "Check that instrument's timeframe in the source."),
+    "instrument_timeframes_agree": ("Every instrument has the file's bar interval",
+                                    "Each instrument in the file was measured on its own rows as well.",
+                                    "Nothing to do."),
     "interval_change_detected": ("Part of the file has another bar interval",
                                  "Reading every row found a section (listed with its source rows) whose bars are spaced "
                                  "differently from the rest, for example a 5-minute tail in a 1-minute file.",

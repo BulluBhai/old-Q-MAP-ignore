@@ -184,21 +184,35 @@ def test_a_version_2_registry_with_results_upgrades_and_keeps_every_record(tmp_p
                      "VALUES (1,'R1',?,'rejected','p',1,'p@1+c1','delimited_text',1,'csv',?)", (raw, NOW))
 
 
+# SHA-256 of every released migration. A new migration must be added here when it is released.
+MIGRATION_PINS = {
+    1: "219c00acaf9edf4ff90ebe1fc25a9454a222d6837ab7ad5e5cff3f0b8934c662",
+    2: "7e58647827776ffa218ee612b4b1d7bfdb7480bcc0dab226071af3d18042a27e",
+    3: "79bb18bbcf3fcb42c554a533fefae9bbb15a98079c57eaa09a4250a59c396e0e",
+    4: "3dc564ae6db0c51277e9c51ff62433ee6816cbd8d76118f7a07f303dbcf02253",
+    5: "43938f6918a9ebe3e5c36ebb7d3970b553eba5334cbd4904cfff0d668f969932",  # storage classes (pinned on submission)
+    6: "854ad8f8e8f702f43aa2054eea6e7afaa07e048db1c09bc6fd5f7cf05a940381",  # audited storage changes (PR #4 review)
+    7: "391e2232e790915f23e228004cf01dc08127bed03ce0803ec1405c6cf74b15f6",  # Temporary/ folder (OD-8)
+    8: "96fd2b03f145680d1cd9fb1b63b1b5083e3637e7a89460714af961b09fce4817",  # folder sources (Blueprint v1.3)
+    # 9 and 10 pinned 04-Nov-26 (review item D6); unchanged since they were added in 3876772 and 66895cc
+    9: "6d48d251e565901979fc3e52f5989e261fff0924dcd172e95df70360b608b1ac",  # file-name identification ON (DQ-8)
+    10: "343864a267b50095e338ef6ed4215e47ccb11b6c1b6bedf42b83ccfdf6337970",  # reversible user decisions
+}
+
+
 def test_applied_migrations_are_frozen():
-    """An applied migration must never be edited (add a new one instead). These hashes pin migrations 1-8."""
+    """An applied migration must never be edited (add a new one instead). MIGRATION_PINS pins every migration."""
     import hashlib
 
-    pinned = {
-        1: "219c00acaf9edf4ff90ebe1fc25a9454a222d6837ab7ad5e5cff3f0b8934c662",
-        2: "7e58647827776ffa218ee612b4b1d7bfdb7480bcc0dab226071af3d18042a27e",
-        3: "79bb18bbcf3fcb42c554a533fefae9bbb15a98079c57eaa09a4250a59c396e0e",
-        4: "3dc564ae6db0c51277e9c51ff62433ee6816cbd8d76118f7a07f303dbcf02253",
-        5: "43938f6918a9ebe3e5c36ebb7d3970b553eba5334cbd4904cfff0d668f969932",  # storage classes (pinned on submission)
-        6: "854ad8f8e8f702f43aa2054eea6e7afaa07e048db1c09bc6fd5f7cf05a940381",  # audited storage changes (PR #4 review)
-        7: "391e2232e790915f23e228004cf01dc08127bed03ce0803ec1405c6cf74b15f6",  # Temporary/ folder (OD-8)
-        8: "96fd2b03f145680d1cd9fb1b63b1b5083e3637e7a89460714af961b09fce4817",  # folder sources (Blueprint v1.3)
-    }
+    pinned = MIGRATION_PINS
     actual = {v: hashlib.sha256(sql.encode("utf-8")).hexdigest() for v, _, sql in MIGRATIONS}
     assert [v for v, _, _ in MIGRATIONS] == list(range(1, len(MIGRATIONS) + 1))  # numbered without gaps
     for v, h in pinned.items():
         assert actual[v] == h, f"migration {v} was edited after it was released; add a new migration instead"
+    unpinned = sorted(set(actual) - set(pinned))
+    assert not unpinned, f"migration(s) {unpinned} have no integrity pin: add their SHA-256 to MIGRATION_PINS"
+
+
+def test_every_migration_is_pinned():
+    """Fails when a migration is added (or LATEST_VERSION raised) without a corresponding integrity pin."""
+    assert sorted(MIGRATION_PINS) == [v for v, _, _ in MIGRATIONS] == list(range(1, LATEST_VERSION + 1))
