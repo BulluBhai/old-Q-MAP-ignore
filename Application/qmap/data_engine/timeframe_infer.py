@@ -15,8 +15,10 @@ Method (reproducible and explainable):
    days. Repeated timestamps (zero steps) are ignored. The block's interval is its most common step.
 4. The dominant interval is the most common block interval. A block agrees with it when at least `consistency_share`
    of its steps are whole multiples of it (gaps of 2, 3 ... intervals are missing bars, not another timeframe) AND the
-   interval itself occurs in the block, or is the block's own most common step. If every block agrees: CONSISTENT. If
-   blocks show materially different intervals: MIXED (reported; never forced into one timeframe).
+   interval itself occurs in the block, or is the block's own most common step. Steps are only compared in the same
+   unit: a block measured in minutes, days, weeks, months, quarters or years never agrees with an interval measured in
+   another of these units (review 04-Nov-26). If every block agrees: CONSISTENT. If blocks show materially different
+   intervals: MIXED (reported; never forced into one timeframe).
 5. No exchange or session calendar is used anywhere: a gap is never explained or filled, only measured.
 
 Only the sampled observations are examined for the timeframe; every row is still parsed and validated elsewhere,
@@ -192,6 +194,15 @@ def _is_minutes(label: str | None) -> bool:
     return bool(label) and (label.endswith("m") or label.endswith("h")) and label not in ("1M",)
 
 
+_CALENDAR_UNITS = {"1W": "week", "1M": "month", "1Q": "quarter", "1Y": "year"}
+
+
+def _measuring_unit(label: str) -> str:
+    """The unit a block's steps are counted in by _label_from_steps: minutes, days (1D and 'Nd'), weeks, months,
+    quarters or years. Steps can only be compared with an interval measured in the same unit."""
+    return "minute" if _is_minutes(label) else _CALENDAR_UNITS.get(label, "day")
+
+
 def _blocks_for(candidate: str | None, intraday: bool, cfg: dict) -> int:
     if candidate is None:
         return cfg["blocks_daily"]
@@ -287,8 +298,12 @@ def infer_interval(keys: list, *, zone: str | None, config: dict | None = None) 
         # the dominant interval itself must occur in the block: a block of only 5-minute steps is not "1-minute data
         # with missing bars", but a block of mostly 2-minute steps with some 1-minute steps is
         has_base = b.interval == dominant or steps.count(unit) >= max(1, len(steps) // 10)
-        # minutes and days are different units: a daily block never agrees with an intraday interval, or the reverse
-        same_kind = _is_minutes(b.interval) == _is_minutes(dominant)
+        # Steps are counted in the block's own unit (minutes, days, weeks, months, quarters, years). A block measured in
+        # another unit never agrees: a daily block never agrees with an intraday interval, or the reverse, and
+        # (independent review 04-Nov-26) a weekly, monthly, quarterly or yearly block never agrees with a daily
+        # interval, or with each other. Before this, every daily-or-longer label had base unit 1, so a weekly block's
+        # steps (1, 1, 1 weeks) looked like whole multiples of a daily interval that also "occurred" in the block.
+        same_kind = _measuring_unit(b.interval) == _measuring_unit(dominant)
         b.agrees = same_kind and b.agreeing_share >= cfg["consistency_share"] and has_base
     inf.patterns = dict(counts)
     if all(b.agrees for b in measured):
