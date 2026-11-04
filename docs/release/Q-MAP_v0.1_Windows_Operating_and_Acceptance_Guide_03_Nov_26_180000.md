@@ -12,10 +12,11 @@ included below; nothing is lost). It is also your normal operating procedure aft
 - **REQUIRED**: only you can do these, on your own Windows computer and with your real market files (installation,
   IDLE, File Explorer, your data, what the windows look like).
 - **OPTIONAL**: the same behaviour is already proved by automated tests that run on a Windows computer at GitHub for
-  every change (A6, A8 and V11 open the real windows; V4, V8, V10 and W13-W18 check the same results, messages and
-  reports without the window). Do them only if you want to see the behaviour yourself. W13-W18 were made
-  acceptance checks by your decision D5-44; they are listed as OPTIONAL here because they are now proved
-  automatically (`test_dq7_acceptance_pattern_files`). If you prefer to keep them required, do them.
+  every change (A6, A8 and V11 open the real windows; V4, V8 and V10 check the same results and messages without the
+  window). Do them only if you want to see the behaviour yourself.
+- **W13-W18 stay REQUIRED** (your decision D5-44, confirmed 04-Nov-26). The automated test
+  `test_dq7_acceptance_pattern_files` checks the same six files on Windows for every change; that evidence
+  **supplements but does not replace** your own check of what the Sources screen shows.
 
 Record each result as **P** (pass), **F** (fail) or **NT** (not tested) in Part 9.
 
@@ -44,7 +45,7 @@ Create these new, empty folders. **For acceptance, never use your real data fold
 | Q-MAP_DATA | `D:\Q-MAP_V01\Q-MAP_DATA` | nothing (Q-MAP fills it) |
 | Q-MAP_OUTPUT | `D:\Q-MAP_V01\Q-MAP_OUTPUT` | nothing (one folder per run appears here) |
 | Market_Files | `D:\Q-MAP_V01\Market_Files` | **COPIES** (Ctrl+C, Ctrl+V; never drag) of your eight files `5PAISA_30min.csv`, `AKZOINDIA.parquet`, `CRYPTO_RIVERUSD, 180.csv`, `ICICIBANK.txt`, `NSE_BANKNIFTY, 15.csv`, `OLAELEC.xlsx`, `UJJIVAN.txt`, `VERANDA_1min.csv`; plus `ICICIBANK (1).txt` and `ICICIBANK - Copy.txt` (two more copies of ICICIBANK.txt, renamed) and `RELIANCE_EQ.csv` (a small daily file of another stock) |
-| Pattern_Files (optional) | `D:\Q-MAP_V01\Pattern_Files` | the six files from `Q-MAP_APP\docs\acceptance_testing\dq7_pattern_files_03_Nov_26\` |
+| Pattern_Files | `D:\Q-MAP_V01\Pattern_Files` | the six files from `Q-MAP_APP\docs\acceptance_testing\dq7_pattern_files_03_Nov_26\` |
 | V01_Files | `D:\Q-MAP_V01\V01_Files` | `NSE_CONFLICTDAILY.csv` from `Q-MAP_APP\docs\acceptance_testing\v01_files_03_Nov_26\` (synthetic) |
 | Evidence | `D:\Q-MAP_V01\Evidence` | your screenshots |
 
@@ -81,12 +82,12 @@ Both windows may stay open together.
 | **W8** | REQUIRED | Put 30 or more file copies in a new folder, add and scan it, press **Stop scan** while it runs | The window stays responsive; it stops after the current file and says how many were not processed |
 | **A4** | REQUIRED | Scan `Market_Files` again without changing anything | Every file "unchanged"; no new datasets |
 | **V4** | OPTIONAL | **Add folder...** → `V01_Files` → **SCAN SELECTED FOLDER NOW** | `NSE_CONFLICTDAILY.csv` imported as NSE:CONFLICTDAILY, Daily, 301 bars, with a conflicting-observations warning (29-Jul-24 has two different rows). Needed for V8 |
-| **W13** | OPTIONAL | Add `Pattern_Files`, scan | 6 imported, no question; each "Detected timeframe: 5 minutes", "Consistent across 15 sampled block(s)" |
-| **W14** | OPTIONAL | Click `NSE_RANDOMGAPS.csv` | No interval warning; only "Some days have fewer bars than usual" |
-| **W15** | OPTIONAL | Click `NSE_EVERYOTHER.csv` | "Part of the file **may** have another bar interval", with source rows and the words "cannot show whether" |
-| **W16** | OPTIONAL | Click `NSE_GENUINE3M.csv`, then `NSE_DAILY0000.csv` | "Part of the file **has** another bar interval", with source rows |
-| **W17** | OPTIONAL | Click `NSE_DAILY0915.csv` | Under the "**may** have another bar interval" line; detail says "a time the intraday bars also use" |
-| **W18** | OPTIONAL | Click `NSE_SPARSE.csv` | No interval warning; "Some days have fewer bars than usual" lists the one-bar days |
+| **W13** | REQUIRED | Add `Pattern_Files`, scan | 6 imported, no question; each "Detected timeframe: 5 minutes", "Consistent across 15 sampled block(s)" |
+| **W14** | REQUIRED | Click `NSE_RANDOMGAPS.csv` (about 10 % of bars missing at random) | No interval warning of either kind; only "Some days have fewer bars than usual". Not listed under either interval line in the Exceptions box |
+| **W15** | REQUIRED | Click `NSE_EVERYOTHER.csv` (one day with every other bar missing) | Warning "Part of the file **may** have another bar interval" with the source rows and the words "cannot show whether"; Exceptions line "A section may have another bar interval or regularly missing bars (full-file check)" lists the file; timeframe still 5 minutes |
+| **W16** | REQUIRED | Click `NSE_GENUINE3M.csv` (one day of 3-minute bars), then `NSE_DAILY0000.csv` (35 one-bar dates at 00:00) | Warning "Part of the file **has** another bar interval" with the source rows (3-minute steps; for DAILY0000 "outside the times of the intraday bars, like daily data"); Exceptions line "A section of the file has another bar interval (found by the full-file check)" lists both |
+| **W17** | REQUIRED | Click `NSE_DAILY0915.csv` (35 one-bar dates at 09:15) | Listed under the "**may** have another bar interval" line, not the "has" line; the detail says "a time the intraday bars also use" |
+| **W18** | REQUIRED | Click `NSE_SPARSE.csv` (35 dates with one bar each at varying times); then **Open run folder**; then in the Workbench run Dataset Summary on NSE:EVERYOTHER | SPARSE: no interval warning; "Some days have fewer bars than usual" lists the one-bar dates. Run folder: the `issues_event...csv` files of the W15-W17 files contain the interval finding with source rows (two `interval_change_uncertain`, two `interval_change_detected`); W14 and W18 have none; `Scan_Report_...csv` lists all six as imported. Workbench: readiness "Validated with warnings: ... interval_change_uncertain ..." and the summary runs |
 
 ### 5.2 Your datasets (Database Manager → Datasets and Storage)
 
@@ -103,7 +104,7 @@ Both windows may stay open together.
 | **A5** | REQUIRED | Dataset Summary on ICICIBANK; Start date: **Calendar...**, `<<` back to January 1998, pick 02; End date: type `02-Nov-26`; run | Completes; Bars 7,166; first close 7.86; last close 1,387.40 |
 | **A7** | REQUIRED | **Open Output Folder** under the completion message | File Explorer opens that run's `DSUM_...` folder |
 | **V6** | REQUIRED | Choose **MA Affinity (QLOPB)** and look at section 3 | Boxes already filled with QLOPB's defaults (MA types SMA, MA start 10, MA end 250, Forward windows 5,10,20,50 ...); the description says results are exploratory and Directed IR and the weights are pending your review |
-| **V7** | REQUIRED | Select **NSE:ICICIBANK Daily** → **Check readiness (nothing is saved)** → **RUN ANALYSIS**; then **Open Output Folder** | READY (notes possible); a Run ID starting `MAAF_`. The folder holds `QLOPB_MA_Affinity_....xlsx`, `QLOPB_MA_Affinity_Report_....pdf`, PNG charts, `MA_Affinity_Candidates_....csv`, `MA_Affinity_Interactions_....csv`, `run_log.txt`, `Run_Metadata_....json`. In the Excel **Summary** sheet: "Instrument / file" names the dataset and the Run ID; "Bar size" says "Daily (Q-MAP registered dataset; not re-aggregated)"; a Top-5 list; the limitations. The **Data_Quality** sheet lists the Run ID, code build, dataset checksum and source file. The PDF opens |
+| **V7** | REQUIRED | Select **NSE:ICICIBANK Daily** → **Check readiness (nothing is saved)** → **RUN ANALYSIS**; then **Open Output Folder** | READY (notes possible); a Run ID starting `MAAF_`. The folder holds `QLOPB_MA_Affinity_....xlsx`, `QLOPB_MA_Affinity_Report_....pdf`, PNG charts, `MA_Affinity_Candidates_....csv`, `MA_Affinity_Interactions_....csv`, `run_log.txt`, `Run_Metadata_....json`. In the Excel **Summary** sheet: "Instrument / file" names the dataset and the Run ID; "Bar size" says "Daily (Q-MAP registered dataset; not re-aggregated)"; a Top-5 list; the limitations. The **Data_Quality** sheet lists the Run ID, code build, dataset checksum and source file. The PDF's first lines show the dataset, the Run ID, "Q-MAP build: qmap 0.1.0rc1 ...", the source fingerprint and the dataset checksum; Q-MAP's notes appear under Warnings as "Q-MAP data: ..." |
 | **V9** | REQUIRED | **NSE:ICICIBANK Weekly**, MA end `60` → RUN ANALYSIS; then **Monthly** with MA start `5`, MA end `24`, Forward windows `3,6,12` | Both finish; "Bar size" says Weekly / Monthly (Q-MAP registered dataset) |
 | **V8** | OPTIONAL | **NSE:CONFLICTDAILY** → RUN ANALYSIS | **Not started**; the readiness box says FAIL "1 timestamp(s) in the chosen period hold conflicting observations ... (29-Jul-24) ... MA Affinity needs exactly one bar per time". With End date `26-07-24` and MA end `60` it runs |
 | **V10** | OPTIONAL | VERANDA (1-minute) with MA Affinity → Check readiness | FAIL "Timeframe 1 minute is not supported here (needs: Daily, Weekly, Monthly)." |
@@ -178,10 +179,15 @@ For weekly/monthly research with a start date, start on the first trading day of
 | W12 | REQUIRED | | |
 | V14 | REQUIRED | | |
 | W11 | REQUIRED | | |
+| W13 | REQUIRED | | |
+| W14 | REQUIRED | | |
+| W15 | REQUIRED | | |
+| W16 | REQUIRED | | |
+| W17 | REQUIRED | | |
+| W18 | REQUIRED | | |
 | V4, V8 | optional | | |
 | V10, V11 | optional | | |
 | A6, A8 | optional | | |
-| W13-W18 | optional | | |
 | V12 | optional | | |
 
 Send this table and the zipped `Evidence` folder (right-click → Send to → Compressed (zipped) folder) for review.

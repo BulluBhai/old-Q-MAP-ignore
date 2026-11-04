@@ -1,6 +1,6 @@
 # Q-MAP v0.1: final comprehensive release audit
 
-Prepared 03-Nov-26 by Claude (lead developer). Reference: Master Blueprint v1.35. Scope frozen as instructed (MIQP,
+Prepared 03-Nov-26 by Claude (lead developer); **closure update 04-Nov-26** after the independent review (sections 1, 3, 4, 5, 6, 8 and new section 9). Reference: Master Blueprint v1.35. Scope frozen as instructed (MIQP,
 DQ-11, DQ-12, DQ-14, OW-33 Option C / `vs3` / reprocessing, Opportunity Scanner, backtesting, portfolio/risk excluded).
 Audited object: the **cumulative release**, i.e. what `main` would contain after PR #1 → #2 → #3 → #4 → #9 → #10 → #12.
 A trial merge of PR #12's head into current `main` (`b66c901`) gives a tree **identical** to PR #12's head, so testing
@@ -41,7 +41,7 @@ from v0.1 · **F** future. "Real" = evidence on real market files; "synthetic" =
 | D6-06 | Builds distinguishable in every run record | `core/build.py`, runs, manifest, Run_Metadata, MA Affinity reports | test_build_id (6), ma_affinity report test | pass | ZIP copy has no git commit (fingerprint identifies it) | A |
 | BP §13 rule 1 | Deterministic results | QLOPB engine | test_ma_affinity_workbench (repeat run byte-identical) | pass | — | A |
 | BP §13 rule 4 | No look-ahead | derived bars dated by last session; QLOPB IS/OOS freeze, windows inside period | test_derive, Tests/qlopb (IS/OOS, boundaries) | pass | QLOPB "incomplete aggregated bar" question open | B |
-| BP §8.5.5, §8.5.11 E, D6-12 | Warnings visible in outputs | Run_Metadata, run log, **Excel/PDF (audit fix)** | test_ma_affinity_workbench (report content) | pass | — | B |
+| BP §8.5.5, §8.5.11 E, D6-12, D6-14 | Warnings and provenance visible in outputs | Run_Metadata, run log, Excel (Summary, Data_Quality), **PDF heading line and Warnings (04-Nov-26)** | test_ma_affinity_workbench (Excel content; **actual PDF text**; Run_Metadata) | pass; section 9 table | — | B |
 | BP §5.10/5.11 GUI | Two separate GUIs; Workbench never imports source files | `qmap_gui/*`, entry points | Tests/gui (212 window tests incl. 4 MA Affinity) | pass on Linux/Xvfb and on GitHub Windows runner | real IDLE session: owner | B |
 | Recovery | Interrupted work completed or cleaned; registry consistent | `storage/recovery.py` | test_ingest_recovery, test_storage_integrity | pass | raw restore only on command line (OW-07, F) | B |
 | Windows | Runs on Windows, Python 3.11, IDLE, no install step | launcher, `environment.py` | CI windows-latest (full suite incl. GUI) | pass on CI | IDLE + package install on the owner's PC: V1 | B |
@@ -56,8 +56,8 @@ No item is classed **C** or **D** after the corrections in section 5.
 
 | # | Item | Class | Status |
 |---|---|---|---|
-| 1 | MA Affinity Excel/PDF did not show Q-MAP data notes, Run ID, build or dataset checksum (BP §8.5.5, §8.5.11 E; owner instruction 5) | was **Release blocker** | **Fixed** in `afa6652` (no QLOPB code or calculation change; tested) |
-| 2 | Windows guide depended on two other documents and asked for checks already proved automatically | was **Release blocker** (usability of acceptance) | **Fixed** in `b04c0cd`; OPTIONAL marking awaits your agreement (D6-13) |
+| 1 | MA Affinity Excel/PDF did not show Q-MAP data notes, Run ID, build or dataset checksum (BP §8.5.5, §8.5.11 E; owner instruction 5) | was **Release blocker** | Excel fixed in `afa6652`. **The 03-Nov-26 version of this report wrongly said the PDF was also complete**: inspection of a generated PDF on 04-Nov-26 showed build, fingerprint and checksum missing. **PDF fixed in `5eec5b3`** and verified by reading the PDF in an automated test (section 9). No QLOPB code or calculation change |
+| 2 | Windows guide depended on two other documents | was **Release blocker** (usability of acceptance) | **Fixed** in `b04c0cd`. W13-W18 **restored to REQUIRED** on 04-Nov-26 (D5-44 preserved, D6-13); A6, A8, V4, V8, V10, V11 OPTIONAL |
 | 3 | README said a declared timeframe is always used (outdated since DQ-7) | was documentation defect | **Fixed** |
 | 4 | OW-39: daily file with a few two-bar dates registered as intraday without a warning | Important limitation | Documented; MA Affinity and derivation refuse it; fix belongs to the OW-33/DQ-14 decision |
 | 5 | OW-40: start date inside a week/month keeps that period's bar (earlier sessions included) | Important limitation | Documented with workaround (start on the first trading day of the week/month) |
@@ -71,12 +71,14 @@ No item is classed **C** or **D** after the corrections in section 5.
 
 ## 4. Test evidence
 
-Environment: Linux container, CPython **3.11.15** (python-build-standalone, Tk 9.0), Xvfb virtual display; pandas
+Environment: Linux container, CPython **3.11.15**, pypdf 6 (tests only) (python-build-standalone, Tk 9.0), Xvfb virtual display; pandas
 3.1.0, numpy 2.4.6, pyarrow 26.0.1, scipy 1.17.1, matplotlib 3.11.2, reportlab 5.1.0, openpyxl 3.1.5.
 
 | Run | Command | Commit | Result |
 |---|---|---|---|
-| Q-MAP full suite, window tests required | `QMAP_REQUIRE_GUI_TESTS=1 xvfb-run -a python -m pytest -q -p no:cacheprovider` | `b04c0cd` | **1269 passed, 0 failed, 0 skipped** (212 GUI) |
+| Q-MAP full suite, window tests required (**final code commit**) | `QMAP_REQUIRE_GUI_TESTS=1 xvfb-run -a python -m pytest -q -p no:cacheprovider` | `5eec5b3` | **1270 passed, 0 failed, 0 skipped** (212 GUI) |
+| Q-MAP full suite, no display (final code commit) | `python -m pytest -q -p no:cacheprovider` (DISPLAY unset) | `5eec5b3` | 1165 passed, 105 skipped (window tests, no display), 0 failed |
+| Earlier: Q-MAP full suite, window tests required | same | `b04c0cd` | 1269 passed, 0 failed, 0 skipped (212 GUI) |
 | Q-MAP full suite, no display | `python -m pytest -q -p no:cacheprovider` (DISPLAY unset) | `b04c0cd` | 1164 passed, 105 skipped (window tests, no display), 0 failed |
 | QLOPB original repository | `python -m unittest discover` in `tests` | QLOPB `6cbadc7` (safeguards) | 107 passed |
 | QLOPB original repository | same | QLOPB `be6d945` (`main`) | 96 passed |
@@ -99,13 +101,16 @@ only by the REQUIRED checks in the Windows guide.
 | Commit | Change | Methodology/architecture change? |
 |---|---|---|
 | `afa6652` | MA Affinity reports: Q-MAP data note via QLOPB's `quality` input (bar size, Run ID, build, dataset, checksum, lineage, warnings), readiness notes in the reports' warnings, Run ID in the label; `RunContext.readiness_warnings`; tests for report content, repeatability, acceptance file with the guide's settings | No (calculation unchanged; tested against a plain engine run) |
+| `5eec5b3` | PDF provenance: heading line with Run ID, build, fingerprint, dataset checksum; dataset validation warnings in the reports' warnings; XML-escaped PDF text; automated test reading the PDF (pypdf as a test-only dependency) | No (QLOPB code and calculations unchanged) |
+| closure docs | W13-W18 back to REQUIRED; guide V7 expects the PDF provenance; D6-12 corrected, D6-13 decided, D6-14; this report | No |
 | `b04c0cd` | Windows guide made self-contained with REQUIRED/OPTIONAL checks; limitations OW-39, OW-40, QLOPB `main` without safeguards; README DQ-7 wording; decisions D6-12, D6-13 | No |
 | this document | Final audit | No |
 
 ## 6. GitHub and CI
 
-- PR #12 head before this document: `b04c0cd` (the commit adding this document becomes the release head; its CI is
-  reported with the PR).
+- Final code commit: `5eec5b3`. The release head is the documentation commit after it (closure report); its CI
+  result is stated in the closure reply and on the PR. Earlier heads: `b04c0cd` runs 83/84 success; `ee14b89` runs 85/86
+  success (Ubuntu and Windows).
 - CI on `9caa140` (previous head): run 81 (push) and run 82 (pull_request) **success**, Ubuntu and Windows.
 - Review threads: none open on PRs #1, #2, #3, #4 (two resolved), #9, #10, #12; no requested changes. PR #9 carries the
   owner's DQ-1/DQ-2 decisions comment.
@@ -124,6 +129,31 @@ confirmation); the OW-33 branch (not in the release).
 ## 8. Windows/IDLE acceptance
 
 `docs/release/Q-MAP_v0.1_Windows_Operating_and_Acceptance_Guide_03_Nov_26_180000.md`, Part 9.
-REQUIRED (only the owner can do these): V1-V3, W1-W12, A4, A5, A7, V5-V7, V9, V13, V14 (installation and IDLE,
-real files, File Explorer, visual behaviour, restart). OPTIONAL (proved by automated tests on GitHub's Windows runner):
-A6, A8, V4, V8, V10, V11, W13-W18 (W13-W18: your decision D5-44 can keep them required), V12 (standalone comparison).
+REQUIRED (only the owner can do these): V1-V3, W1-W18, A4, A5, A7, V5-V7, V9, V13, V14 (installation and IDLE, real
+files, File Explorer, visual behaviour, restart; W13-W18 by D5-44 - the automated Windows test
+`test_dq7_acceptance_pattern_files` supplements but does not replace them). OPTIONAL, each backed by an automated test
+that runs on GitHub's Windows runner: A6 (`test_year_buttons_move_a_whole_year_and_keep_the_month`, real window), A8
+(`test_a_missing_folder_is_explained_not_a_crash`, real window), V11 (`test_invalid_weights_are_reported_as_parameters`,
+real window), V4 and V8 (`test_acceptance_file_conflictdaily_is_imported_and_refused_with_its_date`, same folder settings
+as the guide), V10 (`test_intraday_and_quarterly_datasets_are_refused_with_the_reason`); V12 (standalone comparison).
+
+## 9. Provenance verification of the generated reports (closure review, 04-Nov-26)
+
+Method: an MA Affinity run on a dataset that has a validation warning and an overlap NOTE (synthetic `NSE:M&M`, '&'
+included on purpose), then the generated files were read: the PDF with pypdf (text of every page), the workbook with
+openpyxl, the JSON as text. Before the fix (`ee14b89`) the PDF lacked version, build, fingerprint and checksum. After
+the fix (`5eec5b3`):
+
+| Item | Excel Summary | Excel Data_Quality | PDF report | Run_Metadata JSON |
+|---|---|---|---|---|
+| Run ID | yes (Instrument / file line) | yes | yes (heading line) | yes (`run_id`) |
+| Q-MAP version / build label | no | yes (Code build) | yes (heading: "Q-MAP build: qmap 0.1.0rc1 / c2 build ... git ...") | yes (`build`) |
+| Source fingerprint (full SHA-256) | no | yes | yes (heading) | yes (`build.source_fingerprint`) |
+| Dataset identity (instrument, timeframe, dataset number) | yes | yes | yes (heading) | yes (`input_datasets`) |
+| Dataset checksum (SHA-256) | no | yes | yes (heading) | yes (`input_datasets[].sha256`) |
+| Dataset validation warnings | yes (Warnings: "Q-MAP dataset validation warning: ...") | yes | yes (Warnings) | yes (`input_datasets[].validation_warnings`) |
+| Readiness notes shown before the run | yes (Warnings: "Q-MAP data: ...") | yes | yes (Warnings) | yes (`readiness_warnings`) |
+
+The Excel Summary sheet deliberately keeps QLOPB's layout; the full record is on its Data_Quality sheet. Automated
+test: `Tests/integration/test_ma_affinity_workbench.py::test_pdf_and_excel_and_metadata_carry_the_full_provenance`
+(every item in the PDF, Data_Quality and Run_Metadata; '&' rendered correctly), plus the existing Excel Summary test.
