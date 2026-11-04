@@ -266,4 +266,4 @@ New tests: 53 (A1/A2 13 including the W19 files, B3 17, C4 6, C5 16, D6 1).
 
 **CI (GitHub Actions, independently verifiable).** On the previous head `3f4faea`: run 95 (push) and run 96
 (pull_request) **success**, both Windows and Ubuntu jobs, Python 3.11. Run 96:
-https://github.com/BulluBhai/Q-MAP/actions/runs/41762511637. CI on the new head: see PR #12.
+https://github.com/BulluBhai/Q-MAP/actions/runs/41762511637. On head `b2b5e93` (code `919c697`, build `3fa925abf95b`): run #100 (`41772097006`) **success**. Windows: 1,341 passed, 1 skipped (macOS/Linux-only hard-link test), 0 failed. Ubuntu: 1,235 passed, 107 skipped (105 window tests without a display, 2 Windows-junction tests), 0 failed. https://github.com/BulluBhai/Q-MAP/actions/runs/41772097006. Runs #97-#99 also succeeded.

@@ -1,5 +1,7 @@
 # Q-MAP v0.1: final comprehensive release audit
 
+**Current release: code commit `919c697`, build fingerprint `3fa925abf95b`** (later commits change documents and tests only).
+
 Prepared 03-Nov-26 by Claude (lead developer); **closure update 04-Nov-26** after the independent review (sections 1, 3, 4, 5, 6, 8 and new section 9); **revised 04-Nov-26** after ChatGPT's independent audit of PR #12 head `3f4faea` (sections 1, 3, 4, 6, 11 and new section 12). Reference: Master Blueprint v1.35. Scope frozen as instructed (MIQP,
 DQ-11, DQ-12, DQ-14, OW-33 Option C / `vs3` / reprocessing, Opportunity Scanner, backtesting, portfolio/risk excluded).
 Audited object: the **cumulative release**, i.e. what `main` would contain after PR #1 → #2 → #3 → #4 → #9 → #10 → #12.
@@ -82,10 +84,10 @@ Environment: Linux container, CPython **3.11.15**, pypdf 6 (tests only) (python-
 
 | Run | Command | Commit | Result |
 |---|---|---|---|
-| **Current code commit (04-Nov-26)**, window tests required | `QMAP_REQUIRE_GUI_TESTS=1 xvfb-run -a python -m pytest -q -p no:cacheprovider` | `919c697` (+ final test commit, same build) | **1340 passed, 0 failed, 2 skipped** (Windows-only junction tests; 212 GUI passed) |
+| **Current code commit (04-Nov-26)**, window tests required (local, Claude-reported; CI results in section 6) | `QMAP_REQUIRE_GUI_TESTS=1 xvfb-run -a python -m pytest -q -p no:cacheprovider` | `919c697` (+ final test commit, same build) | **1340 passed, 0 failed, 2 skipped** (Windows-only junction tests; 212 GUI passed) |
 | Previous code under test | same | `5c779e6` (head `3f4faea`, +1 test-only commit `cbca66b`) | 1289 passed, 0 failed, 0 skipped (Claude-reported; see section 12 for the 1,270 / 1,288 / 1,289 history) |
 | Q-MAP full suite, window tests required (03-Nov-26 closure code commit) | `QMAP_REQUIRE_GUI_TESTS=1 xvfb-run -a python -m pytest -q -p no:cacheprovider` | `5eec5b3` | **1270 passed, 0 failed, 0 skipped** (212 GUI) |
-| Q-MAP full suite, no display (final code commit) | `python -m pytest -q -p no:cacheprovider` (DISPLAY unset) | `5eec5b3` | 1165 passed, 105 skipped (window tests, no display), 0 failed |
+| Q-MAP full suite, no display (03-Nov-26 closure code commit) | `python -m pytest -q -p no:cacheprovider` (DISPLAY unset) | `5eec5b3` | 1165 passed, 105 skipped (window tests, no display), 0 failed |
 | Earlier: Q-MAP full suite, window tests required | same | `b04c0cd` | 1269 passed, 0 failed, 0 skipped (212 GUI) |
 | Q-MAP full suite, no display | `python -m pytest -q -p no:cacheprovider` (DISPLAY unset) | `b04c0cd` | 1164 passed, 105 skipped (window tests, no display), 0 failed |
 | QLOPB original repository | `python -m unittest discover` in `tests` | QLOPB `6cbadc7` (safeguards) | 107 passed |
@@ -116,16 +118,32 @@ only by the REQUIRED checks in the Windows guide.
 
 ## 6. GitHub and CI
 
-- **04-Nov-26:** code commit `919c697`; CI on the previous head `3f4faea`: run 95 (push) and run 96 (pull_request) **success**, Windows and Ubuntu, Python 3.11 (https://github.com/BulluBhai/Q-MAP/actions/runs/41762511637). CI on the new head: PR #12. CI results are GitHub's own and can be checked independently; test totals in this report are Claude's local runs.
+- **GitHub CI on the corrected release (04-Nov-26)**, independently verifiable on GitHub. Run **#100** (`41772097006`,
+  pull_request) on PR head `b2b5e93`, which contains code commit `919c697`, build `3fa925abf95b`:
+  https://github.com/BulluBhai/Q-MAP/actions/runs/41772097006
+
+  | Platform (Python 3.11) | Passed | Skipped | Failed | Why the counts differ |
+  |---|---|---|---|---|
+  | Windows (`windows-latest`) | **1,341** | 1 | **0** | Window (GUI) tests are required and all run. The 1 skip is the hard-link fallback test, which exists only on macOS/Linux |
+  | Ubuntu (`ubuntu-latest`) | **1,235** | 107 | **0** | The runner has no display, so 105 window tests skip. The 2 Windows-junction tests skip on Linux |
+
+  Runs #97 and #98 on `919c697`, and run #99 (push) on `b2b5e93`, also succeeded. On the previous head `3f4faea`, runs
+  #95 and #96 succeeded.
+- **Local totals are reported separately by Claude** (Linux container, Xvfb, window tests required): 1,340 passed,
+  2 skipped (Windows-junction tests), 0 failed on `b2b5e93` (section 4). Local totals are not CI results.
 - 03-Nov-26 closure code commit: `5eec5b3`. The release head was the documentation commit after it (closure report); its CI
   result is stated in the closure reply and on the PR. Earlier heads: `b04c0cd` runs 83/84 success; `ee14b89` runs 85/86
   success (Ubuntu and Windows).
 - CI on `9caa140` (previous head): run 81 (push) and run 82 (pull_request) **success**, Ubuntu and Windows.
 - Review threads: none open on PRs #1, #2, #3, #4 (two resolved), #9, #10, #12; no requested changes. PR #9 carries the
   owner's DQ-1/DQ-2 decisions comment.
-- Unapproved changes: none. PR #10 → PR #12 changes only the files of D6-01..D6-13 (QLOPB engine and tests, analysis,
-  build ID, GUI listing, docs, `.gitattributes`) plus `main`'s own Blueprint v1.35 files and its deletion of the v1.0
-  copy.
+- **Changes awaiting owner approval or confirmation (implemented or recorded, NOT approved):** D3-15 (grey "Waiting"
+  row; approval pending), D6-18 (MA Affinity refuses earlier "would be MIXED" datasets; proposed), D6-19 (D5-15/D5-18
+  superseded by DQ-8; confirmation requested), D6-20 (refusal of multi-instrument files with differing intervals;
+  confirmation requested), D6-21 (DQ-7 base-step rule for daily-or-longer data; decision requested, not implemented),
+  OW-41 (re-classification of earlier datasets; decision requested). PR #10 → PR #12 changes the files of D6-01..D6-23
+  (QLOPB engine and tests, analysis, build ID, GUI listing, data-engine and storage corrections, tests, docs,
+  `.gitattributes`), plus `main`'s own Blueprint v1.35 files and its deletion of the v1.0 copy.
 
 ## 7. PR dependency and merge sequence (only with the owner's explicit approval)
 
@@ -138,8 +156,9 @@ confirmation); the OW-33 branch (not in the release).
 ## 8. Windows/IDLE acceptance
 
 `docs/release/Q-MAP_v0.1_Windows_Operating_and_Acceptance_Guide_03_Nov_26_180000.md`, Part 9.
-REQUIRED (only the owner can do these): V1-V3, W1-W18, A4, A5, A7, V5-V7, V9, V13, V14 (installation and IDLE, real
-files, File Explorer, visual behaviour, restart; W13-W18 by D5-44 - the automated Windows test
+REQUIRED (only the owner can do these; identical to section 16 of the manual for build `3fa925abf95b`): V1-V3, W1-W19
+(W1-W12, W13-W18 and W19), A4, A5, A7, V5-V7, V9, V13, V14 (installation and IDLE, real files, File Explorer, visual
+behaviour, restart, W19 same-size/same-date change detection; W13-W18 by D5-44 - the automated Windows test
 `test_dq7_acceptance_pattern_files` supplements but does not replace them). OPTIONAL, each backed by an automated test
 that runs on GitHub's Windows runner: A6 (`test_year_buttons_move_a_whole_year_and_keep_the_month`, real window), A8
 (`test_a_missing_folder_is_explained_not_a_crash`, real window), V11 (`test_invalid_weights_are_reported_as_parameters`,
@@ -193,7 +212,7 @@ the previous code (verified by running them against it).
 (`6cbadc7` / `be6d945`). CI: see PR #12 and the closure reply.
 
 **Matrix update.** Row "BP §8.5.11 B, DQ-7": defect D found and corrected; class B (awaiting owner acceptance).
-Build fingerprint of the code under test: `4956d0b680a7` (unchanged by documentation commits; also verified on a
+Build fingerprint of the code under test at that time (`1291d63`): `4956d0b680a7`; superseded, current build `3fa925abf95b` at `919c697` (unchanged by documentation commits; also verified on a
 `git archive` export, i.e. what a ZIP download contains).
 
 **Windows manual.** `Q-MAP_v0.1_Windows_Operating_and_Acceptance_Guide_03_Nov_26_180000.md` is now the "Q-MAP v0.1 —
