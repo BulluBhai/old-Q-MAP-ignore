@@ -151,3 +151,24 @@ def test_derived_weekly_data_inherit_the_earlier_classification_note(settings, d
     assert weekly.timeframe_logic == EARLIER_CHANGED  # built from a daily dataset that the correction would call MIXED
     chk = check_analysis(settings, db, MA_AFFINITY, [weekly.dataset_id], {"ma_end": "20"})
     assert any(f.name == "timeframe_logic" for r in chk.reports for f in r.failures)
+
+
+def test_a_change_of_the_folder_inputs_reinterprets_with_the_correction_and_keeps_the_earlier_dataset(
+        settings, db, tmp_path, original_logic):
+    """E.g. the alias-registry edit of acceptance check W5: the scan reads the file again."""
+    from qmap.data_engine.instrument_names import registry_path
+
+    a = tmp_path / "A"
+    a.mkdir()
+    _write(a / "NSE_DAYWEEK.csv", MIXED_CASES["daily then weekly"][0])
+    src = D.add_folder_source(settings, db, a)
+    _scan(settings, db, src)
+    original_logic.undo()
+    reg = registry_path(settings)
+    reg.parent.mkdir(parents=True, exist_ok=True)
+    reg.write_text((reg.read_text(encoding="utf-8") if reg.exists() else "canonical,alias1\n") + "RELIANCE,RELIANCE EQ\n",
+                   encoding="utf-8")
+    res = _scan(settings, db, src)
+    assert [(f[1], f[2]) for f in res.files] == [("unchanged", "processed")]
+    got = sorted((d.timeframe, d.status, d.timeframe_logic) for d in list_datasets(db))
+    assert got == [("1D", "active", EARLIER_CHANGED), ("MIXED", "active", CORRECTED)]
