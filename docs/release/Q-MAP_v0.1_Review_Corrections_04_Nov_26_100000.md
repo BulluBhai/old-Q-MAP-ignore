@@ -14,7 +14,24 @@ fingerprint-scheme (`vs2`) version change. QLOPB calculations are unchanged.
 | Code commit (last program change) | `919c697` |
 | Build fingerprint (program files, see `core/build.py`) | `3fa925abf95b` (full `3fa925abf95b69e748361d81c3fb08f612bd75b82b731404bcc28459cdf1a8bc`) |
 | Previous code under test | `5c779e6`, fingerprint `ec8398fcfddd` (PR head `3f4faea`) |
-| PR head | the documentation commit after `919c697`. Documentation commits do not change the fingerprint, because tests and documents are not program files |
+| PR head | see the commit table below. Commits after `919c697` change tests, acceptance fixtures, documents and `.gitattributes`, but no program file, so the fingerprint is unchanged |
+
+**Commit history `3f4faea..0b33482` (reconciliation 04-Nov-26):**
+
+| Commit | Classification | Contents |
+|---|---|---|
+| `a834d6a` | **Application code + tests** | A1, A2, B3: `core/config.py`, `data_engine/auto_interpret.py`, `discovery.py`, `ingest.py`, `storage/files.py`, `recovery.py`, `registry.py`, `storage_class.py`; tests `test_scan_change_detection.py`, `test_data_root_containment.py` |
+| `919c697` | **Application code + tests** (last program change) | C4: `data_engine/process.py`, `qmap_gui/messages.py` (three check-name texts); tests `test_multi_instrument_timeframes.py`, `test_dq7_sparse_daily_characterisation.py` (C5), `test_placement_and_migration.py` (D6), `test_qlopb_research_engine.py` (D7) |
+| `b2b5e93` | **Tests + acceptance fixtures + documents + `.gitattributes`**; no program file | one test added to `test_scan_change_detection.py` (W19 files); fixtures `docs/acceptance_testing/w19_same_size_files_04_Nov_26/version_A/ and version_B/NSE_SAMESIZE.csv`; `.gitattributes` (`-text` for those fixtures); decision log, register, final audit, known limitations, this record, Windows manual |
+| `0b33482` | **Documents only** | final audit, known limitations, register, this record, Windows manual |
+
+The interval `3f4faea..0b33482` as a whole therefore changes application code, tests, fixtures, documents and
+`.gitattributes`; it is **not** documentation-only. Only `0b33482` (and the reconciliation commit that adds this
+table) is documentation-only. `git diff 919c697 0b33482 -- Application pyproject.toml '*.py' ':!Tests'` is empty:
+no program file changed after `919c697`, so the build fingerprint (program files only: `Application/**/*.py`,
+top-level `.py`, `pyproject.toml`) stays `3fa925abf95b`; recomputed on `0b33482`: `qmap 0.1.0rc1 / c2 build
+3fa925abf95b`. The git part of a build label shows the checked-out commit, so it differs between these commits while
+the fingerprint does not.
 
 ## 1. Defects corrected
 
@@ -266,4 +283,4 @@ New tests: 53 (A1/A2 13 including the W19 files, B3 17, C4 6, C5 16, D6 1).
 
 **CI (GitHub Actions, independently verifiable).** On the previous head `3f4faea`: run 95 (push) and run 96
 (pull_request) **success**, both Windows and Ubuntu jobs, Python 3.11. Run 96:
-https://github.com/BulluBhai/Q-MAP/actions/runs/41762511637. On head `b2b5e93` (code `919c697`, build `3fa925abf95b`): run #100 (`41772097006`) **success**. Windows: 1,341 passed, 1 skipped (macOS/Linux-only hard-link test), 0 failed. Ubuntu: 1,235 passed, 107 skipped (105 window tests without a display, 2 Windows-junction tests), 0 failed. https://github.com/BulluBhai/Q-MAP/actions/runs/41772097006. Runs #97-#99 also succeeded.
+https://github.com/BulluBhai/Q-MAP/actions/runs/41762511637. On head `b2b5e93` (code `919c697`, build `3fa925abf95b`): run #100 (`41772097006`) **success**. Windows: 1,341 passed, 1 skipped (macOS/Linux-only hard-link test), 0 failed. Ubuntu: 1,235 passed, 107 skipped (105 window tests without a display, 2 Windows-junction tests), 0 failed. https://github.com/BulluBhai/Q-MAP/actions/runs/41772097006. Runs #97-#99 also succeeded. On head `0b33482` (documents only): run #102 (`41800140103`) **success**. Windows: 1,341 passed, 1 skipped, 0 failed. Ubuntu: 1,235 passed, 107 skipped, 0 failed. These totals were read from run #102's own job logs; they equal run #100's because `0b33482` changes no test or program file. https://github.com/BulluBhai/Q-MAP/actions/runs/41800140103 (run #101, push, also succeeded).

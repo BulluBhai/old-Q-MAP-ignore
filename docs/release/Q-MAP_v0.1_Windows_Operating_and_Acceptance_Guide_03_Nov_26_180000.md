@@ -8,7 +8,7 @@
 | Revised | 04-Nov-26 (second revision), after the independent audit of `3f4faea`: new build, new REQUIRED check **W19** (a changed file with the same size and date is detected), notes on multi-instrument files. Earlier versions are kept in Git history |
 | Status | **OUTSTANDING** — Q-MAP v0.1 is not ready for controlled analytical use until you complete this manual and accept the result |
 
-Later commits on the pull request that change only documents do not change the code you test. You can always check
+Later commits on the pull request that change no program file (only tests, test files or documents) do not change the code you test. You can always check
 that you have the right code: every Q-MAP report shows the **build fingerprint**, and it must be `3fa925abf95b`
 (check V13).
 

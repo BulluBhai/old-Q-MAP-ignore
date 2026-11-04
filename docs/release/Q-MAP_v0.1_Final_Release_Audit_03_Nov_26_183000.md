@@ -1,6 +1,6 @@
 # Q-MAP v0.1: final comprehensive release audit
 
-**Current release: code commit `919c697`, build fingerprint `3fa925abf95b`** (later commits change documents and tests only).
+**Current release: code commit `919c697`, build fingerprint `3fa925abf95b`.** The later commits change no program file: `b2b5e93` changes tests, acceptance fixtures, documents and `.gitattributes`; `0b33482` and the reconciliation commit change documents only. The interval from `3f4faea` includes application changes (`a834d6a`, `919c697`); see the commit table in `Q-MAP_v0.1_Review_Corrections_04_Nov_26_100000.md` §0.
 
 Prepared 03-Nov-26 by Claude (lead developer); **closure update 04-Nov-26** after the independent review (sections 1, 3, 4, 5, 6, 8 and new section 9); **revised 04-Nov-26** after ChatGPT's independent audit of PR #12 head `3f4faea` (sections 1, 3, 4, 6, 11 and new section 12). Reference: Master Blueprint v1.35. Scope frozen as instructed (MIQP,
 DQ-11, DQ-12, DQ-14, OW-33 Option C / `vs3` / reprocessing, Opportunity Scanner, backtesting, portfolio/risk excluded).
@@ -118,6 +118,10 @@ only by the REQUIRED checks in the Windows guide.
 
 ## 6. GitHub and CI
 
+- **GitHub CI, latest checked run: #102** (`41800140103`, pull_request) on head `0b33482` (documents only; code
+  `919c697`, build `3fa925abf95b`): https://github.com/BulluBhai/Q-MAP/actions/runs/41800140103. Totals read from
+  run #102's own job logs: **Windows 1,341 passed, 1 skipped, 0 failed; Ubuntu 1,235 passed, 107 skipped, 0 failed**
+  (same skips and reasons as the table below). Run #101 (push) also succeeded.
 - **GitHub CI on the corrected release (04-Nov-26)**, independently verifiable on GitHub. Run **#100** (`41772097006`,
   pull_request) on PR head `b2b5e93`, which contains code commit `919c697`, build `3fa925abf95b`:
   https://github.com/BulluBhai/Q-MAP/actions/runs/41772097006
