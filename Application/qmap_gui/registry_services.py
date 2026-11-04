@@ -15,6 +15,7 @@ from typing import Callable
 
 from qmap.catalog import DatasetInfo, fmt_date, get_dataset, list_datasets, overview, provenance, timeframe_label
 from qmap.core.config import Settings
+from qmap.core.timeframes import EARLIER_CHANGED
 from qmap.core.errors import QmapError
 from qmap.core.runs import run_context
 from qmap.data_engine.derive import DERIVED_TIMEFRAMES, assess_derivation, derive_timeframe
@@ -79,6 +80,9 @@ def details(settings: Settings, dataset_id: int) -> list[tuple[str, str | None]]
                  (f"Processing: {d.processing_version}   Settings fingerprint: {d.config_fingerprint}\n", "muted")]
         if d.source_files:
             parts.append((f"Original file(s): {', '.join(d.source_files)} (preserved unchanged)\n", None))
+        if d.timeframe_logic_note:
+            parts.append(("Timeframe: " + d.timeframe_logic_note + "\n",
+                          "warning" if d.timeframe_logic == EARLIER_CHANGED else "muted"))
         parts.append(("Validation: " + ("passed with warnings:\n" if d.warnings else "passed.\n"),
                       "warning" if d.warnings else "ok"))
         parts += [(f"  - {w}\n", "warning") for w in d.warnings]

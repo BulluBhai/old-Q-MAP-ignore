@@ -229,7 +229,13 @@ def _dataset_record(db: Database, dataset_id: int, report: ReadinessReport) -> d
             "canonical_schema_version": d.canonical_schema_version, "storage_class": d.storage_class,
             "relative_path": d.relative_path, "date_from": d.date_from, "date_to": d.date_to, "row_count": d.row_count,
             "rows_in_window": report.rows_in_window, "validation_status": d.validation_status,
-            "validation_warnings": d.warnings, "source_files": d.source_files, "lineage": provenance(db, dataset_id)}
+            "validation_warnings": d.warnings, "source_files": d.source_files, "lineage": provenance(db, dataset_id),
+            # which DQ-7 comparison classified the timeframe: corrected / earlier (before 04-Nov-26) / not applicable
+            "timeframe_classified_by": {"corrected": "DQ-7 corrected comparison (04-Nov-26)",
+                                        "earlier_same": "DQ-7 comparison before the 04-Nov-26 correction; same result",
+                                        "earlier_changed": "DQ-7 comparison before the 04-Nov-26 correction; the "
+                                                           "corrected comparison would give MIXED"}.get(
+                                            d.timeframe_logic, "not a DQ-7 sampling result or not affected")}
 
 
 def run_analysis(settings: Settings, db: Database, spec: AnalysisSpec, dataset_ids: list[int], raw_params: dict, *,

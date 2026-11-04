@@ -17,6 +17,7 @@ from qmap.catalog import fmt_date, get_dataset, timeframe_label
 from qmap.data_engine import user_decisions as UD
 from qmap.data_engine.instrument_names import add_aliases, registry_path
 from qmap.core.config import Settings
+from qmap.core.timeframes import CORRECTED, EARLIER_CHANGED, classification_logic
 from qmap.core.errors import QmapError
 from qmap.core.runs import run_context
 from qmap.data_engine import discovery as D
@@ -120,6 +121,10 @@ def file_details(s: D.FileState, decisions: dict | None = None) -> list[tuple[st
         parts.append((f"Detected timeframe: {detected_timeframe(s)}\n", "bold"))
         parts.append((f"Validation: {inf.get('summary')} ({inf.get('rows_examined')} of {inf.get('rows_total')} rows "
                       f"examined)\n", "warning" if inf.get("status") != "consistent" else None))
+        logic, note = classification_logic(inf)
+        if logic and logic != CORRECTED:
+            # an unchanged file is not read again, so its earlier classification is shown as it was made (04-Nov-26)
+            parts.append(("Earlier classification: " + note + "\n", "warning" if logic == EARLIER_CHANGED else "muted"))
         name_tf = [w for w in s.interpretation.get("warnings", []) if "file name says" in w]
         if name_tf:
             parts.append((f"File name: {name_tf[0]}\n", "warning"))

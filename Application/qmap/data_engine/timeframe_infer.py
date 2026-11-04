@@ -40,7 +40,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from ..core.timeframes import MIXED, minutes_label
+from ..core.timeframes import INFERENCE_LOGIC, MIXED, is_minutes_label, measuring_unit, minutes_label
 
 DEFAULT_SAMPLING = {
     "initial_rows": 20,      # observations used for the candidate interval
@@ -99,7 +99,9 @@ class Inference:
         return {"status": self.status, "timeframe": self.timeframe, "candidate": self.candidate,
                 "summary": self.summary, "rows_total": self.rows_total, "rows_examined": self.rows_examined,
                 "seed": self.seed, "patterns": self.patterns, "blocks": [b.as_dict() for b in self.blocks],
-                "method": "sampled successive-row blocks; same-day steps for intraday; no exchange calendar"}
+                "method": "sampled successive-row blocks; same-day steps for intraday; no exchange calendar",
+                # marks results of the corrected comparison (04-Nov-26); records without it are identifiable as earlier
+                "logic": INFERENCE_LOGIC}
 
 
 # ---- step measurement -------------------------------------------------------------------------------------------
@@ -190,17 +192,8 @@ def _base_unit(label: str) -> int:
     return 1
 
 
-def _is_minutes(label: str | None) -> bool:
-    return bool(label) and (label.endswith("m") or label.endswith("h")) and label not in ("1M",)
-
-
-_CALENDAR_UNITS = {"1W": "week", "1M": "month", "1Q": "quarter", "1Y": "year"}
-
-
-def _measuring_unit(label: str) -> str:
-    """The unit a block's steps are counted in by _label_from_steps: minutes, days (1D and 'Nd'), weeks, months,
-    quarters or years. Steps can only be compared with an interval measured in the same unit."""
-    return "minute" if _is_minutes(label) else _CALENDAR_UNITS.get(label, "day")
+_is_minutes = is_minutes_label
+_measuring_unit = measuring_unit  # the one implementation lives in core.timeframes (also used to judge stored records)
 
 
 def _blocks_for(candidate: str | None, intraday: bool, cfg: dict) -> int:
