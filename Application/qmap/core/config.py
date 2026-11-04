@@ -66,6 +66,10 @@ def _parse_date(value, name: str) -> date:
     )
 
 
+class UnsafeDataPath(ValueError):
+    """A registry path that is malformed or would lead outside Q-MAP_DATA (for example through a link)."""
+
+
 @dataclass(frozen=True)
 class Settings:
     data_root: Path
@@ -140,8 +144,20 @@ class Settings:
         """
         parts = relative_path.split("/") if isinstance(relative_path, str) else []
         if (not parts or any(p in ("", ".", "..") or "\\" in p or ":" in p for p in parts)):
-            raise ValueError(f"not a valid registry path inside Q-MAP_DATA: {relative_path!r}")
-        return self.data_root.joinpath(*parts)
+            raise UnsafeDataPath(f"not a valid registry path inside Q-MAP_DATA: {relative_path!r}")
+        candidate = self.data_root.joinpath(*parts)
+        # A symbolic link or Windows junction anywhere below the data root could make a valid-looking path point
+        # outside it. Resolve it (links and junctions followed) and require the result to stay inside the RESOLVED
+        # data root, so nothing outside Q-MAP_DATA is ever read, written, made writable or deleted through it.
+        root = self.data_root.resolve()
+        try:
+            real = candidate.resolve()
+        except (OSError, RuntimeError) as exc:  # unreadable link, link loop
+            raise UnsafeDataPath(f"the registry path {relative_path!r} cannot be resolved safely: {exc}") from None
+        if real != root and root not in real.parents:
+            raise UnsafeDataPath(f"the registry path {relative_path!r} leads outside Q-MAP_DATA (to {real}) through a "
+                                 "symbolic link or junction; it is not used")
+        return candidate
 
     def to_relative(self, absolute: Path) -> str:
         return absolute.resolve().relative_to(self.data_root).as_posix()

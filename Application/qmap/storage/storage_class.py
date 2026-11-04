@@ -25,10 +25,13 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from ..core.config import LEGACY_TEMPORARY_FOLDER, TEMPORARY_FOLDER, Settings
+from ..core.config import LEGACY_TEMPORARY_FOLDER, TEMPORARY_FOLDER, Settings, UnsafeDataPath
+from ..core.logging_setup import get_logger
 from ..core.runs import Run
 from .db import Database, utc_now_iso
 from .files import copy_durably, place_without_overwrite, safe_remove, sha256_file, unique_tmp_name
+
+log = get_logger("storage")
 
 PERMANENT, TEMPORARY = "permanent", "temporary"
 STORAGE_CLASSES = (PERMANENT, TEMPORARY)
@@ -124,7 +127,12 @@ def _common(settings: Settings, db: Database, dataset_id: int, action: str) -> t
     a.run_uses = [r["run_id"] for r in db.query(
         "SELECT run_id FROM run_inputs WHERE dataset_id = ? ORDER BY run_id", (dataset_id,))]
     if not a.blockers:
-        path = settings.data_path(row["relative_path"])
+        try:
+            path = settings.data_path(row["relative_path"])
+        except UnsafeDataPath as exc:
+            a.blockers.append(f"The registered path is not safe to use ({exc}). Nothing was changed; investigate the "
+                              "Q-MAP_DATA folder (a link or junction may lead outside it).")
+            return a, row
         if not path.is_file():
             a.blockers.append(f"The registered file is missing ({row['relative_path']}). Run 'verify' and investigate "
                               "before changing this dataset.")
@@ -143,7 +151,12 @@ def assess_move(settings: Settings, db: Database, dataset_id: int, to_class: str
         a.blockers.append(f"This dataset is already {LABELS[to_class]}.")
         return a
     a.to_path = temporary_path_for(row["relative_path"]) if to_class == TEMPORARY else permanent_path_for(row["relative_path"])
-    if settings.data_path(a.to_path).exists():
+    try:
+        dest_exists = settings.data_path(a.to_path).exists()
+    except UnsafeDataPath as exc:
+        a.blockers.append(f"The destination is not safe to use ({exc}). Nothing was changed.")
+        return a
+    if dest_exists:
         a.blockers.append(f"A file already exists at the destination ({a.to_path}); it is never overwritten. Run "
                           "'verify' and investigate.")
     if db.one("SELECT 1 FROM datasets WHERE relative_path = ?", (a.to_path,)) is not None:
@@ -274,6 +287,16 @@ def is_open_destination(db: Database, rel: str) -> bool:
     return db.one("SELECT 1 FROM storage_actions WHERE status = 'started' AND to_path = ?", (rel,)) is not None
 
 
+def _recovery_path(settings: Settings, rel: str, report):
+    """settings.data_path(rel) or None when the path is unsafe (recorded as a problem; nothing is touched)."""
+    try:
+        return settings.data_path(rel)
+    except UnsafeDataPath as exc:
+        report.problems.append(f"{rel}: {exc}")
+        log.error("Unsafe registry path, not used by recovery: %s", exc)
+        return None
+
+
 def recover_storage_actions(settings: Settings, db: Database, is_live, report) -> None:
     """Finish or undo storage actions whose run has ended, and remove copies that are provably redundant.
 
@@ -286,7 +309,8 @@ def recover_storage_actions(settings: Settings, db: Database, is_live, report) -
         if act["action"] == "move":
             done = row is not None and row["relative_path"] == act["to_path"]
             if not done and act["to_path"] and act["to_path"] != (row["relative_path"] if row else None):
-                if safe_remove(settings.data_path(act["to_path"])):
+                target = _recovery_path(settings, act["to_path"], report)
+                if target is not None and safe_remove(target):
                     report.deleted_temp_files.append(act["to_path"])
         else:
             done = row is not None and row["file_deleted_at"] is not None
@@ -298,8 +322,8 @@ def recover_storage_actions(settings: Settings, db: Database, is_live, report) -
     # Old copy left behind by a completed move: removed only if no dataset uses that path and it is an exact copy.
     for act in db.query("SELECT a.from_path, d.sha256 FROM storage_actions a JOIN datasets d USING (dataset_id) "
                         "WHERE a.action = 'move' AND a.status = 'completed'"):
-        old = settings.data_path(act["from_path"])
-        if not old.is_file() or db.one("SELECT 1 FROM datasets WHERE relative_path = ?", (act["from_path"],)):
+        old = _recovery_path(settings, act["from_path"], report)
+        if old is None or not old.is_file() or db.one("SELECT 1 FROM datasets WHERE relative_path = ?", (act["from_path"],)):
             continue
         try:
             same = sha256_file(old) == act["sha256"]
@@ -313,6 +337,6 @@ def recover_storage_actions(settings: Settings, db: Database, is_live, report) -
 
     # A deletion was committed but its file is still there (crash, or the file was locked at the time).
     for row in db.query("SELECT relative_path FROM datasets WHERE file_deleted_at IS NOT NULL"):
-        path = settings.data_path(row["relative_path"])
-        if path.is_file() and safe_remove(path):
+        path = _recovery_path(settings, row["relative_path"], report)
+        if path is not None and path.is_file() and safe_remove(path):
             report.deleted_temp_files.append(row["relative_path"])

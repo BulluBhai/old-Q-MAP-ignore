@@ -35,6 +35,7 @@ from ..core.errors import QmapError
 from ..core.runs import Run
 from ..storage.db import Database, utc_now_iso
 from ..storage.files import sha256_file
+from ..storage.registry import CHANGED_SINCE_EXAMINED
 from . import auto_interpret as A
 from .format_detect import EXTENSION_KIND
 from .ingest import _date_limit_retry, ingest_file
@@ -336,6 +337,38 @@ def list_candidate_files(settings: Settings, src: FolderSource) -> tuple[list[Pa
     return found, excluded
 
 
+def _fingerprint_extensions(settings: Settings) -> dict:
+    """Settings that can change a scan's outcome and were missing from the original fingerprint (review of
+    04-Nov-26): the DQ-7 sampling settings, the requirement set the automatic profiles use (require_volume), the
+    file-size limit (a larger file is 'unsupported') and the cleaning-code version. Each value is RESOLVED (defaults
+    applied) and included only when it differs from the value in force when the original fingerprint was defined,
+    so fingerprints made under the current settings stay valid and nothing is re-evaluated in bulk; any change of
+    one of these settings changes the fingerprint and the next scan re-evaluates the file."""
+    from .. import CLEANING_CODE_VERSION
+    from .timeframe_infer import DEFAULT_SAMPLING
+    from ..core.config import DEFAULT_REQUIREMENT_SETS
+
+    current = {
+        "sampling": {**DEFAULT_SAMPLING, **(getattr(settings, "timeframe_sampling", None) or {})},
+        "requirement_set": {"name": A.AUTO_REQUIREMENT_SET, "require_volume": bool(
+            (settings.requirement_sets.get(A.AUTO_REQUIREMENT_SET) or {}).get("require_volume"))},
+        "max_file_size_mb": settings.max_file_size_mb,
+        "cleaning_code": CLEANING_CODE_VERSION,
+    }
+    baseline = {
+        "sampling": dict(DEFAULT_SAMPLING),
+        "requirement_set": {"name": "price_only", "require_volume": bool(
+            DEFAULT_REQUIREMENT_SETS["price_only"]["require_volume"])},
+        "max_file_size_mb": 1024,
+        "cleaning_code": FINGERPRINT_BASELINE_CLEANING_CODE,
+    }
+    return {k: v for k, v in current.items() if v != baseline[k]}
+
+
+# the cleaning-code version in force when the fingerprint extensions were defined (see _fingerprint_extensions)
+FINGERPRINT_BASELINE_CLEANING_CODE = "c2"
+
+
 def _inputs_fingerprint(src: FolderSource, answer_row, settings: Settings) -> str:
     """Everything outside the file that can change how it is interpreted or validated."""
     reg = registry_path(settings)
@@ -344,6 +377,9 @@ def _inputs_fingerprint(src: FolderSource, answer_row, settings: Settings) -> st
                "sym_from_name": src.symbol_from_filename, "answer": answer_row["answer_id"] if answer_row else None,
                "validation": [str(settings.plausible_min_date), settings.plausible_max_days_ahead,
                               settings.max_daily_move_pct, settings.min_rows, settings.max_gap_days]}
+    ext = _fingerprint_extensions(settings)
+    if ext:
+        payload["ext"] = ext
     return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()[:16]
 
 
@@ -482,8 +518,8 @@ def _scan_one(run: Run, src: FolderSource, scan_id: int, path: Path, rel: str, l
 
     can_skip = (last is not None and last["outcome"] in FINAL_OUTCOMES and last["inputs_fingerprint"] == fp
                 and not retry_due and last["sha256"])
-    if can_skip and last["file_size"] == st.st_size and last["file_mtime_ns"] == st.st_mtime_ns:
-        return unchanged_skip(last["sha256"])
+    # D5-08: the CURRENT checksum is always part of the unchanged-file test. Size and modification time are never
+    # enough on their own: contents can change while both stay the same (or the time is restored by a sync tool).
     try:
         sha = sha256_file(path)
     except OSError as exc:
@@ -522,7 +558,12 @@ def _scan_one(run: Run, src: FolderSource, scan_id: int, path: Path, rel: str, l
     o = interp.overrides
     res = ingest_file(run, path, interp.profile, source_label=f"Folder source: {src.label}",
                       note=f"scan {scan_id}: {rel}", exchange=o.get("exchange"), symbol=o.get("symbol"),
-                      timeframe=o.get("timeframe"), today=today)
+                      timeframe=o.get("timeframe"), today=today, expected_sha256=sha)
+    if res.receipt_status == "failed" and (res.message or "").startswith(CHANGED_SINCE_EXAMINED):
+        detail = note + res.message
+        _observe(db, scan_id, sid, rel, action="processed", outcome="failed", event_id=res.event_id, detail=detail,
+                 **base)
+        return "failed", change, "processed", detail
     raw = db.one("SELECT sha256 FROM datasets WHERE dataset_id = ?", (res.raw_dataset_id,)) if res.raw_dataset_id else None
     if raw is not None and raw["sha256"] != sha:
         detail = ("The file changed while it was being scanned; the version that was loaded is recorded under its own "

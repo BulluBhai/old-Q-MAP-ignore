@@ -82,8 +82,16 @@ def _fail_event(db: Database, event_id: int, detail: str) -> None:
         _finish_event(conn, event_id, "failed", None, detail)
 
 
-def receive_file(run: Run, src: str | Path, *, source_label: str | None = None, note: str | None = None) -> Receipt:
-    """Register a file as raw data (or recognise it as already registered) and log the receipt."""
+CHANGED_SINCE_EXAMINED = "E_CHANGED_SINCE_EXAMINED"
+
+
+def receive_file(run: Run, src: str | Path, *, source_label: str | None = None, note: str | None = None,
+                 expected_sha256: str | None = None) -> Receipt:
+    """Register a file as raw data (or recognise it as already registered) and log the receipt.
+
+    `expected_sha256` (folder scans): the checksum of the content the caller examined. If the file now has another
+    checksum it changed in between, and NOTHING is registered (the receipt is recorded as failed), so content can
+    never be registered with an interpretation made from earlier content."""
     settings, db, log = run.settings, run.db, run.logger
     src = Path(src)
     try:
@@ -107,6 +115,12 @@ def receive_file(run: Run, src: str | Path, *, source_label: str | None = None, 
         log.error("Receipt %s failed: %s (%s)", eid, detail, src)
         return Receipt(event_id=eid, status="failed", detail=detail)
     maybe_fail("after_hash")
+    if expected_sha256 is not None and sha != expected_sha256:
+        detail = (f"{CHANGED_SINCE_EXAMINED}: the file changed after it was examined (checksum {expected_sha256[:12]}... when examined, "
+                  f"{sha[:12]}... now). Nothing was registered. Scan again when the file is no longer being written.")
+        eid = _insert_event(db, run, status="failed", sha256=sha, detail=detail, **base)
+        log.warning("Receipt %s: %s (%s)", eid, detail, src.name)
+        return Receipt(event_id=eid, status="failed", sha256=sha, detail=detail)
 
     # 2. Detect the format from content.
     detected = detect_format(src, max_size_bytes=settings.max_file_size_mb * 1024 * 1024)

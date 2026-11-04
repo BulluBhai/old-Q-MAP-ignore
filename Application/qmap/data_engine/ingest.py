@@ -202,11 +202,14 @@ def _write_issue_report(run: Run, event_id: int, issues: list) -> Path | None:
 
 def ingest_file(run: Run, path: str | os.PathLike, profile: SourceProfile, *, source_label: str | None = None,
                 note: str | None = None, force_reason: str | None = None, exchange: str | None = None,
-                symbol: str | None = None, timeframe: str | None = None, today: date | None = None) -> IngestResult:
-    """Ingest one file. Never modifies the source; always records the receipt."""
+                symbol: str | None = None, timeframe: str | None = None, today: date | None = None,
+                expected_sha256: str | None = None) -> IngestResult:
+    """Ingest one file. Never modifies the source; always records the receipt. With `expected_sha256` nothing is
+    registered unless the file still has that checksum (see receive_file)."""
     check_profile_against_settings(profile, run.settings)
     path = Path(path)
-    receipt = receive_file(run, path, source_label=source_label or profile.source_label, note=note)
+    receipt = receive_file(run, path, source_label=source_label or profile.source_label, note=note,
+                           expected_sha256=expected_sha256)
     if not receipt.ok:
         return IngestResult(outcome=receipt.status, message=receipt.detail or "", event_id=receipt.event_id,
                             receipt_status=receipt.status)
