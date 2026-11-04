@@ -1,3 +1,4 @@
 # Test and acceptance data are compared byte for byte (SHA-256): never convert their line endings on checkout.
 Tests/fixtures/qlopb_data/* -text
 docs/acceptance_testing/v01_files_03_Nov_26/* -text
+docs/acceptance_testing/w19_same_size_files_04_Nov_26/**/* -text

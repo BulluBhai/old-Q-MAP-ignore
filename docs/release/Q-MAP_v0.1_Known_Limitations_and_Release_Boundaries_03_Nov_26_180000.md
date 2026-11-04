@@ -1,6 +1,6 @@
 # Q-MAP v0.1: known limitations and release boundaries
 
-Release candidate `0.1.0rc1`, prepared 03-Nov-26. Reference: Master Blueprint v1.35. Target maturity: **controlled
+Release candidate `0.1.0rc1`, prepared 03-Nov-26; **revised 04-Nov-26** after the independent audit of `3f4faea` (code `919c697`, build `3fa925abf95b`). Reference: Master Blueprint v1.35. Target maturity: **controlled
 analytical use** by the Project Owner after Windows/IDLE acceptance. **Not production-ready.**
 
 ## 1. What v0.1 contains
@@ -76,9 +76,23 @@ analytical use** by the Project Owner after Windows/IDLE acceptance. **Not produ
 - **Datasets prepared before that correction (OW-41, D6-17)** keep their registered timeframe: an unchanged file is
   not read again by a scan, and nothing is reprocessed. Q-MAP judges each earlier classification from the sample
   recorded with it and says so ("same result" or "the corrected comparison would give MIXED") in Datasets and Storage,
-  Sources, the readiness check and Run_Metadata. MA Affinity refuses the second kind (D6-18, awaiting confirmation).
+  Sources, the readiness check and Run_Metadata. MA Affinity refuses the second kind (D6-18: implemented as the safer default; owner approval **not given yet**).
   The same file arriving again under another name or folder is classified with the corrected comparison and becomes
   a separate dataset; the earlier one is kept.
+- **Sparse daily or weekly observations (C5, OW-42, D6-21 pending)**: DQ-7 labels daily-or-longer data from the
+  most common gap in calendar days, without requiring the base step itself. Observations every 2-4 days are registered
+  1D; observations every 5-10 days (for example a daily series sampled once a week) are registered **1W** and would be
+  offered to weekly analyses. Check the source of any 1W dataset you did not expect.
+- **Files with several instruments (C4, D6-20 awaiting confirmation)**: each instrument is measured on its own rows as
+  well; if one differs from the file as a whole, the file is rejected and must be split. An instrument too short to
+  measure takes the file's interval, with a warning. Datasets registered from such files before 04-Nov-26 were not
+  re-examined.
+- **Folder scans** read every file completely at every scan to calculate its checksum (correction A1, 04-Nov-26):
+  large folders take longer to scan than before, but a changed file is never missed because its size and date are
+  unchanged.
+- **Links inside Q-MAP_DATA**: a symbolic link or Windows junction that leads outside Q-MAP_DATA is never followed;
+  datasets reached through one are reported as unsafe and are not used (B3). Do not redirect Q-MAP_DATA sub-folders to
+  other drives; move the whole Q-MAP_DATA folder instead.
 - DQ-11/DQ-12 not built (see section 2). Thousands separators and decimal commas are not read automatically (OW-21);
   multi-symbol files are usually asked, not inferred (OW-22).
 

@@ -4,12 +4,12 @@
 |---|---|
 | For | The Q-MAP Project Owner (Windows, Python 3.11, IDLE). No programming, no command line, no reading of code or logs |
 | Release candidate | Pull request #12: https://github.com/BulluBhai/Q-MAP/pull/12 (branch `claude/epic-darwin-33o518`) |
-| Code under test | commit `5c779e6` (`5c779e632be41e08f1e3798fe8465dd5509d0e62`), version `0.1.0rc1`, **build fingerprint `ec8398fcfddd`** |
-| Revised | 04-Nov-26, after the independent review, the DQ-7 correction and the clarification of how earlier classifications are identified (earlier versions of this guide are kept in Git history) |
+| Code under test | commit `919c697` (`919c697f4bc83778b82ca8d08855215bf6de0b5c`), version `0.1.0rc1`, **build fingerprint `3fa925abf95b`** |
+| Revised | 04-Nov-26 (second revision), after the independent audit of `3f4faea`: new build, new REQUIRED check **W19** (a changed file with the same size and date is detected), notes on multi-instrument files. Earlier versions are kept in Git history |
 | Status | **OUTSTANDING** — Q-MAP v0.1 is not ready for controlled analytical use until you complete this manual and accept the result |
 
 Later commits on the pull request that change only documents do not change the code you test. You can always check
-that you have the right code: every Q-MAP report shows the **build fingerprint**, and it must be `ec8398fcfddd`
+that you have the right code: every Q-MAP report shows the **build fingerprint**, and it must be `3fa925abf95b`
 (check V13).
 
 ---
@@ -99,7 +99,7 @@ Each check is marked:
    extracted folder to `Q-MAP_APP`, so that you have `D:\Q-MAP_V01\Q-MAP_APP\database_manager.py`.
    (Use `C:\` instead of `D:\` if you have no D drive. Keep the path short, and **not** inside OneDrive.)
 5. Write the date of download in section 16. The code you test is identified later by its build fingerprint
-   `ec8398fcfddd` (check V13).
+   `3fa925abf95b` (check V13).
 
 ## 6. Prepare the folders and test files
 
@@ -120,6 +120,7 @@ Create these folders inside `D:\Q-MAP_V01\` (in File Explorer: right-click → *
 | `V01_Files` | `NSE_CONFLICTDAILY.csv` from `D:\Q-MAP_V01\Q-MAP_APP\docs\acceptance_testing\v01_files_03_Nov_26\` (synthetic) |
 | `W8_Many_Files` | 30 or more data files for the Stop test (W8 explains how) |
 | `W11_Check` | empty for now; used at the very end (W11) |
+| `W19_Scan` | empty for now; used by W19 (Q-MAP's own synthetic test file is copied in there) |
 | `Evidence` | your screenshots, with the sub-folders listed in section 13 |
 
 **Before you start — the "before" picture of your originals (part of W11):** open the folder where your real eight
@@ -257,6 +258,31 @@ grouped by kind.
 - **Pass:** every file "unchanged"; no new datasets in Datasets and Storage.
 - **Evidence:** `Evidence\02_Sources\A4_rescan.png`.
 
+### W19 — A changed file with the same size and date is detected (REQUIRED)
+
+- **Checks / why:** Q-MAP decides whether a file is unchanged by its **content** (its SHA-256 checksum), not only by
+  its size and "Date modified". Before 04-Nov-26 a file whose contents changed while its size and date stayed the same
+  could be skipped (review finding A1).
+- **The two test files** (synthetic, made by Q-MAP's developer):
+  `D:\Q-MAP_V01\Q-MAP_APP\docs\acceptance_testing\w19_same_size_files_04_Nov_26\version_A\NSE_SAMESIZE.csv` and
+  `...\version_B\NSE_SAMESIZE.csv`. They have the same name and the same size (2,717 bytes), and they differ in one
+  digit (the last volume value: 65194 in A, 65197 in B). They came out of the same ZIP, so their "Date modified" is
+  the same, and copying in File Explorer keeps that date.
+- **Steps:**
+  1. In File Explorer, copy (Ctrl+C / Ctrl+V) `version_A\NSE_SAMESIZE.csv` into `D:\Q-MAP_V01\W19_Scan`.
+  2. In Sources: **Add folder...** → `W19_Scan` → **SCAN SELECTED FOLDER NOW**. Expected: `NSE_SAMESIZE.csv` Imported.
+  3. In File Explorer, open `W19_Scan` with **View → Details**, take a screenshot showing **Size** and **Date
+     modified**, then copy `version_B\NSE_SAMESIZE.csv` into `W19_Scan` and choose **Replace the file in the
+     destination**. Take a second screenshot: the size and date look the same as before.
+  4. Back in Sources, with the `W19_Scan` line selected, click **SCAN SELECTED FOLDER NOW** again.
+- **Pass:** the file is reported as **changed** and processed, not "unchanged" or "skipped". It is Imported as a
+  new version, and Datasets and Storage shows a second NSE:SAMESIZE dataset. A note that it overlaps the first version and differs on one date is expected. The first version is kept unchanged. A third scan without any change reports
+  it as unchanged.
+- **Fail:** the second scan says "unchanged"/"skipped" for `NSE_SAMESIZE.csv`.
+- **Note:** if your two screenshots show different dates (for example because the files were not taken from the same
+  ZIP), the check still tests that the change is found, but not the same-date case. Write that in Remarks.
+- **Evidence:** `Evidence\02_Sources\W19_before.png`, `W19_after_copy.png`, `W19_changed.png`.
+
 ### V4 — A file with a conflicting date (OPTIONAL, needed for V8)
 
 - **Steps:** **Add folder...** → `V01_Files` → **SCAN SELECTED FOLDER NOW**.
@@ -292,7 +318,7 @@ tests whether the chosen data are suitable; **RUN ANALYSIS** runs it; **Open Out
 **Two terms you will see:**
 - **Run ID** — the name of one run, such as `MAAF_20261104_101500` (MA Affinity, date, time). Every run gets a new one
   and its own folder; an earlier run is never overwritten.
-- **Build fingerprint** — a 12-character code (here `ec8398fcfddd`) that identifies exactly which version of the
+- **Build fingerprint** — a 12-character code (here `3fa925abf95b`) that identifies exactly which version of the
   program produced a result. If the program changes, the code changes. It lets anyone later tell which program
   produced a report.
 
@@ -340,12 +366,12 @@ tests whether the chosen data are suitable; **RUN ANALYSIS** runs it; **Open Out
   full tables, for checking), `run_log.txt` and `Run_Metadata_<date>.json` (the run record).
 - **Pass — in the workbook:** sheet **Summary**: the line "Instrument / file" names NSE:ICICIBANK, the dataset number
   and the Run ID; "Bar size" says "Daily (Q-MAP registered dataset; not re-aggregated)"; a Top-5 list; WARNINGS and
-  LIMITATIONS. Sheet **Data_Quality**: "Run ID", "Code build: qmap 0.1.0rc1 / c2 build ec8398fcfddd", "Dataset
+  LIMITATIONS. Sheet **Data_Quality**: "Run ID", "Code build: qmap 0.1.0rc1 / c2 build 3fa925abf95b", "Dataset
   checksum (SHA-256)", source file and lineage.
 - **Pass — in the PDF:** the first lines under the title show the dataset, the Run ID, "Q-MAP build: qmap 0.1.0rc1 /
-  c2 build ec8398fcfddd", the source fingerprint and the dataset checksum. Q-MAP's own notes, if any, appear under
+  c2 build 3fa925abf95b", the source fingerprint and the dataset checksum. Q-MAP's own notes, if any, appear under
   **Warnings** starting with "Q-MAP data:".
-- **Fail:** not started without a clear reason; files missing; the build is not `ec8398fcfddd`.
+- **Fail:** not started without a clear reason; files missing; the build is not `3fa925abf95b`.
 - **Evidence:** `Evidence\04_Workbench\V7_completed.png`, `V7_folder.png`, `V7_excel_summary.png`,
   `V7_excel_data_quality.png`, `V7_pdf_first_page.png`; copy the run folder into `Evidence\07_Run_Folders\`.
 
@@ -361,7 +387,7 @@ tests whether the chosen data are suitable; **RUN ANALYSIS** runs it; **Open Out
 
 - **Checks / why:** each result can be traced to its data and to the exact program build.
 - **Steps:** in the V7 run folder, right-click `Run_Metadata_<date>.json` → **Open with → Notepad**. Use **Ctrl+F**
-  (Find) to look for each of these, one at a time: `ec8398fcfddd`, `MAAF_`, `ICICIBANK`, `6cbadc7`, `as_loaded`,
+  (Find) to look for each of these, one at a time: `3fa925abf95b`, `MAAF_`, `ICICIBANK`, `6cbadc7`, `as_loaded`,
   `corrected comparison`.
 - **Pass:** each is found. (Meaning: the build; the Run ID; the dataset; the QLOPB version the method comes from;
   "the data were used as registered, not re-aggregated"; "its timeframe was classified with the corrected DQ-7
@@ -492,7 +518,7 @@ treated as uniform, because MA Affinity and other research assume one bar size. 
 ```text
 Evidence\
     01_Start\          V1-V3
-    02_Sources\        W1-W8, A4, V4
+    02_Sources\        W1-W8, A4, W19, V4
     03_Datasets\       V5, W10
     04_Workbench\      W9, A5, A7, V6-V13
     05_Patterns\       W13-W18
@@ -541,7 +567,7 @@ Nothing in this manual can change your original files: Q-MAP only reads, and the
 | Windows version | |
 | Python version (first line in IDLE) | |
 | Date the ZIP was downloaded | |
-| Build fingerprint seen in reports (must be `ec8398fcfddd`) | |
+| Build fingerprint seen in reports (must be `3fa925abf95b`) | |
 | Overall decision | ACCEPTED / NOT ACCEPTED |
 | Outstanding issues (refer to check numbers) | |
 
@@ -574,6 +600,7 @@ Nothing in this manual can change your original files: Q-MAP only reads, and the
 | W16 | REQUIRED | | |
 | W17 | REQUIRED | | |
 | W18 | REQUIRED | | |
+| W19 | REQUIRED | | |
 | W12 | REQUIRED | | |
 | V14 | REQUIRED | | |
 | W11 (parts 1 and 2) | REQUIRED | | |

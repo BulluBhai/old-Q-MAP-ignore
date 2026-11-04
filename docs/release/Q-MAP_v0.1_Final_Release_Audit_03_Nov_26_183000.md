@@ -1,6 +1,6 @@
 # Q-MAP v0.1: final comprehensive release audit
 
-Prepared 03-Nov-26 by Claude (lead developer); **closure update 04-Nov-26** after the independent review (sections 1, 3, 4, 5, 6, 8 and new section 9). Reference: Master Blueprint v1.35. Scope frozen as instructed (MIQP,
+Prepared 03-Nov-26 by Claude (lead developer); **closure update 04-Nov-26** after the independent review (sections 1, 3, 4, 5, 6, 8 and new section 9); **revised 04-Nov-26** after ChatGPT's independent audit of PR #12 head `3f4faea` (sections 1, 3, 4, 6, 11 and new section 12). Reference: Master Blueprint v1.35. Scope frozen as instructed (MIQP,
 DQ-11, DQ-12, DQ-14, OW-33 Option C / `vs3` / reprocessing, Opportunity Scanner, backtesting, portfolio/risk excluded).
 Audited object: the **cumulative release**, i.e. what `main` would contain after PR #1 → #2 → #3 → #4 → #9 → #10 → #12.
 A trial merge of PR #12's head into current `main` (`b66c901`) gives a tree **identical** to PR #12's head, so testing
@@ -8,8 +8,12 @@ PR #12's head tests the cumulative release.
 
 ## 1. Conclusion
 
-**READY FOR OWNER ACCEPTANCE** — no known release blocker remains; the Project Owner's Windows/IDLE acceptance
-(REQUIRED checks in the Windows guide) and the independent review (OW-35) are outstanding.
+**Revised 04-Nov-26: corrections made; owner decisions and acceptance outstanding.** The audit of `3f4faea` found
+data-integrity defects (A1 unchanged-file test without checksum, A2 incomplete inputs fingerprint, B3 data-root
+containment, C4 multi-instrument timeframe) and record inconsistencies. They are corrected and regression-tested in
+code commit `919c697` (build `3fa925abf95b`); see section 12. This report does **not** state that no defects or
+decisions remain: open owner decisions are D3-15, D6-18, D6-19, D6-20, D6-21 and OW-41; OW-34 (Windows/IDLE
+acceptance) has not been started; OW-35 still needs an independent reviewer; the limitations in section 3 stand.
 
 ## 2. Requirements-to-implementation matrix
 
@@ -64,7 +68,9 @@ No item is classed **C** or **D** after the corrections in section 5.
 | 6 | QLOPB methodology items pending (Directed IR, weights, incomplete aggregated bars); p-values uncorrected | Important limitation | Printed in every report |
 | 7 | No trading calendar, no corporate actions, bar-time convention not detected, gaps only warned | Important limitation | Documented |
 | 8 | OW-33/DQ-14 sampling asymmetry | Important limitation (deferred) | Documented |
-| 9 | Safeguards S-1..S-3 and the integration not independently reviewed (OW-35) | Important — review outstanding | ChatGPT review |
+| 9 | Safeguards S-1..S-3 and the integration not independently reviewed (OW-35) | Important — review outstanding | Reproducible comparison and developer review supplied 04-Nov-26 (D6-23, not independent); independent review open |
+| 13 | Audit of `3f4faea`: A1, A2, B3, C4, D6, D7 | were **data-integrity defects / test defects** | **Corrected** in `a834d6a`, `919c697` (section 12) |
+| 14 | C5: DQ-7 sparse daily/weekly labels (OW-42) | Important limitation | Characterised; owner decision D6-21 |
 | 10 | Windows/IDLE owner acceptance (OW-34) | Outstanding owner action | Guide ready |
 | 11 | pandas 3 deprecation warnings in the QLOPB engine (OW-36) | Enhancement | Not changed (would touch migrated code) |
 | 12 | Intraday/quarterly MA Affinity (OW-38), Blueprint v1.1 file (OW-37), raw restore GUI (OW-07), run reuse (OW-15) | Enhancement / owner | Deferred |
@@ -76,7 +82,9 @@ Environment: Linux container, CPython **3.11.15**, pypdf 6 (tests only) (python-
 
 | Run | Command | Commit | Result |
 |---|---|---|---|
-| Q-MAP full suite, window tests required (**final code commit**) | `QMAP_REQUIRE_GUI_TESTS=1 xvfb-run -a python -m pytest -q -p no:cacheprovider` | `5eec5b3` | **1270 passed, 0 failed, 0 skipped** (212 GUI) |
+| **Current code commit (04-Nov-26)**, window tests required | `QMAP_REQUIRE_GUI_TESTS=1 xvfb-run -a python -m pytest -q -p no:cacheprovider` | `919c697` (+ final test commit, same build) | **1340 passed, 0 failed, 2 skipped** (Windows-only junction tests; 212 GUI passed) |
+| Previous code under test | same | `5c779e6` (head `3f4faea`, +1 test-only commit `cbca66b`) | 1289 passed, 0 failed, 0 skipped (Claude-reported; see section 12 for the 1,270 / 1,288 / 1,289 history) |
+| Q-MAP full suite, window tests required (03-Nov-26 closure code commit) | `QMAP_REQUIRE_GUI_TESTS=1 xvfb-run -a python -m pytest -q -p no:cacheprovider` | `5eec5b3` | **1270 passed, 0 failed, 0 skipped** (212 GUI) |
 | Q-MAP full suite, no display (final code commit) | `python -m pytest -q -p no:cacheprovider` (DISPLAY unset) | `5eec5b3` | 1165 passed, 105 skipped (window tests, no display), 0 failed |
 | Earlier: Q-MAP full suite, window tests required | same | `b04c0cd` | 1269 passed, 0 failed, 0 skipped (212 GUI) |
 | Q-MAP full suite, no display | `python -m pytest -q -p no:cacheprovider` (DISPLAY unset) | `b04c0cd` | 1164 passed, 105 skipped (window tests, no display), 0 failed |
@@ -108,7 +116,8 @@ only by the REQUIRED checks in the Windows guide.
 
 ## 6. GitHub and CI
 
-- Final code commit: `5eec5b3`. The release head is the documentation commit after it (closure report); its CI
+- **04-Nov-26:** code commit `919c697`; CI on the previous head `3f4faea`: run 95 (push) and run 96 (pull_request) **success**, Windows and Ubuntu, Python 3.11 (https://github.com/BulluBhai/Q-MAP/actions/runs/41762511637). CI on the new head: PR #12. CI results are GitHub's own and can be checked independently; test totals in this report are Claude's local runs.
+- 03-Nov-26 closure code commit: `5eec5b3`. The release head was the documentation commit after it (closure report); its CI
   result is stated in the closure reply and on the PR. Earlier heads: `b04c0cd` runs 83/84 success; `ee14b89` runs 85/86
   success (Ubuntu and Windows).
 - CI on `9caa140` (previous head): run 81 (push) and run 82 (pull_request) **success**, Ubuntu and Windows.
@@ -204,7 +213,7 @@ correction:
 
 | Path | Result |
 |---|---|
-| Identical, unchanged file in the same folder | Scan **skips** it (size, date and inputs unchanged): the earlier 1D result is kept; no attempt, no dataset, nothing superseded. The corrected inference does **not** run |
+| Identical, unchanged file in the same folder | Scan **skips** it (checksum and inputs unchanged; since A1 the current checksum is always calculated): the earlier 1D result is kept; no attempt, no dataset, nothing superseded. The corrected inference does **not** run |
 | Identical content as a new file (another folder) | Corrected inference runs (the measured timeframe changes the load request, so nothing is reused): a new MIXED dataset; the earlier 1D dataset stays unchanged and active |
 | Genuinely new file | Corrected inference (MIXED for a mixed file; 1D for a uniform one) |
 | Same folder after a change of the folder's inputs (e.g. alias registry, W5) | Re-interpreted with the corrected inference, as for a new file |
@@ -223,4 +232,26 @@ files), readiness (NOTE, or FAIL for analyses needing one interval: D6-18, propo
 identity or the inputs of every file: the next scan would process every file again, create new datasets and
 supersede the existing ones (the OW-31 situation). Not authorised; not done.
 
-**Build of the code under test:** commit `5c779e6`, fingerprint `ec8398fcfddd` (the manual is updated).
+**Build of the code under test (at that time):** commit `5c779e6`, fingerprint `ec8398fcfddd`. Superseded on 04-Nov-26 by `919c697` / `3fa925abf95b` (section 12).
+
+## 12. Corrections after the independent audit of `3f4faea` (04-Nov-26)
+
+Full record: `docs/release/Q-MAP_v0.1_Review_Corrections_04_Nov_26_100000.md`.
+
+| Item | Correction | Tests | Status |
+|---|---|---|---|
+| A1 | Current SHA-256 always calculated before a file is treated as unchanged (D5-08); a file changed after it was examined is not registered | `test_scan_change_detection` | Done and tested |
+| A2 | Inputs fingerprint includes resolved sampling, automatic requirement set / require_volume, file-size limit, cleaning-code version (only when different from the defining values: no bulk re-evaluation) | same | Done and tested |
+| B3 | Registry paths must resolve inside Q-MAP_DATA; links/junctions never followed, changed or removed; recovery reports unsafe paths | `test_data_root_containment` | Done and tested (Linux); junctions on Windows CI only |
+| C4 | Multi-instrument files measured per instrument; differing intervals refused (D6-20) | `test_multi_instrument_timeframes` | Done and tested; confirmation requested |
+| C5 | Sparse daily/weekly behaviour characterised; recommendation D6-21 | `test_dq7_sparse_daily_characterisation` | Investigation done; method unchanged |
+| D6 | Migrations 9, 10 pinned; unpinned migration fails | `test_placement_and_migration` | Done and tested |
+| D7 | QLOPB source check against captured bytes | `test_qlopb_research_engine` | Done and tested |
+| E8-E10 | Decision log (D5-15, D5-18, D3-15 annotated; D6-19..D6-23), register (OW-34, OW-35, OW-41; OW-42..44), limitations, this report | — | Done |
+| F11 | OW-35 comparison and developer review (D6-23) | migration identity test | Done; independent review open |
+| F12 | Windows manual for build `3fa925abf95b`, new REQUIRED check W19 | — | Done; no acceptance marked complete |
+
+**Local test totals (Claude-reported, collected per commit on 04-Nov-26):** `5eec5b3` 1,270 (03-Nov-26 closure); `1291d63` 1,286 (+16 DQ-7 unit fix); `5c779e6` 1,288 (+2 earlier-classification identification; the code of build `ec8398fcfddd`); `cbca66b`/`3f4faea` 1,289 (+1 test only); `919c697` + final test commit 1,342 collected = 1,340 passed + 2 skipped (+53 this cycle). The figure 1,289 earlier attributed to "code under test `5c779e6`" includes that later test-only commit.
+
+**No original market file was modified; no blanket reprocessing, dataset-identity change, version change or unapproved methodology change was made.** C4 adds a refusal (pending confirmation); C5 changes nothing.
+

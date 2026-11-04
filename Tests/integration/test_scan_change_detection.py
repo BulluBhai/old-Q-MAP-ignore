@@ -193,3 +193,21 @@ def test_the_next_scan_re_evaluates_an_unchanged_file_after_a_setting_change(set
     assert (change_kind, action) == ("unchanged", "processed")
     # and with the changed settings kept, the following scan skips again
     assert outcome_of(scan(changed, db, source), "NSE_ABC.csv")[2] == "skipped"
+
+
+def test_the_w19_acceptance_files_behave_as_the_manual_says(settings, db, source, folder):
+    """Windows manual W19: version B replaces version A with the same size and the same modification time."""
+    from pathlib import Path
+
+    base = Path(__file__).resolve().parents[2] / "docs" / "acceptance_testing" / "w19_same_size_files_04_Nov_26"
+    a, b = (base / v / "NSE_SAMESIZE.csv" for v in ("version_A", "version_B"))
+    assert a.stat().st_size == b.stat().st_size and a.read_bytes() != b.read_bytes()
+    target = folder / "NSE_SAMESIZE.csv"
+    target.write_bytes(a.read_bytes())
+    stamp = target.stat()
+    assert outcome_of(scan(settings, db, source), "NSE_SAMESIZE.csv")[3] == "imported"
+    target.write_bytes(b.read_bytes())  # as File Explorer's copy-and-replace: content changes, the date is kept
+    os.utime(target, ns=(stamp.st_atime_ns, stamp.st_mtime_ns))
+    r = scan(settings, db, source)
+    assert outcome_of(r, "NSE_SAMESIZE.csv")[1:4] == ("changed", "processed", "imported")
+    assert len([d for d in db.query("SELECT 1 FROM datasets WHERE layer = 'cleaned'")]) == 2
