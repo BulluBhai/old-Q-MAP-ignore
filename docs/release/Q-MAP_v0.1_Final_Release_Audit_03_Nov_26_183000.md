@@ -1,6 +1,6 @@
 # Q-MAP v0.1: final comprehensive release audit
 
-**Current release: code commit `919c697`, build fingerprint `3fa925abf95b`.** The later commits change no program file: `b2b5e93` changes tests, acceptance fixtures, documents and `.gitattributes`; `0b33482`, `822180a` and the run #104 record change documents only. Latest CI: run #104 on `822180a` (section 6). The interval from `3f4faea` includes application changes (`a834d6a`, `919c697`); see the commit table in `Q-MAP_v0.1_Review_Corrections_04_Nov_26_100000.md` §0.
+**Current release: code commit `919c697`, build fingerprint `3fa925abf95b`.** The later commits change no program file: `b2b5e93` changes tests, acceptance fixtures, documents and `.gitattributes`; `0b33482`, `822180a`, `2f7f99b` and the close-out commit change documents only. Latest completed CI: run #106 on `2f7f99b` (section 6). Close-out: section 13. The interval from `3f4faea` includes application changes (`a834d6a`, `919c697`); see the commit table in `Q-MAP_v0.1_Review_Corrections_04_Nov_26_100000.md` §0.
 
 Prepared 03-Nov-26 by Claude (lead developer); **closure update 04-Nov-26** after the independent review (sections 1, 3, 4, 5, 6, 8 and new section 9); **revised 04-Nov-26** after ChatGPT's independent audit of PR #12 head `3f4faea` (sections 1, 3, 4, 6, 11 and new section 12). Reference: Master Blueprint v1.35. Scope frozen as instructed (MIQP,
 DQ-11, DQ-12, DQ-14, OW-33 Option C / `vs3` / reprocessing, Opportunity Scanner, backtesting, portfolio/risk excluded).
@@ -118,7 +118,12 @@ only by the REQUIRED checks in the Windows guide.
 
 ## 6. GitHub and CI
 
-- **GitHub CI, latest checked run: #104** (`41862084196`, pull_request) on head `822180a`
+- **GitHub CI, latest checked run: #106** (`41868295640`, pull_request) on head `2f7f99b`
+  (`2f7f99b2d83609d216b43f7f52ed4955ce3b5323`; documents only; code `919c697`, build `3fa925abf95b`):
+  https://github.com/BulluBhai/Q-MAP/actions/runs/41868295640. Totals read from run #106's own job logs: **Windows /
+  Python 3.11: 1,341 passed, 1 skipped, 0 failed; GUI tests 212 passed, 0 skipped, 0 failed. Ubuntu / Python 3.11:
+  1,235 passed, 107 skipped, 0 failed.** Run #105 (push) also succeeded.
+- **Earlier run #104** (`41862084196`, pull_request) on head `822180a`
   (`822180ab55c325ec85fc84a60c43928215177aba`; a documents-only commit; code `919c697`, build `3fa925abf95b`):
   https://github.com/BulluBhai/Q-MAP/actions/runs/41862084196. Totals read from run #104's own job logs and
   independently verified by ChatGPT: **Windows / Python 3.11: 1,341 passed, 1 skipped, 0 failed; GUI tests 212
@@ -284,3 +289,35 @@ Full record: `docs/release/Q-MAP_v0.1_Review_Corrections_04_Nov_26_100000.md`.
 
 **No original market file was modified; no blanket reprocessing, dataset-identity change, version change or unapproved methodology change was made.** C4 adds a refusal (pending confirmation); C5 changes nothing.
 
+
+## 13. Pre-UAT close-out (04-Nov-26)
+
+**Reviewed.** I re-read the code diff `3f4faea..919c697` (A1, A2, B3, C4) for defects and found none. I checked
+that no program file changed after `919c697`. The build fingerprint was recomputed on `2f7f99b`: `3fa925abf95b`. I ran
+the full local suite and repeated the OW-35 file comparison against a fresh QLOPB clone: 32 files identical after the
+import lines are turned back, 28 import lines differ, `Application/qlopb` unchanged since `3f4faea`. The REQUIRED
+checklist, the pending decisions and the CI evidence were checked across this report, the Review Corrections record
+and the Windows manual. No PR review threads are open.
+
+**Local suite on `2f7f99b`** (Claude-reported, Linux, CPython 3.11.15, Xvfb, window tests required): 1,340 passed, 2 skipped (Windows-junction tests), 0 failed; GUI 212 passed. This is automated testing, not owner acceptance.
+
+**Defects found in this close-out:** none in the code. Documentation: the CI evidence now cites run #106 (the latest
+completed run), and the Review Corrections commit table names `2f7f99b`. A commit cannot record the CI run of
+itself: the CI result of the close-out commit that adds this section is reported on PR #12, not here.
+
+**Owner decisions and their effect on UAT** (none is approved; none is decided here):
+
+| Ref | Blocks UAT? | Why |
+|---|---|---|
+| D6-18 | No, but confirm before or during UAT | Safer default in place (MA Affinity refuses earlier "would be MIXED" datasets); UAT shows this behaviour |
+| D6-20 | No, but confirm before or during UAT | Safer default in place (multi-instrument files with differing intervals refused) |
+| D3-15 | No | The grey "Waiting" row is visible during UAT (W-checks); approve or reject after seeing it |
+| D6-19 | No | Record-keeping only; the code already follows DQ-8 |
+| D6-21 | No | Recommendation only; no code change; a later decision |
+| OW-41 | No | Concerns re-classification of earlier datasets; a fresh UAT data folder has none |
+
+All six should be settled before any merge into `main`.
+
+**OW-35.** The evidence is ready for independent verification: the reproducible comparison (Review Corrections §4)
+and the automated identity test. The developer review is not independent, so OW-35 stays open until ChatGPT (or
+another reviewer) has verified it.
