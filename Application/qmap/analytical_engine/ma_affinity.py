@@ -24,7 +24,8 @@ Eligibility (decision 4; existing DQ classifications are only READ, never change
 from __future__ import annotations
 
 import csv
-from dataclasses import asdict
+from dataclasses import asdict, replace
+from xml.sax.saxutils import escape
 from pathlib import Path
 
 import numpy as np
@@ -191,6 +192,17 @@ class QmapDataNote:
         return "\n".join(self.lines)
 
 
+def _pdf_view(ctx: RunContext, info, res):
+    """The result as QLOPB's PDF writer should see it (closure review 04-Nov-26): the PDF has no Data_Quality sheet, so
+    its heading line (`label`) carries the provenance - Run ID, Q-MAP build, full source fingerprint, dataset checksum.
+    Text is XML-escaped because the PDF writer reads it as markup (`&`, `<` in names or warnings). A copy only: the
+    calculation result, the Excel workbook and the CSV tables are unaffected."""
+    b = current_build()
+    label = (f"{dataset_label(info)}, Run {ctx.run_id} | Q-MAP build: {build_label(b)} | Source fingerprint (SHA-256): "
+             f"{b['source_fingerprint']} | Dataset checksum (SHA-256): {info.sha256}")
+    return replace(res, label=escape(label), warnings=[escape(w) for w in res.warnings])
+
+
 def dataset_label(info) -> str:
     return f"{info.instrument} {info.timeframe_label} (dataset {info.dataset_id})"
 
@@ -223,8 +235,9 @@ def execute(ctx: RunContext) -> list[Path]:
     # The reports print res.warnings; the Q-MAP data notes shown before the run are added so that the Excel and PDF
     # carry them too (Blueprint v1.35 8.5.5 / 8.5.11 E). Nothing in the calculation reads this list.
     res.warnings.extend(f"Q-MAP data: {w}" for w in ctx.readiness_warnings)
+    res.warnings.extend(f"Q-MAP dataset validation warning: {w}" for w in info.warnings)
     charts = make_charts(res, ctx.run_dir, ctx.stamp)
-    outputs = [write_excel(res, ctx.run_dir, ctx.stamp, charts), write_pdf(res, ctx.run_dir, ctx.stamp, charts)]
+    outputs = [write_excel(res, ctx.run_dir, ctx.stamp, charts), write_pdf(_pdf_view(ctx, info, res), ctx.run_dir, ctx.stamp, charts)]
     outputs += list(charts.values())
     outputs.append(_csv(ctx.output(f"MA_Affinity_Candidates_{ctx.stamp}.csv"), res.results))
     outputs.append(_csv(ctx.output(f"MA_Affinity_Interactions_{ctx.stamp}.csv"), res.interactions.to_dict("records")))

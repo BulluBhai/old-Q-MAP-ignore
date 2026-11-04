@@ -346,3 +346,51 @@ def test_reports_carry_run_build_dataset_and_the_q_map_data_notes(settings, db, 
     np.testing.assert_allclose(got["is_affinity_score"].astype(float),
                                pd.DataFrame(plain.results)["is_affinity_score"].astype(float), rtol=0, atol=1e-12,
                                equal_nan=True)
+
+
+def _pdf_text(path) -> str:
+    """All text of a generated PDF, whitespace removed (long hashes may be wrapped across lines)."""
+    from pypdf import PdfReader
+
+    return "".join("".join((page.extract_text() or "").split()) for page in PdfReader(str(path)).pages)
+
+
+def _nows(text: str) -> str:
+    return "".join(str(text).split())
+
+
+def test_pdf_and_excel_and_metadata_carry_the_full_provenance(settings, db, folder):
+    """Closure review 04-Nov-26: verify the ACTUAL generated PDF, not only the workbook."""
+    import openpyxl
+
+    rows = ohlcv(400)
+    days = weekdays(400, date(2023, 1, 2))
+    write_delimited(folder / "NSE_M&M.csv", HEADER, [[d.isoformat()] + r for d, r in zip(days, rows)])  # '&' in a name
+    _scan(settings, db, folder)
+    revised = [list(r) for r in rows]
+    revised[3][3] = round(revised[3][3] + 0.5, 2)
+    revised[3][1] = max(revised[3][1], revised[3][3])
+    write_delimited(folder / "NSE_M&M provider2.csv", HEADER, [[d.isoformat()] + r for d, r in zip(days, revised)])
+    _scan(settings, db, folder)
+    ds = next(d for d in list_datasets(db) if get_dataset(db, d.dataset_id).warnings)
+    info = get_dataset(db, ds.dataset_id)
+    res = run_analysis(settings, db, MA_AFFINITY, [ds.dataset_id], {"ma_end": "60"})
+    assert res.outcome == "completed", res.message
+    build = current_build()
+    note = next(item.detail for rep in res.readiness.reports for item in rep.warnings if item.name == "conflicts")
+    required = {
+        "run_id": res.run_id, "version": build["version"], "fingerprint": build["source_fingerprint"],
+        "dataset": f"dataset {ds.dataset_id}", "instrument": info.instrument, "checksum": info.sha256,
+        "validation_warning": info.warnings[0][:60], "readiness_note": note[:60],
+    }
+    pdf = _pdf_text(next(res.run_dir.glob("QLOPB_MA_Affinity_Report_*.pdf")))
+    wb = openpyxl.load_workbook(next(res.run_dir.glob("QLOPB_MA_Affinity_*.xlsx")))
+    quality = _nows(" ".join(str(v) for r in wb["Data_Quality"].iter_rows(values_only=True) for v in r if v is not None))
+    meta = _nows(res.metadata_path.read_text(encoding="utf-8"))
+    for key, value in required.items():
+        assert _nows(value) in pdf, f"PDF lacks {key}"
+        assert _nows(value) in quality, f"Excel Data_Quality lacks {key}"
+    for key in ("run_id", "version", "fingerprint", "instrument", "checksum", "validation_warning", "readiness_note"):
+        assert _nows(required[key]) in meta, f"Run_Metadata lacks {key}"
+    assert "M&M" in pdf and "&amp;" not in pdf  # the name is shown as written, not as markup
+    assert "Q-MAPbuild:" in pdf and "Q-MAPdata:" in pdf and "Q-MAPdatasetvalidationwarning:" in pdf
