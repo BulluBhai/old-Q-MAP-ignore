@@ -191,3 +191,36 @@ Build fingerprint of the code under test: `4956d0b680a7` (unchanged by documenta
 Windows Owner Acceptance Testing Manual" (same path; earlier versions in Git history). All approved REQUIRED checks
 kept; W13-W18 REQUIRED; W11 gains a content check by SHA-256 through Q-MAP itself (D6-16); W8 has practical
 instructions and a documented fallback.
+
+## 11. Processing identity after the DQ-7 correction (04-Nov-26)
+
+**Question.** `CLEANING_CODE_VERSION` stayed `c2`, the fingerprint scheme `vs2`, and the processing identity is the
+profile and cleaning-code version: would an unchanged file reuse an earlier result instead of running the corrected
+inference?
+
+**Established end to end** (`Tests/integration/test_dq7_correction_reuse.py`; the original comparison and inference
+record are emulated exactly). A mixed daily/weekly file loaded with the original logic is registered 1D. After the
+correction:
+
+| Path | Result |
+|---|---|
+| Identical, unchanged file in the same folder | Scan **skips** it (size, date and inputs unchanged): the earlier 1D result is kept; no attempt, no dataset, nothing superseded. The corrected inference does **not** run |
+| Identical content as a new file (another folder) | Corrected inference runs (the measured timeframe changes the load request, so nothing is reused): a new MIXED dataset; the earlier 1D dataset stays unchanged and active |
+| Genuinely new file | Corrected inference (MIXED for a mixed file; 1D for a uniform one) |
+| Same folder after a change of the folder's inputs (e.g. alias registry, W5) | Re-interpreted with the corrected inference, as for a new file |
+
+**Gap found.** Earlier and corrected results carried the same processing version, so an earlier classification
+could not be distinguished from a corrected one.
+
+**Correction (`5c779e6`, no version change, no migration, no reprocessing).** New inference records carry
+`logic = dq7-units-2026-11-04`. A stored record is judged read-only from the blocks it recorded: *corrected*;
+*earlier, same result* (all recorded blocks in one unit); *earlier, the corrected comparison would give MIXED* (recorded
+blocks in more than one calendar unit). Shown in Datasets and Storage details, Sources file details (also for skipped
+files), readiness (NOTE, or FAIL for analyses needing one interval: D6-18, proposed) and Run_Metadata
+(`timeframe_classified_by`). Weekly/monthly data derived from an earlier daily dataset inherit its judgement.
+
+**Why no processing-version change.** A new cleaning-code version, rules version or fingerprint scheme changes the
+identity or the inputs of every file: the next scan would process every file again, create new datasets and
+supersede the existing ones (the OW-31 situation). Not authorised; not done.
+
+**Build of the code under test:** commit `5c779e6`, fingerprint `ec8398fcfddd` (the manual is updated).

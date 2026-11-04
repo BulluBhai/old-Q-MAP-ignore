@@ -4,12 +4,12 @@
 |---|---|
 | For | The Q-MAP Project Owner (Windows, Python 3.11, IDLE). No programming, no command line, no reading of code or logs |
 | Release candidate | Pull request #12: https://github.com/BulluBhai/Q-MAP/pull/12 (branch `claude/epic-darwin-33o518`) |
-| Code under test | commit `1291d63` (`1291d6365caaa7d6c037eae1798f39b18c957a2f`), version `0.1.0rc1`, **build fingerprint `4956d0b680a7`** |
-| Revised | 04-Nov-26, after the independent review and the DQ-7 correction (earlier versions of this guide are kept in Git history) |
+| Code under test | commit `5c779e6` (`5c779e632be41e08f1e3798fe8465dd5509d0e62`), version `0.1.0rc1`, **build fingerprint `ec8398fcfddd`** |
+| Revised | 04-Nov-26, after the independent review, the DQ-7 correction and the clarification of how earlier classifications are identified (earlier versions of this guide are kept in Git history) |
 | Status | **OUTSTANDING** — Q-MAP v0.1 is not ready for controlled analytical use until you complete this manual and accept the result |
 
 Later commits on the pull request that change only documents do not change the code you test. You can always check
-that you have the right code: every Q-MAP report shows the **build fingerprint**, and it must be `4956d0b680a7`
+that you have the right code: every Q-MAP report shows the **build fingerprint**, and it must be `ec8398fcfddd`
 (check V13).
 
 ---
@@ -53,6 +53,15 @@ production use, trading signals or automated decisions.
 technical export columns), DQ-14 (full-file finding changing the timeframe); OW-33 Option C and any reprocessing;
 Opportunity Scanner, backtesting, portfolio and risk. These appear as COMING SOON or not at all.
 
+**Data prepared before 04-Nov-26 (only relevant after acceptance, for your real Q-MAP folders).** On 04-Nov-26 a fault
+was corrected in how Q-MAP recognises a file that mixes daily, weekly, monthly, quarterly or yearly sections. Q-MAP does
+**not** re-process data you prepared earlier (you have not authorised that). Instead it checks the record kept with
+each earlier dataset and tells you in plain words: in Datasets and Storage and in Sources, a line "Timeframe: ..." or
+"Earlier classification: ..." says whether the earlier result is the same under the corrected rule, or whether the
+corrected rule would call the file MIXED. In the second case MA Affinity refuses that dataset (as for any MIXED data)
+and Dataset Summary shows a NOTE. Nothing about the dataset itself is changed. The acceptance test in this manual uses
+new, empty folders, so you will not see these notes during the test.
+
 ## 3. What you are testing, and what automated testing already covers
 
 Each check is marked:
@@ -90,7 +99,7 @@ Each check is marked:
    extracted folder to `Q-MAP_APP`, so that you have `D:\Q-MAP_V01\Q-MAP_APP\database_manager.py`.
    (Use `C:\` instead of `D:\` if you have no D drive. Keep the path short, and **not** inside OneDrive.)
 5. Write the date of download in section 16. The code you test is identified later by its build fingerprint
-   `4956d0b680a7` (check V13).
+   `ec8398fcfddd` (check V13).
 
 ## 6. Prepare the folders and test files
 
@@ -264,7 +273,8 @@ grouped by kind.
 - **Steps:** Home → **Datasets and Storage**; click the **NSE:ICICIBANK Daily** line; under "Derive from daily data"
   tick **Weekly** and **Monthly**; click **DERIVE SELECTED TIMEFRAMES**.
 - **Pass:** two new lines, NSE:ICICIBANK Weekly and Monthly, linked to the daily dataset (details show where they came
-  from). Nothing in `Market_Files` changes.
+  from). Nothing in `Market_Files` changes. Clicking the daily line shows, in its details, "Timeframe: measured with the
+  corrected DQ-7 comparison (04-Nov-26)" — everything in this test is prepared with the corrected code.
 - **Evidence:** `Evidence\03_Datasets\V5_derived.png`.
 
 ### W10 — Reversible reject (REQUIRED)
@@ -282,7 +292,7 @@ tests whether the chosen data are suitable; **RUN ANALYSIS** runs it; **Open Out
 **Two terms you will see:**
 - **Run ID** — the name of one run, such as `MAAF_20261104_101500` (MA Affinity, date, time). Every run gets a new one
   and its own folder; an earlier run is never overwritten.
-- **Build fingerprint** — a 12-character code (here `4956d0b680a7`) that identifies exactly which version of the
+- **Build fingerprint** — a 12-character code (here `ec8398fcfddd`) that identifies exactly which version of the
   program produced a result. If the program changes, the code changes. It lets anyone later tell which program
   produced a report.
 
@@ -330,12 +340,12 @@ tests whether the chosen data are suitable; **RUN ANALYSIS** runs it; **Open Out
   full tables, for checking), `run_log.txt` and `Run_Metadata_<date>.json` (the run record).
 - **Pass — in the workbook:** sheet **Summary**: the line "Instrument / file" names NSE:ICICIBANK, the dataset number
   and the Run ID; "Bar size" says "Daily (Q-MAP registered dataset; not re-aggregated)"; a Top-5 list; WARNINGS and
-  LIMITATIONS. Sheet **Data_Quality**: "Run ID", "Code build: qmap 0.1.0rc1 / c2 build 4956d0b680a7", "Dataset
+  LIMITATIONS. Sheet **Data_Quality**: "Run ID", "Code build: qmap 0.1.0rc1 / c2 build ec8398fcfddd", "Dataset
   checksum (SHA-256)", source file and lineage.
 - **Pass — in the PDF:** the first lines under the title show the dataset, the Run ID, "Q-MAP build: qmap 0.1.0rc1 /
-  c2 build 4956d0b680a7", the source fingerprint and the dataset checksum. Q-MAP's own notes, if any, appear under
+  c2 build ec8398fcfddd", the source fingerprint and the dataset checksum. Q-MAP's own notes, if any, appear under
   **Warnings** starting with "Q-MAP data:".
-- **Fail:** not started without a clear reason; files missing; the build is not `4956d0b680a7`.
+- **Fail:** not started without a clear reason; files missing; the build is not `ec8398fcfddd`.
 - **Evidence:** `Evidence\04_Workbench\V7_completed.png`, `V7_folder.png`, `V7_excel_summary.png`,
   `V7_excel_data_quality.png`, `V7_pdf_first_page.png`; copy the run folder into `Evidence\07_Run_Folders\`.
 
@@ -351,9 +361,11 @@ tests whether the chosen data are suitable; **RUN ANALYSIS** runs it; **Open Out
 
 - **Checks / why:** each result can be traced to its data and to the exact program build.
 - **Steps:** in the V7 run folder, right-click `Run_Metadata_<date>.json` → **Open with → Notepad**. Use **Ctrl+F**
-  (Find) to look for each of these, one at a time: `4956d0b680a7`, `MAAF_`, `ICICIBANK`, `6cbadc7`, `as_loaded`.
+  (Find) to look for each of these, one at a time: `ec8398fcfddd`, `MAAF_`, `ICICIBANK`, `6cbadc7`, `as_loaded`,
+  `corrected comparison`.
 - **Pass:** each is found. (Meaning: the build; the Run ID; the dataset; the QLOPB version the method comes from;
-  "the data were used as registered, not re-aggregated".) `"git_commit": null` is normal for a ZIP download.
+  "the data were used as registered, not re-aggregated"; "its timeframe was classified with the corrected DQ-7
+  comparison".) `"git_commit": null` is normal for a ZIP download.
 - **Evidence:** `Evidence\04_Workbench\V13_metadata.png`.
 
 ### OPTIONAL Workbench checks (already proved automatically)
@@ -529,7 +541,7 @@ Nothing in this manual can change your original files: Q-MAP only reads, and the
 | Windows version | |
 | Python version (first line in IDLE) | |
 | Date the ZIP was downloaded | |
-| Build fingerprint seen in reports (must be `4956d0b680a7`) | |
+| Build fingerprint seen in reports (must be `ec8398fcfddd`) | |
 | Overall decision | ACCEPTED / NOT ACCEPTED |
 | Outstanding issues (refer to check numbers) | |
 

@@ -71,8 +71,14 @@ analytical use** by the Project Owner after Windows/IDLE acceptance. **Not produ
   supported) and weekly/monthly derivation refuses it (needs daily). Dataset Summary would describe it as intraday.
   Changing this needs the DQ-14/OW-33 decision; not changed in v0.1.
 - **DQ-7 correction of 04-Nov-26 (D6-15)**: files mixing daily, weekly, monthly, quarterly or yearly sections are now
-  MIXED when the sampled blocks land in both sections (before: wrongly one timeframe). Datasets registered earlier are
-  not reclassified automatically (OW-41). A section too small to be sampled can still be missed (same limit as OW-33).
+  MIXED when the sampled blocks land in both sections (before: wrongly one timeframe). A section too small to be
+  sampled can still be missed (same limit as OW-33).
+- **Datasets prepared before that correction (OW-41, D6-17)** keep their registered timeframe: an unchanged file is
+  not read again by a scan, and nothing is reprocessed. Q-MAP judges each earlier classification from the sample
+  recorded with it and says so ("same result" or "the corrected comparison would give MIXED") in Datasets and Storage,
+  Sources, the readiness check and Run_Metadata. MA Affinity refuses the second kind (D6-18, awaiting confirmation).
+  The same file arriving again under another name or folder is classified with the corrected comparison and becomes
+  a separate dataset; the earlier one is kept.
 - DQ-11/DQ-12 not built (see section 2). Thousands separators and decimal commas are not read automatically (OW-21);
   multi-symbol files are usually asked, not inferred (OW-22).
 
