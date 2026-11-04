@@ -157,3 +157,37 @@ the fix (`5eec5b3`):
 The Excel Summary sheet deliberately keeps QLOPB's layout; the full record is on its Data_Quality sheet. Automated
 test: `Tests/integration/test_ma_affinity_workbench.py::test_pdf_and_excel_and_metadata_carry_the_full_provenance`
 (every item in the PDF, Data_Quality and Run_Metadata; '&' rendered correctly), plus the existing Excel Summary test.
+
+## 10. Independent review finding and correction (04-Nov-26)
+
+**Finding (confirmed).** `timeframe_infer.py` counted each sampled block's steps in the block's own unit (days, weeks,
+months, quarters, years) and `_base_unit()` returned 1 for every daily-or-longer label; the only unit check separated
+minutes from everything else. A weekly block's steps (1, 1, 1 weeks) therefore looked like whole multiples of a daily
+interval in which the daily interval "occurred", and the reverse. Reproduced with deterministic synthetic dates: daily
++ weekly, weekly + daily, daily + monthly, monthly + daily, weekly + monthly, monthly + weekly, monthly + quarterly,
+quarterly + yearly and daily + yearly files were all CONSISTENT although the sampled blocks landed in both sections.
+
+**Correction (`1291d63`).** A block agrees only with an interval measured in the same unit (minute; day, including
+"Nd"; week; month; quarter; year). Within a unit the approved rule is unchanged (90 % of steps whole multiples AND the
+interval occurs in the block). No version bumped: no reprocessing, no change for files that were classified correctly
+(all 171 existing DQ-7, interpretation and derivation tests pass unchanged). Existing registered datasets are not
+reclassified automatically (OW-41, owner decision).
+
+**Tests.** `Tests/integration/test_dq7_calendar_units.py` (16): the nine mixed pairs above, each asserting that blocks
+land in both sections and only the minority-unit blocks disagree; uniform daily (weekends, random holidays, a holiday
+week), weekly (missing weeks, Thursday closes), monthly (missing months, varying month-end days), quarterly and yearly
+files stay CONSISTENT; reproducibility; end-to-end scan registers MIXED and MA Affinity refuses it. Ten of them fail on
+the previous code (verified by running them against it).
+
+**Results on `1291d63`** (Linux, CPython 3.11.15, Xvfb): full suite with window tests **1286 passed, 0 failed,
+0 skipped** (212 GUI); without a display 1181 passed, 105 skipped (window tests), 0 failed; QLOPB 107 / 96 passed
+(`6cbadc7` / `be6d945`). CI: see PR #12 and the closure reply.
+
+**Matrix update.** Row "BP §8.5.11 B, DQ-7": defect D found and corrected; class B (awaiting owner acceptance).
+Build fingerprint of the code under test: `4956d0b680a7` (unchanged by documentation commits; also verified on a
+`git archive` export, i.e. what a ZIP download contains).
+
+**Windows manual.** `Q-MAP_v0.1_Windows_Operating_and_Acceptance_Guide_03_Nov_26_180000.md` is now the "Q-MAP v0.1 —
+Windows Owner Acceptance Testing Manual" (same path; earlier versions in Git history). All approved REQUIRED checks
+kept; W13-W18 REQUIRED; W11 gains a content check by SHA-256 through Q-MAP itself (D6-16); W8 has practical
+instructions and a documented fallback.

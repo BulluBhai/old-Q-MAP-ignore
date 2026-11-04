@@ -70,6 +70,9 @@ analytical use** by the Project Owner after Windows/IDLE acceptance. **Not produ
   (for example "30 minutes"), without a warning. Nothing is lost or changed, MA Affinity refuses it (timeframe not
   supported) and weekly/monthly derivation refuses it (needs daily). Dataset Summary would describe it as intraday.
   Changing this needs the DQ-14/OW-33 decision; not changed in v0.1.
+- **DQ-7 correction of 04-Nov-26 (D6-15)**: files mixing daily, weekly, monthly, quarterly or yearly sections are now
+  MIXED when the sampled blocks land in both sections (before: wrongly one timeframe). Datasets registered earlier are
+  not reclassified automatically (OW-41). A section too small to be sampled can still be missed (same limit as OW-33).
 - DQ-11/DQ-12 not built (see section 2). Thousands separators and decimal commas are not read automatically (OW-21);
   multi-symbol files are usually asked, not inferred (OW-22).
 
