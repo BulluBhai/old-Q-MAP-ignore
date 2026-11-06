@@ -53,7 +53,20 @@ SUPPORTED_EXTENSIONS = tuple(sorted(EXTENSION_KIND))  # .csv .dat .parquet .pq .
 FINAL_OUTCOMES = ("imported", "reused", "needs_answer", "rejected", "blocked", "unsupported", "ignored")
 OUTCOME_LABELS = {"imported": "Imported", "reused": "Already loaded", "needs_answer": "Needs your answer",
                   "rejected": "Rejected", "blocked": "Rejected earlier (unchanged)", "unsupported": "Not supported",
-                  "ignored": "Ignored (not a data file type)", "failed": "Failed", "missing": "No longer in the folder"}
+                  "ignored": "Ignored (not a data file type)", "failed": "Failed", "missing": "No longer in the folder",
+                  "unchanged_loaded": "Unchanged (imported earlier)", "unchanged_rejected": "Unchanged (rejected earlier)",
+                  "unchanged_waiting": "Unchanged (still needs your answer)"}
+
+# UAT 06-Nov-26 (findings O3/O4): a file skipped because it is unchanged keeps its earlier outcome in the registry (the
+# skip logic needs it), but the screen, the scan report and the scan summary describe what happened IN THIS SCAN, so an
+# earlier "Imported" is never shown or counted again as an import. Display only; nothing is stored differently.
+SKIPPED_DISPLAY = {"imported": "unchanged_loaded", "reused": "unchanged_loaded", "rejected": "unchanged_rejected",
+                   "blocked": "unchanged_rejected", "needs_answer": "unchanged_waiting"}
+
+
+def display_outcome(outcome: str, action: str | None) -> str:
+    """The outcome key to SHOW for a file: an unchanged, skipped file is shown as unchanged, not as its earlier result."""
+    return SKIPPED_DISPLAY.get(outcome, outcome) if action == "skipped" else outcome
 
 
 class SourceError(QmapError):
@@ -95,7 +108,8 @@ class FileState:
 
     @property
     def outcome_label(self) -> str:
-        return OUTCOME_LABELS.get(self.outcome, self.outcome)
+        key = display_outcome(self.outcome, self.action)
+        return OUTCOME_LABELS.get(key, key)
 
 
 @dataclass
@@ -452,8 +466,9 @@ def scan_source(run: Run, source_id: int, *, today: date | None = None, progress
                 detail = f"Unexpected problem: {type(exc).__name__}: {exc}"
                 outcome, change, action = "failed", "unreadable", "none"
                 _observe(db, scan_id, source_id, rel, change=change, action=action, outcome=outcome, detail=detail)
-            result.counts[outcome] = result.counts.get(outcome, 0) + 1
-            result.files.append((rel, change, action, outcome, detail))
+            shown = display_outcome(outcome, action)
+            result.counts[shown] = result.counts.get(shown, 0) + 1
+            result.files.append((rel, change, action, shown, detail))
         for rel, row in (latest.items() if not result.stopped else ()):  # unknown when stopped early
             if rel not in seen and row["outcome"] != "missing":
                 detail = "No longer found in the folder (moved, renamed, deleted or now excluded). Data already " \

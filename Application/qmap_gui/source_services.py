@@ -25,6 +25,7 @@ from qmap.data_engine.profiles import ALLOWED_TIMEFRAMES
 from qmap.storage.db import open_database
 
 from .common import EmitHandler as _EmitHandler
+from .messages import describe_warning
 from .services import plain  # also used by the Sources screen (errors without their technical code)
 
 ATTENTION = ("needs_answer", "rejected", "blocked", "unsupported", "failed", "missing")
@@ -97,17 +98,24 @@ def identity_text(s: D.FileState) -> str:
     return f"{exch}:{sym}" + (f" ({how})" if how else "")
 
 
+RESTORED_LABEL = "Available again (restored by you)"
+
+
 def file_row(s: D.FileState, decisions: dict | None = None) -> tuple:
     ds = ", ".join(str(i) for i in s.dataset_ids) or "-"
     result = s.outcome_label
     if decisions and s.dataset_ids and all(decisions.get(i) == "rejected" for i in s.dataset_ids):
         result = "Rejected by you"
+    elif decisions and s.dataset_ids and all(decisions.get(i) == UD.RESTORED for i in s.dataset_ids):
+        result = RESTORED_LABEL  # Restore re-offers the data; nothing is imported again (UAT finding O3)
     return (s.relative_path, result, detected_timeframe(s), identity_text(s), s.change, ds,
             (s.detail or "")[:160])
 
 
-def file_details(s: D.FileState, decisions: dict | None = None) -> list[tuple[str, str | None]]:
-    """Plain-English description of one file's current state, as (text, tag) parts."""
+def file_details(s: D.FileState, decisions: dict | None = None,
+                 warnings: dict | None = None) -> list[tuple[str, str | None]]:
+    """Plain-English description of one file's current state, as (text, tag) parts. `warnings` (dataset id -> the
+    quality warnings recorded for that dataset, see dataset_warnings) adds them in plain English (UAT finding O1)."""
     tag = {"imported": "ok", "reused": "ok", "needs_answer": "warning", "missing": "warning"}.get(s.outcome, "error")
     if s.outcome == "ignored":
         tag = "muted"
@@ -116,7 +124,9 @@ def file_details(s: D.FileState, decisions: dict | None = None) -> list[tuple[st
     inf = _inference(s)
     if inf:  # DQ-7 section 3.6: detected timeframe, sampled blocks, validation, discrepancy, acceptance status
         rejected = bool(decisions and s.dataset_ids and all(decisions.get(i) == "rejected" for i in s.dataset_ids))
+        restored = bool(decisions and s.dataset_ids and all(decisions.get(i) == UD.RESTORED for i in s.dataset_ids))
         status = ("Rejected by you (reversible: Restore)" if rejected else
+                  RESTORED_LABEL + "; nothing was imported again" if restored else
                   "Accepted by default" if s.outcome in ("imported", "reused") else s.outcome_label)
         parts.append((f"Detected timeframe: {detected_timeframe(s)}\n", "bold"))
         parts.append((f"Validation: {inf.get('summary')} ({inf.get('rows_examined')} of {inf.get('rows_total')} rows "
@@ -136,6 +146,15 @@ def file_details(s: D.FileState, decisions: dict | None = None) -> list[tuple[st
             parts.append((f"WARNING: {w}\n", "warning"))
     if s.detail:
         parts.append((f"{s.detail}\n", None))
+    for ds in s.dataset_ids:  # recorded at load time; shown as recorded, never recalculated here
+        recorded = (warnings or {}).get(ds) or []
+        if recorded:
+            parts.append((f"Quality warnings recorded for dataset {ds}:\n", "bold"))
+            for w in recorded:
+                title, detail, _name = describe_warning(w)
+                parts.append((f"WARNING: {title}\n", "warning"))
+                if detail:
+                    parts.append((f"    {detail}\n", "muted"))
     if s.dataset_ids:
         parts.append((f"Dataset(s): {', '.join(map(str, s.dataset_ids))} - see Datasets and Storage.\n", None))
     for q in s.questions:
@@ -345,6 +364,17 @@ def exceptions_text(groups: list[dict]) -> list[tuple[str, str | None]]:
 
 def dataset_decisions(settings: Settings, dataset_ids) -> dict:
     return _with_db(settings, lambda db: {i: UD.current_decision(db, i) for i in dataset_ids})
+
+
+def dataset_warnings(settings: Settings, dataset_ids) -> dict:
+    """dataset id -> the quality warnings recorded for it (the same list Datasets and Storage shows)."""
+    def build(db):
+        out = {}
+        for i in dict.fromkeys(dataset_ids):
+            info = get_dataset(db, i)
+            out[i] = list(info.warnings) if info is not None else []
+        return out
+    return _with_db(settings, build)
 
 
 def reject_files(settings: Settings, states: list, reason: str = "") -> UD.DecisionResult:

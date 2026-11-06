@@ -24,6 +24,7 @@ from qmap.storage.storage_class import (LABELS, is_legacy_temporary_path, PERMAN
                                         delete_temporary_file, move_dataset)
 
 from .common import EmitHandler as _EmitHandler
+from .messages import warning_lines
 from .services import plain
 
 MODULE_CODE, MODULE_NAME, AREA = "DBM", "Database Manager", "Data_Management"
@@ -85,7 +86,7 @@ def details(settings: Settings, dataset_id: int) -> list[tuple[str, str | None]]
                           "warning" if d.timeframe_logic == EARLIER_CHANGED else "muted"))
         parts.append(("Validation: " + ("passed with warnings:\n" if d.warnings else "passed.\n"),
                       "warning" if d.warnings else "ok"))
-        parts += [(f"  - {w}\n", "warning") for w in d.warnings]
+        parts += [(f"  - {w}\n", "warning") for w in warning_lines(d.warnings)]
         parts.append(("Lineage (newest first):\n", "bold"))
         parts += [(f"  {line}\n", None) for line in provenance(db, dataset_id)]
         return parts
