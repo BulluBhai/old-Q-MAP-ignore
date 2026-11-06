@@ -1,0 +1,44 @@
+MA Affinity output comparison, 06-Nov-26 (UTC 18:09)
+Same synthetic daily file (1,500 bars, seed 7), folder scan + Workbench MA Affinity with default settings.
+Previous build efb4bd9 (fingerprint 3fa925abf95b) vs corrected build 56a72f4 (fingerprint 21d31f0fe259); Python 3.11.15.
+SHA-256 of the result tables:
+  Candidates   old 8efe7b82b52ff5abee5b6b0cd4cb6074fb1c8a69e4b9a218839d2d6afc86de1f
+  Candidates   new 8efe7b82b52ff5abee5b6b0cd4cb6074fb1c8a69e4b9a218839d2d6afc86de1f
+  Interactions old 6e3cb4022c4a50450379b72d523f6e7b282fc2e0126c35e14879d20319427032
+  Interactions new 6e3cb4022c4a50450379b72d523f6e7b282fc2e0126c35e14879d20319427032
+Result: identical. The display corrections do not change MA Affinity results.
+
+Script used:
+"""Run MA Affinity (defaults) on one synthetic daily file through the folder scan + Workbench path; print SHA-256 of
+the candidate and interaction tables. argv: <app dir> <work dir>."""
+import sys, hashlib, json
+from datetime import date, timedelta
+from pathlib import Path
+app, work = Path(sys.argv[1]), Path(sys.argv[2])
+sys.path.insert(0, str(app / "Application"))
+from qmap.core.config import load_settings
+from qmap.storage.db import open_database
+from qmap.core.runs import run_context
+from qmap.data_engine import discovery as D
+from qmap.analytical_engine import MA_AFFINITY, run_analysis
+import random
+for d in ("data", "out", "code", "files"): (work / d).mkdir(parents=True, exist_ok=True)
+rnd, rows, p, day = random.Random(7), [], 100.0, date(2018, 1, 1)
+while len(rows) < 1500:
+    if day.weekday() < 5:
+        o = round(p, 2); c = round(o * (1 + rnd.uniform(-0.02, 0.02)), 2)
+        h = round(max(o, c) * (1 + rnd.uniform(0, .01)), 2); l = round(min(o, c) * (1 - rnd.uniform(0, .01)), 2)
+        rows.append(f"{day.isoformat()},{o},{h},{l},{c},{rnd.randint(1000, 9000)}"); p = c
+    day += timedelta(days=1)
+(work / "files" / "NSE_SYNTH.csv").write_text("time,open,high,low,close,Volume\n" + "\n".join(rows) + "\n")
+s = load_settings(None, env={"QMAP_DATA_ROOT": str(work / "data"), "QMAP_OUTPUT_ROOT": str(work / "out")}, code_root=work / "code")
+db = open_database(s.db_path)
+src = D.add_folder_source(s, db, work / "files", market_timezone="Asia/Kolkata")
+with run_context(s, db, D.MODULE_CODE, area=D.AREA) as run:
+    D.scan_source(run, src.source_id)
+ds = D.file_states(db, src.source_id)[0].dataset_ids[0]
+res = run_analysis(s, db, MA_AFFINITY, [ds], {})
+assert res.outcome == "completed", res.message
+for f in sorted(res.outputs):
+    if f.name.startswith(("MA_Affinity_Candidates", "MA_Affinity_Interactions")):
+        print(f.name.split("_0")[0], hashlib.sha256(f.read_bytes()).hexdigest())

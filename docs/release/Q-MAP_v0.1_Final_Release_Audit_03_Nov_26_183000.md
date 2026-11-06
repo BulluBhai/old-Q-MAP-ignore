@@ -1,6 +1,6 @@
 # Q-MAP v0.1: final comprehensive release audit
 
-**Current release: code commit `919c697`, build fingerprint `3fa925abf95b`.** The later commits change no program file: `b2b5e93` changes tests, acceptance fixtures, documents and `.gitattributes`; `0b33482`, `822180a`, `2f7f99b` and the close-out commit change documents only. Latest completed CI: run #106 on `2f7f99b` (section 6). Close-out: section 13. The interval from `3f4faea` includes application changes (`a834d6a`, `919c697`); see the commit table in `Q-MAP_v0.1_Review_Corrections_04_Nov_26_100000.md` §0.
+**Current release (06-Nov-26, after UAT round 1): code commit `56a72f4`, build fingerprint `21d31f0fe259`** (display corrections; section 14). Before that: code `919c697`, build `3fa925abf95b`, the build of UAT round 1. The later commits change no program file: `b2b5e93` changes tests, acceptance fixtures, documents and `.gitattributes`; `0b33482`, `822180a`, `2f7f99b` and the close-out commit change documents only. Latest completed CI: run #106 on `2f7f99b` (section 6). Close-out: section 13. The interval from `3f4faea` includes application changes (`a834d6a`, `919c697`); see the commit table in `Q-MAP_v0.1_Review_Corrections_04_Nov_26_100000.md` §0.
 
 Prepared 03-Nov-26 by Claude (lead developer); **closure update 04-Nov-26** after the independent review (sections 1, 3, 4, 5, 6, 8 and new section 9); **revised 04-Nov-26** after ChatGPT's independent audit of PR #12 head `3f4faea` (sections 1, 3, 4, 6, 11 and new section 12). Reference: Master Blueprint v1.35. Scope frozen as instructed (MIQP,
 DQ-11, DQ-12, DQ-14, OW-33 Option C / `vs3` / reprocessing, Opportunity Scanner, backtesting, portfolio/risk excluded).
@@ -321,3 +321,14 @@ All six should be settled before any merge into `main`.
 **OW-35.** The evidence is ready for independent verification: the reproducible comparison (Review Corrections §4)
 and the automated identity test. The developer review is not independent, so OW-35 stays open until ChatGPT (or
 another reviewer) has verified it.
+
+## 14. UAT round 1 and round-2 corrections (06-Nov-26)
+
+UAT round 1 (engine-level, build `3fa925abf95b`): 0 FAIL, 7 REQUIRED checks NOT TESTED, observations O1-O7
+(`docs/acceptance_testing/uat_round1_06_Nov_26/`). Owner decisions D6-24; corrections D6-25 in code commit `56a72f4`,
+**build `21d31f0fe259`**: O1 (Sources shows recorded warnings), O3/O4 (scan results describe this scan; Restore
+wording), Python 3.12 in CI; O2 (W5) handled by a manual, reversible rejection step; O5/O6 documented; O7 no action.
+MA Affinity output verified byte-identical before and after. Full record, test results by OS and Python version, and
+acceptance status per check: `docs/acceptance_testing/Q-MAP_v0.1_UAT_Round2_Corrections_Report_06_Nov_26_183000.md`.
+Remaining owner screen checks: `docs/acceptance_testing/Q-MAP_v0.1_UAT_Round2_Owner_Screen_Checklist_06_Nov_26_183000.md`.
+Windows UAT is **not** complete; controlled analytical use is **not** approved; OW-35 stays open.

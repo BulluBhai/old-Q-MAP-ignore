@@ -2,14 +2,14 @@
 
 | | |
 |---|---|
-| For | The Q-MAP Project Owner (Windows, Python 3.11, IDLE). No programming, no command line, no reading of code or logs |
+| For | The Q-MAP Project Owner (Windows, Python 3.11 or newer, IDLE). No programming, no command line, no reading of code or logs |
 | Release candidate | Pull request #12: https://github.com/BulluBhai/Q-MAP/pull/12 (branch `claude/epic-darwin-33o518`) |
-| Code under test | commit `919c697` (`919c697f4bc83778b82ca8d08855215bf6de0b5c`), version `0.1.0rc1`, **build fingerprint `3fa925abf95b`** |
-| Revised | 04-Nov-26 (second revision), after the independent audit of `3f4faea`: new build, new REQUIRED check **W19** (a changed file with the same size and date is detected), notes on multi-instrument files. Earlier versions are kept in Git history |
+| Code under test | commit `56a72f4` (`56a72f4b989e4ae3e459b24c11b6d819bcaa70c3`), version `0.1.0rc1`, **build fingerprint `21d31f0fe259`** (corrections after the first UAT round, 06-Nov-26). The first round tested build `3fa925abf95b` |
+| Revised | 06-Nov-26 (third revision), after the first UAT round: Sources shows the recorded quality warnings (W2, W14-W18); unchanged files are shown as "Unchanged (imported earlier)" (A4, V14); Restore shows "Available again (restored by you)" (W7); W5 gains a one-time reject step; W1 and the Run ID time are explained. Second revision 04-Nov-26, after the independent audit of `3f4faea`: new build, new REQUIRED check **W19** (a changed file with the same size and date is detected), notes on multi-instrument files. Earlier versions are kept in Git history |
 | Status | **OUTSTANDING** — Q-MAP v0.1 is not ready for controlled analytical use until you complete this manual and accept the result |
 
 Later commits on the pull request that change no program file (only tests, test files or documents) do not change the code you test. You can always check
-that you have the right code: every Q-MAP report shows the **build fingerprint**, and it must be `3fa925abf95b`
+that you have the right code: every Q-MAP report shows the **build fingerprint**, and it must be `21d31f0fe259`
 (check V13).
 
 ---
@@ -85,7 +85,8 @@ Each check is marked:
    remembers everything between sittings).
 2. **Python 3.11 or newer from python.org**, with "tcl/tk and IDLE" ticked when it was installed (this is the
    default). To check: open IDLE from the Start menu; the first line of the IDLE window shows the version, for
-   example `Python 3.11.9`.
+   example `Python 3.11.9`. Python 3.12 is also fine: both 3.11 and 3.12 are tested automatically on Windows and
+   Linux. Write the exact first line of the IDLE window in section 16.
 3. An internet connection the first time, because Q-MAP may need to download a few standard Python packages.
 4. Excel (or any program that opens `.xlsx`), a PDF reader, and Notepad.
 
@@ -99,7 +100,7 @@ Each check is marked:
    extracted folder to `Q-MAP_APP`, so that you have `D:\Q-MAP_V01\Q-MAP_APP\database_manager.py`.
    (Use `C:\` instead of `D:\` if you have no D drive. Keep the path short, and **not** inside OneDrive.)
 5. Write the date of download in section 16. The code you test is identified later by its build fingerprint
-   `3fa925abf95b` (check V13).
+   `21d31f0fe259` (check V13).
 
 ## 6. Prepare the folders and test files
 
@@ -183,9 +184,15 @@ grouped by kind.
   2. **Add folder...** → `D:\Q-MAP_V01\Market_Files` → **Select Folder**.
   3. Click **SCAN SELECTED FOLDER NOW** and wait until the status says the scan has finished.
 - **Pass:** no question window at any point. Imported: 5PAISA (30 minutes), RIVERUSD (CRYPTO, 3 hours), ICICIBANK
-  (Daily; its two copies shown as "Already loaded"), BANKNIFTY (15 minutes), OLAELEC (1 minute), UJJIVAN (5 minutes),
+  (Daily; one of the three identical ICICIBANK files is shown as "Imported" and the other two as "Already loaded"),
+  BANKNIFTY (15 minutes), OLAELEC (1 minute), UJJIVAN (5 minutes),
   VERANDA (1 minute), RELIANCE_EQ. Not loaded: AKZOINDIA (a data error: low above open on 08-Nov-25).
-- **Fail:** a question appears; a file not loaded that should be; AKZOINDIA loaded.
+- **Identical files (ICICIBANK):** Q-MAP stores identical content only once, so the three ICICIBANK files make one
+  dataset, not three. The files are read in alphabetical order, so `ICICIBANK (1).txt` comes first and is shown as
+  "Imported"; `ICICIBANK - Copy.txt` and `ICICIBANK.txt` are shown as "Already loaded" with the same dataset number.
+  Datasets and Storage → the ICICIBANK Daily dataset → details line "Original file(s)" lists all three names.
+- **Fail:** a question appears; a file not loaded that should be; AKZOINDIA loaded; the ICICIBANK copies make more
+  than one dataset.
 - **Evidence:** `Evidence\02_Sources\W1_scan_result.png` (scroll if needed; two pictures are fine).
 
 ### W2 — The detected timeframe is explained (REQUIRED)
@@ -193,7 +200,9 @@ grouped by kind.
 - **Checks / why:** the bar size is measured from the data, not taken from a file name.
 - **Steps:** click the line `OLAELEC.xlsx`.
 - **Pass:** "Detected timeframe: 1 minute", "Validation: Consistent across 20 sampled block(s)", "Status: Accepted by
-  default", and a warning about conflicting observations (the same minute with different prices).
+  default", and, under the heading **"Quality warnings recorded for dataset ..."**, the line
+  **"WARNING: Some dates/times have more than one different value"** followed by the details (the same minute with
+  different prices). Datasets and Storage shows the same warning with the same title.
 - **Evidence:** `Evidence\02_Sources\W2_olaelec_detail.png`.
 
 ### W3 — Exceptions are grouped (REQUIRED)
@@ -219,7 +228,20 @@ grouped by kind.
   registry**; click **Open alias registry folder** and open `Instrument_Aliases.csv` in Excel (close Excel afterwards);
   click **SCAN SELECTED FOLDER NOW** again.
 - **Pass:** the CSV has a row `RELIANCE, RELIANCE EQ`; after the scan RELIANCE_EQ.csv is listed as NSE:RELIANCE.
-- **Evidence:** `Evidence\02_Sources\W5_alias_csv.png`, `W5_after_scan.png`.
+- **One-time step afterwards: remove the old duplicate from analyses (reversible).** A correction never changes or
+  deletes existing data, so the dataset loaded before the alias (NSE:RELIANCE_EQ) is still there next to the new
+  NSE:RELIANCE: the same data twice. Remove the old one from analyses like this:
+  1. Open **Datasets and Storage** and find the two Daily lines **NSE:RELIANCE_EQ** and **NSE:RELIANCE**.
+  2. Click each and check in the details: the same "Original file(s)" (`RELIANCE_EQ.csv`), the same number of bars
+     and the same From/To dates. NSE:RELIANCE_EQ has the **lower** dataset number (it was loaded first, in W1).
+     If they differ in any of these, stop and record it: do not reject anything.
+  3. Select the **NSE:RELIANCE_EQ** line only; in **Reason (recorded)** type `duplicate after alias correction (W5)`;
+     click **Reject (reversible)**. The message "Rejected 1 dataset(s). They are kept unchanged and no longer offered
+     to analyses; Restore undoes it." appears.
+  4. Pass: NSE:RELIANCE_EQ shows "Rejected by you"; NSE:RELIANCE is still Active; in the Workbench (**Refresh**) only
+     NSE:RELIANCE is offered. Nothing is deleted: the stored data, your file and earlier runs stay as they are, and
+     **Restore** undoes the rejection at any time.
+- **Evidence:** `Evidence\02_Sources\W5_alias_csv.png`, `W5_after_scan.png`, `Evidence\03_Datasets\W5_old_rejected.png`.
 
 ### W6 — Reject files (REQUIRED)
 
@@ -231,7 +253,8 @@ grouped by kind.
 ### W7 — Restore them (REQUIRED)
 
 - **Steps:** select the same two lines; click **Restore selected**; in the Workbench click **Refresh**.
-- **Pass:** both show "Imported" again; the Workbench offers them.
+- **Pass:** both show **"Available again (restored by you)"**; the Workbench offers them. Restore only makes the
+  data available again; it does not load anything again.
 - **Evidence:** `Evidence\02_Sources\W7_restored.png`.
 
 ### W8 — Stopping a scan (REQUIRED)
@@ -255,7 +278,10 @@ grouped by kind.
 ### A4 — A repeated scan changes nothing (REQUIRED)
 
 - **Steps:** select the `Market_Files` folder line; click **SCAN SELECTED FOLDER NOW** without changing anything.
-- **Pass:** every file "unchanged"; no new datasets in Datasets and Storage.
+- **Pass:** every file shows Change "unchanged" and Action "skipped", and the Result **"Unchanged (imported earlier)"**
+  (AKZOINDIA: "Unchanged (rejected earlier)"). The scan summary counts only this scan, for example
+  "10 unchanged (imported earlier), 1 unchanged (rejected earlier)", with no "imported". No new datasets in Datasets
+  and Storage.
 - **Evidence:** `Evidence\02_Sources\A4_rescan.png`.
 
 ### W19 — A changed file with the same size and date is detected (REQUIRED)
@@ -317,8 +343,10 @@ tests whether the chosen data are suitable; **RUN ANALYSIS** runs it; **Open Out
 
 **Two terms you will see:**
 - **Run ID** — the name of one run, such as `MAAF_20261104_101500` (MA Affinity, date, time). Every run gets a new one
-  and its own folder; an earlier run is never overwritten.
-- **Build fingerprint** — a 12-character code (here `3fa925abf95b`) that identifies exactly which version of the
+  and its own folder; an earlier run is never overwritten. **The time in a Run ID is UTC** (Indian time minus 5 hours
+  30 minutes), while the time at the end of file names is your computer's local time. Example: run
+  `SCAN_20261106_173630` (17:36:30 UTC) wrote `Scan_Report_06_Nov_26_230651.csv` (23:06:51 Indian time).
+- **Build fingerprint** — a 12-character code (here `21d31f0fe259`) that identifies exactly which version of the
   program produced a result. If the program changes, the code changes. It lets anyone later tell which program
   produced a report.
 
@@ -366,12 +394,12 @@ tests whether the chosen data are suitable; **RUN ANALYSIS** runs it; **Open Out
   full tables, for checking), `run_log.txt` and `Run_Metadata_<date>.json` (the run record).
 - **Pass — in the workbook:** sheet **Summary**: the line "Instrument / file" names NSE:ICICIBANK, the dataset number
   and the Run ID; "Bar size" says "Daily (Q-MAP registered dataset; not re-aggregated)"; a Top-5 list; WARNINGS and
-  LIMITATIONS. Sheet **Data_Quality**: "Run ID", "Code build: qmap 0.1.0rc1 / c2 build 3fa925abf95b", "Dataset
+  LIMITATIONS. Sheet **Data_Quality**: "Run ID", "Code build: qmap 0.1.0rc1 / c2 build 21d31f0fe259", "Dataset
   checksum (SHA-256)", source file and lineage.
 - **Pass — in the PDF:** the first lines under the title show the dataset, the Run ID, "Q-MAP build: qmap 0.1.0rc1 /
-  c2 build 3fa925abf95b", the source fingerprint and the dataset checksum. Q-MAP's own notes, if any, appear under
+  c2 build 21d31f0fe259", the source fingerprint and the dataset checksum. Q-MAP's own notes, if any, appear under
   **Warnings** starting with "Q-MAP data:".
-- **Fail:** not started without a clear reason; files missing; the build is not `3fa925abf95b`.
+- **Fail:** not started without a clear reason; files missing; the build is not `21d31f0fe259`.
 - **Evidence:** `Evidence\04_Workbench\V7_completed.png`, `V7_folder.png`, `V7_excel_summary.png`,
   `V7_excel_data_quality.png`, `V7_pdf_first_page.png`; copy the run folder into `Evidence\07_Run_Folders\`.
 
@@ -387,7 +415,7 @@ tests whether the chosen data are suitable; **RUN ANALYSIS** runs it; **Open Out
 
 - **Checks / why:** each result can be traced to its data and to the exact program build.
 - **Steps:** in the V7 run folder, right-click `Run_Metadata_<date>.json` → **Open with → Notepad**. Use **Ctrl+F**
-  (Find) to look for each of these, one at a time: `3fa925abf95b`, `MAAF_`, `ICICIBANK`, `6cbadc7`, `as_loaded`,
+  (Find) to look for each of these, one at a time: `21d31f0fe259`, `MAAF_`, `ICICIBANK`, `6cbadc7`, `as_loaded`,
   `corrected comparison`.
 - **Pass:** each is found. (Meaning: the build; the Run ID; the dataset; the QLOPB version the method comes from;
   "the data were used as registered, not re-aggregated"; "its timeframe was classified with the corrected DQ-7
@@ -482,7 +510,7 @@ treated as uniform, because MA Affinity and other research assume one bar size. 
 - **Steps:** open `database_manager.py` and `analytical_workbench.py` again from IDLE (F5 each); in Sources, select
   `Market_Files` and scan again.
 - **Pass:** folders remembered; every dataset still listed; the Workbench's "Last run folder" shows your latest
-  completed run; the scan reports every file "unchanged".
+  completed run; the scan reports every file "Unchanged (imported earlier)" (AKZOINDIA "Unchanged (rejected earlier)").
 - **Evidence:** `Evidence\06_Originals\V14_restart.png`.
 
 ### W11 — Your original files were not changed (REQUIRED, at the very end)
@@ -567,7 +595,7 @@ Nothing in this manual can change your original files: Q-MAP only reads, and the
 | Windows version | |
 | Python version (first line in IDLE) | |
 | Date the ZIP was downloaded | |
-| Build fingerprint seen in reports (must be `3fa925abf95b`) | |
+| Build fingerprint seen in reports (must be `21d31f0fe259`) | |
 | Overall decision | ACCEPTED / NOT ACCEPTED |
 | Outstanding issues (refer to check numbers) | |
 

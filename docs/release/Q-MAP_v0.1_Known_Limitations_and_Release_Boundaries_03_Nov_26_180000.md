@@ -98,7 +98,7 @@ analytical use** by the Project Owner after Windows/IDLE acceptance. **Not produ
 
 ### 3.3 Platform and operation
 
-- **Windows/IDLE acceptance is outstanding** (V1-V14, W1-W19, A4-A8). GUI tests ran on Linux (virtual screen) and
+- **Windows/IDLE acceptance is outstanding** (V1-V14, W1-W19, A4-A8). Round 1 (06-Nov-26) was engine-level; screen checks remain (round-2 checklist). Python 3.11 and 3.12 are both tested automatically; the minimum stays 3.11. GUI tests ran on Linux (virtual screen) and
   on GitHub's Windows runner; neither replaces your session.
 - The code build is recorded, but a ZIP download has no git commit: the source fingerprint is then the identifier.
 - Keep Q-MAP_DATA on a local disk (file locks); keep paths short (Windows 260-character limit).
