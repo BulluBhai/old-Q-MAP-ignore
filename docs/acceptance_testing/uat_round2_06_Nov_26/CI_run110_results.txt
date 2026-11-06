@@ -1,0 +1,6 @@
+GitHub CI run #110 (42268067492), commit 56a72f4, totals from each job log:
+windows-latest 3.11: 1353 passed, 1 skipped (hard-link fallback, macOS/Linux only), 0 failed; GUI 213 passed, 0 skipped
+windows-latest 3.12: 1353 passed, 1 skipped (same), 0 failed; GUI 213 passed, 0 skipped
+ubuntu-latest 3.11: 1246 passed, 108 skipped (106 window tests without display, 2 Windows-junction tests), 0 failed
+ubuntu-latest 3.12: 1246 passed, 108 skipped (same), 0 failed
+https://github.com/BulluBhai/Q-MAP/actions/runs/42268067492
