@@ -47,14 +47,14 @@ validation rule, QLOPB calculation or methodology was changed.
 |---|---|---|---|---|---|---|
 | Local Linux (Ubuntu 24.04.5, Xvfb, GUI required) | 3.11.15 | `56a72f4` | 1,352 | 2 | 0 | 2 Windows-junction tests (Windows only); 213 GUI passed |
 | Local Linux (same) | 3.12.13 | `56a72f4` | 1,352 | 2 | 0 | same |
-| GitHub CI Windows | 3.11 | `56a72f4` | see section 4a | | | |
-| GitHub CI Windows | 3.12 | `56a72f4` | see section 4a | | | |
-| GitHub CI Ubuntu | 3.11 | `56a72f4` | see section 4a | | | |
-| GitHub CI Ubuntu | 3.12 | `56a72f4` | see section 4a | | | |
+| GitHub CI Windows (GUI required) | 3.11 | `56a72f4` | 1,353 | 1 | 0 | hard-link fallback test (macOS/Linux only); GUI 213 passed, 0 skipped |
+| GitHub CI Windows (GUI required) | 3.12 | `56a72f4` | 1,353 | 1 | 0 | same |
+| GitHub CI Ubuntu (no display) | 3.11 | `56a72f4` | 1,246 | 108 | 0 | 106 window tests (no display) and 2 Windows-junction tests |
+| GitHub CI Ubuntu (no display) | 3.12 | `56a72f4` | 1,246 | 108 | 0 | same |
 
-**4a. GitHub CI on `56a72f4`** (run #110, `42268067492`, pull_request; run #109 push): Ubuntu 3.11 and Ubuntu 3.12
-completed successfully; the two Windows jobs were still running when this report was committed. Their exact totals are
-recorded on PR #12 and in the round-2 close-out message. GitHub's CI results are independent of the local totals above.
+**4a. GitHub CI on `56a72f4`:** run #110 (`42268067492`, pull_request), totals read from each job's log; run #109
+(push) also succeeded. https://github.com/BulluBhai/Q-MAP/actions/runs/42268067492. The Windows window tests ran (213
+passed, none skipped). GitHub's results are independent of the local totals; neither is owner acceptance.
 
 **MA Affinity unchanged.** The same synthetic daily file run through folder scan + Workbench MA Affinity (default
 settings) on the previous build (`efb4bd9`) and on `56a72f4` gives byte-identical candidate and interaction tables
