@@ -1,6 +1,6 @@
 # Q-MAP v0.1: final comprehensive release audit
 
-**Current release (06-Nov-26, after UAT round 1): code commit `56a72f4`, build fingerprint `21d31f0fe259`** (display corrections; section 14). Before that: code `919c697`, build `3fa925abf95b`, the build of UAT round 1. The later commits change no program file: `b2b5e93` changes tests, acceptance fixtures, documents and `.gitattributes`; `0b33482`, `822180a`, `2f7f99b` and the close-out commit change documents only. Latest completed CI: run #106 on `2f7f99b` (section 6). Close-out: section 13. The interval from `3f4faea` includes application changes (`a834d6a`, `919c697`); see the commit table in `Q-MAP_v0.1_Review_Corrections_04_Nov_26_100000.md` §0.
+**Current release (07-Nov-26): code commit `06d8659`, build fingerprint `a202d43d78ed`** (R2-O2 display correction; section 15). Before that: `56a72f4` / `21d31f0fe259` (UAT round-1 corrections; section 14). Before that: code `919c697`, build `3fa925abf95b`, the build of UAT round 1. The later commits change no program file: `b2b5e93` changes tests, acceptance fixtures, documents and `.gitattributes`; `0b33482`, `822180a`, `2f7f99b` and the close-out commit change documents only. Latest completed CI: run #106 on `2f7f99b` (section 6). Close-out: section 13. The interval from `3f4faea` includes application changes (`a834d6a`, `919c697`); see the commit table in `Q-MAP_v0.1_Review_Corrections_04_Nov_26_100000.md` §0.
 
 Prepared 03-Nov-26 by Claude (lead developer); **closure update 04-Nov-26** after the independent review (sections 1, 3, 4, 5, 6, 8 and new section 9); **revised 04-Nov-26** after ChatGPT's independent audit of PR #12 head `3f4faea` (sections 1, 3, 4, 6, 11 and new section 12). Reference: Master Blueprint v1.35. Scope frozen as instructed (MIQP,
 DQ-11, DQ-12, DQ-14, OW-33 Option C / `vs3` / reprocessing, Opportunity Scanner, backtesting, portfolio/risk excluded).
@@ -332,3 +332,12 @@ MA Affinity output verified byte-identical before and after. Full record, test r
 acceptance status per check: `docs/acceptance_testing/Q-MAP_v0.1_UAT_Round2_Corrections_Report_06_Nov_26_183000.md`.
 Remaining owner screen checks: `docs/acceptance_testing/Q-MAP_v0.1_UAT_Round2_Owner_Screen_Checklist_06_Nov_26_183000.md`.
 Windows UAT is **not** complete; controlled analytical use is **not** approved; OW-35 stays open.
+
+## 15. UAT round 2 engine results and the R2-O2 correction (07-Nov-26)
+
+Round 2 at engine level on the owner's PC (build `21d31f0fe259`): 7 PASS, 4 PASS WITH OBSERVATION, 0 FAIL. R2-O2
+(restored label kept after later scans) corrected, display only, in `06d8659`, **build `a202d43d78ed`**; R2-O1
+checklist wording corrected; R2-O3/R2-O4 expected. MA Affinity output byte-identical. Record:
+`docs/acceptance_testing/Q-MAP_v0.1_UAT_Round2_Addendum_07_Nov_26_023022.md`; owner checklist:
+`Q-MAP_v0.1_UAT_Round2b_Owner_Screen_Checklist_07_Nov_26_023022.md` (A4, W7, V14 repeated on the new build). Windows
+UAT not complete; controlled analytical use not approved; OW-35 open.

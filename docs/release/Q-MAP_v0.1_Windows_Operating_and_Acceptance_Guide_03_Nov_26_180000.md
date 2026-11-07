@@ -4,12 +4,12 @@
 |---|---|
 | For | The Q-MAP Project Owner (Windows, Python 3.11 or newer, IDLE). No programming, no command line, no reading of code or logs |
 | Release candidate | Pull request #12: https://github.com/BulluBhai/Q-MAP/pull/12 (branch `claude/epic-darwin-33o518`) |
-| Code under test | commit `56a72f4` (`56a72f4b989e4ae3e459b24c11b6d819bcaa70c3`), version `0.1.0rc1`, **build fingerprint `21d31f0fe259`** (corrections after the first UAT round, 06-Nov-26). The first round tested build `3fa925abf95b` |
-| Revised | 06-Nov-26 (third revision), after the first UAT round: Sources shows the recorded quality warnings (W2, W14-W18); unchanged files are shown as "Unchanged (imported earlier)" (A4, V14); Restore shows "Available again (restored by you)" (W7); W5 gains a one-time reject step; W1 and the Run ID time are explained. Second revision 04-Nov-26, after the independent audit of `3f4faea`: new build, new REQUIRED check **W19** (a changed file with the same size and date is detected), notes on multi-instrument files. Earlier versions are kept in Git history |
+| Code under test | commit `06d8659` (`06d8659975df6cf2ea10f0db2fe74bb8b7f8d63c`), version `0.1.0rc1`, **build fingerprint `a202d43d78ed`** (07-Nov-26: after the next scan a restored file shows that scan's result). UAT round 1 tested `3fa925abf95b`; round 2 (engine level) tested `21d31f0fe259` |
+| Revised | 07-Nov-26 (fourth revision): new build `a202d43d78ed`; W7 and A4/V14 wording for restored files; W18 SPARSE also shows "Long gaps between dates". Third revision 06-Nov-26, after the first UAT round: Sources shows the recorded quality warnings (W2, W14-W18); unchanged files are shown as "Unchanged (imported earlier)" (A4, V14); Restore shows "Available again (restored by you)" (W7); W5 gains a one-time reject step; W1 and the Run ID time are explained. Second revision 04-Nov-26, after the independent audit of `3f4faea`: new build, new REQUIRED check **W19** (a changed file with the same size and date is detected), notes on multi-instrument files. Earlier versions are kept in Git history |
 | Status | **OUTSTANDING** — Q-MAP v0.1 is not ready for controlled analytical use until you complete this manual and accept the result |
 
 Later commits on the pull request that change no program file (only tests, test files or documents) do not change the code you test. You can always check
-that you have the right code: every Q-MAP report shows the **build fingerprint**, and it must be `21d31f0fe259`
+that you have the right code: every Q-MAP report shows the **build fingerprint**, and it must be `a202d43d78ed`
 (check V13).
 
 ---
@@ -100,7 +100,7 @@ Each check is marked:
    extracted folder to `Q-MAP_APP`, so that you have `D:\Q-MAP_V01\Q-MAP_APP\database_manager.py`.
    (Use `C:\` instead of `D:\` if you have no D drive. Keep the path short, and **not** inside OneDrive.)
 5. Write the date of download in section 16. The code you test is identified later by its build fingerprint
-   `21d31f0fe259` (check V13).
+   `a202d43d78ed` (check V13).
 
 ## 6. Prepare the folders and test files
 
@@ -253,7 +253,8 @@ grouped by kind.
 ### W7 — Restore them (REQUIRED)
 
 - **Steps:** select the same two lines; click **Restore selected**; in the Workbench click **Refresh**.
-- **Pass:** both show **"Available again (restored by you)"**; the Workbench offers them. Restore only makes the
+- **Pass:** both show **"Available again (restored by you)"** until the next scan, after which they show that scan's
+  result again (for example "Unchanged (imported earlier)"); the Workbench offers them. Restore only makes the
   data available again; it does not load anything again.
 - **Evidence:** `Evidence\02_Sources\W7_restored.png`.
 
@@ -346,7 +347,7 @@ tests whether the chosen data are suitable; **RUN ANALYSIS** runs it; **Open Out
   and its own folder; an earlier run is never overwritten. **The time in a Run ID is UTC** (Indian time minus 5 hours
   30 minutes), while the time at the end of file names is your computer's local time. Example: run
   `SCAN_20261106_173630` (17:36:30 UTC) wrote `Scan_Report_06_Nov_26_230651.csv` (23:06:51 Indian time).
-- **Build fingerprint** — a 12-character code (here `21d31f0fe259`) that identifies exactly which version of the
+- **Build fingerprint** — a 12-character code (here `a202d43d78ed`) that identifies exactly which version of the
   program produced a result. If the program changes, the code changes. It lets anyone later tell which program
   produced a report.
 
@@ -394,12 +395,12 @@ tests whether the chosen data are suitable; **RUN ANALYSIS** runs it; **Open Out
   full tables, for checking), `run_log.txt` and `Run_Metadata_<date>.json` (the run record).
 - **Pass — in the workbook:** sheet **Summary**: the line "Instrument / file" names NSE:ICICIBANK, the dataset number
   and the Run ID; "Bar size" says "Daily (Q-MAP registered dataset; not re-aggregated)"; a Top-5 list; WARNINGS and
-  LIMITATIONS. Sheet **Data_Quality**: "Run ID", "Code build: qmap 0.1.0rc1 / c2 build 21d31f0fe259", "Dataset
+  LIMITATIONS. Sheet **Data_Quality**: "Run ID", "Code build: qmap 0.1.0rc1 / c2 build a202d43d78ed", "Dataset
   checksum (SHA-256)", source file and lineage.
 - **Pass — in the PDF:** the first lines under the title show the dataset, the Run ID, "Q-MAP build: qmap 0.1.0rc1 /
-  c2 build 21d31f0fe259", the source fingerprint and the dataset checksum. Q-MAP's own notes, if any, appear under
+  c2 build a202d43d78ed", the source fingerprint and the dataset checksum. Q-MAP's own notes, if any, appear under
   **Warnings** starting with "Q-MAP data:".
-- **Fail:** not started without a clear reason; files missing; the build is not `21d31f0fe259`.
+- **Fail:** not started without a clear reason; files missing; the build is not `a202d43d78ed`.
 - **Evidence:** `Evidence\04_Workbench\V7_completed.png`, `V7_folder.png`, `V7_excel_summary.png`,
   `V7_excel_data_quality.png`, `V7_pdf_first_page.png`; copy the run folder into `Evidence\07_Run_Folders\`.
 
@@ -415,7 +416,7 @@ tests whether the chosen data are suitable; **RUN ANALYSIS** runs it; **Open Out
 
 - **Checks / why:** each result can be traced to its data and to the exact program build.
 - **Steps:** in the V7 run folder, right-click `Run_Metadata_<date>.json` → **Open with → Notepad**. Use **Ctrl+F**
-  (Find) to look for each of these, one at a time: `21d31f0fe259`, `MAAF_`, `ICICIBANK`, `6cbadc7`, `as_loaded`,
+  (Find) to look for each of these, one at a time: `a202d43d78ed`, `MAAF_`, `ICICIBANK`, `6cbadc7`, `as_loaded`,
   `corrected comparison`.
 - **Pass:** each is found. (Meaning: the build; the Run ID; the dataset; the QLOPB version the method comes from;
   "the data were used as registered, not re-aggregated"; "its timeframe was classified with the corrected DQ-7
@@ -490,7 +491,8 @@ treated as uniform, because MA Affinity and other research assume one bar size. 
 
 - **Steps:** click `NSE_SPARSE.csv`; then **Open run folder**; then in the Workbench run **Dataset Summary** on
   **NSE:EVERYOTHER**.
-- **Pass:** SPARSE: no interval warning; "Some days have fewer bars than usual" lists the one-bar dates. Run folder:
+- **Pass:** SPARSE: no interval warning; "Some days have fewer bars than usual" lists the one-bar dates, and
+  "Long gaps between dates" (2025-04-04 -> 2025-04-14) is also shown: a real gap in this test file. Run folder:
   the `issues_event...csv` files of the W15-W17 files mention the interval finding with source rows (two say
   `interval_change_uncertain`, two say `interval_change_detected`); RANDOMGAPS and SPARSE have none;
   `Scan_Report_...csv` lists all six as imported. Workbench: the readiness box says "Validated with warnings: ...
@@ -595,7 +597,7 @@ Nothing in this manual can change your original files: Q-MAP only reads, and the
 | Windows version | |
 | Python version (first line in IDLE) | |
 | Date the ZIP was downloaded | |
-| Build fingerprint seen in reports (must be `21d31f0fe259`) | |
+| Build fingerprint seen in reports (must be `a202d43d78ed`) | |
 | Overall decision | ACCEPTED / NOT ACCEPTED |
 | Outstanding issues (refer to check numbers) | |
 

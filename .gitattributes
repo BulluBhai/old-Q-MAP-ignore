@@ -3,3 +3,4 @@ Tests/fixtures/qlopb_data/* -text
 docs/acceptance_testing/v01_files_03_Nov_26/* -text
 docs/acceptance_testing/w19_same_size_files_04_Nov_26/**/* -text
 docs/acceptance_testing/uat_round1_06_Nov_26/* -text
+docs/acceptance_testing/uat_round2_laptop_07_Nov_26/* -text
