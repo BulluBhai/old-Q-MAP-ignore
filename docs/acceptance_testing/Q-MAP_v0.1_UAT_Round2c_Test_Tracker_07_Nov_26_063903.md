@@ -36,7 +36,7 @@ Tests marked **(real record)** make a recorded, reversible change in your real Q
 
 | No. | Step | Checklist name | Test | Expected result (short) | Evidence | File name(s) | Your result | What happened |
 |---:|---:|---|---|---|---|---|---|---|
-| 00a | 1-2 | Download | New program in place | Round-2c checklist file present in `Q-MAP_APP`; old program kept as `Q-MAP_APP_round2`. Any other situation: stop, rename nothing, NOT TESTED, write which folders you see | Write down | - | | |
+| 00a | 1-2 | Download | New program in place | Step 1 table: checklist file present in `Q-MAP_APP` (situation A or B: "already in place"), or Step 2 done and checked (download date). STOP cases (A without the file, C, D, or unsure): rename nothing, NOT TESTED, write which folders you see | Write down | - | | |
 | 00 | 4 | W11 (before) | Originals before | Names, sizes, Date modified and address bar visible | Picture | `00_Original_Files_Before.png` | | |
 | 00b | 5 | - | Python version | First line of IDLE written in the session details | Write down | - | | |
 | 01 | 6-7 | V1, V2 | Database Manager and folders | Window opens; both folders green OK; buttons READY | Picture | `01_Database_Manager_Folders.png` | | |

@@ -77,34 +77,49 @@ contain only copies, Q-MAP recognises them as already loaded, and no new data is
 ### Step 1. Check whether the new program is already in place
 
 Claude Code already tested the new program in `D:\Q-MAP_V01\Q-MAP_APP` on 07-Nov-26, so this has probably been done already.
+In this step you only **look**. Do not rename, move or delete anything in Step 1.
 
-1. Open File Explorer and go to `D:\Q-MAP_V01`.
-2. If you see **both** `Q-MAP_APP` **and** `Q-MAP_APP_round2`, open
-   `Q-MAP_APP\docs\acceptance_testing`. If the file `Q-MAP_v0.1_UAT_Round2c_Owner_Screen_Checklist_07_Nov_26_050239.md`
-   is there, **the new program is in place. Skip Step 2 and go to Step 3.** Write "already in place" in the tracker
-   (test 00a).
-3. If you see `Q-MAP_APP` but **no** `Q-MAP_APP_round2`, do Step 2.
-4. **Stop and ask for help** in any other situation. Do not rename, overwrite, move or delete any folder. Mark test 00a
-   NOT TESTED, write which folders you see, and tell ChatGPT. For example:
-   - `Q-MAP_APP_round2` exists but `Q-MAP_APP` is missing;
-   - `Q-MAP_APP` exists but the round-2c checklist file is not inside it;
-   - both folders are there and you are not sure which one is the new program.
+"The checklist file" below means `Q-MAP_v0.1_UAT_Round2c_Owner_Screen_Checklist_07_Nov_26_050239.md` inside the folder
+`docs\acceptance_testing` of a program folder. Only the new program has it.
 
-### Step 2. Only if needed: keep the old program and download the new one
+1. Open File Explorer and go to `D:\Q-MAP_V01`. Note which of these two folders you see: `Q-MAP_APP` and `Q-MAP_APP_round2`.
+2. Find your situation in this table and do **only** what it says:
 
-Do this step **only** if Step 1 sent you here (`Q-MAP_APP` exists and `Q-MAP_APP_round2` does **not**). If
-`Q-MAP_APP_round2` already exists, do not do this step: stop and ask for help (Step 1, point 4).
+| You see | Check | Then |
+|---|---|---|
+| **A.** `Q-MAP_APP` **and** `Q-MAP_APP_round2` | Is the checklist file in `Q-MAP_APP\docs\acceptance_testing`? | **Yes:** the new program is in place. Write "already in place" for test 00a, **skip Step 2**, go to Step 3. **No:** **STOP** (see below). |
+| **B.** `Q-MAP_APP` only (no `Q-MAP_APP_round2`) | Is the checklist file in `Q-MAP_APP\docs\acceptance_testing`? | **Yes:** the new program is in place. Write "already in place (no round-2 copy)" for test 00a, **skip Step 2**, go to Step 3. **No:** `Q-MAP_APP` is the old program. **Do Step 2.** |
+| **C.** `Q-MAP_APP_round2` only (no `Q-MAP_APP`) | - | **STOP** (see below). |
+| **D.** Neither folder | - | **STOP** (see below). |
 
-1. Rename `D:\Q-MAP_V01\Q-MAP_APP` to `Q-MAP_APP_round2`. Do not delete it. (If Windows says the folder is in use, close Q-MAP first.)
-2. Open <https://github.com/BulluBhai/Q-MAP/tree/claude/epic-darwin-33o518>, click the green **Code** button,
+**STOP means:** do not rename, overwrite, move, extract or delete anything. Mark test 00a **NOT TESTED**, write which folders
+you see and whether the checklist file is there, and ask ChatGPT for help before going on. Also stop if you are not sure
+which situation you are in.
+
+### Step 2. Only for situation B without the checklist file: keep the old program and add the new one
+
+Do this step **only** if Step 1 sent you here. At the end of this step, check again (point 7).
+
+1. **Check first that nothing will be overwritten.** In `D:\Q-MAP_V01` there must be **no** folder named
+   `Q-MAP_APP_round2` and **no** folder whose name starts with `Q-MAP-claude-epic-darwin`. If there is one, **STOP**
+   (as in Step 1).
+2. Close Q-MAP if it is open. Rename `D:\Q-MAP_V01\Q-MAP_APP` to `Q-MAP_APP_round2`. Do not delete it.
+   If Windows says the folder is in use or the name already exists, click **Cancel**, and **STOP**.
+3. Open <https://github.com/BulluBhai/Q-MAP/tree/claude/epic-darwin-33o518>, click the green **Code** button,
    then **Download ZIP**.
-3. In your Downloads folder, right-click the ZIP → **Extract All** → choose `D:\Q-MAP_V01` → **Extract**.
-4. A folder named like `Q-MAP-claude-epic-darwin-33o518` appears in `D:\Q-MAP_V01`. Open it: you should see
-   `database_manager.py` directly inside. (If you see another folder with the same name instead, that inner folder is the
-   program.) Rename the folder that contains `database_manager.py` to `Q-MAP_APP` and make sure it sits directly in
-   `D:\Q-MAP_V01`. If Windows says a folder with that name already exists, click **Cancel** or **No**, stop, and ask for help.
-6. Check: `D:\Q-MAP_V01\Q-MAP_APP\docs\acceptance_testing` contains the round-2c checklist file. If not, stop and ask for help.
-5. Do not touch `Q-MAP_DATA`, `Q-MAP_OUTPUT`, `Market_Files` or the other folders.
+4. In your Downloads folder, right-click the ZIP → **Extract All** → **Browse...** → choose `D:\Q-MAP_V01`. The destination
+   box must show exactly `D:\Q-MAP_V01` (delete anything Windows added after it). Click **Extract**.
+   If Windows asks whether to replace any files, click **Cancel** / **Skip** (do not replace), and **STOP**.
+5. A new folder named `Q-MAP-claude-epic-darwin-33o518` appears in `D:\Q-MAP_V01`. Open it: `database_manager.py` and
+   `analytical_workbench.py` must be **directly** inside it. If they are not (for example there is only another folder
+   inside), **STOP**.
+6. Rename `Q-MAP-claude-epic-darwin-33o518` to `Q-MAP_APP`. If Windows says the name already exists, click **Cancel**,
+   and **STOP**.
+7. **Check again:** `D:\Q-MAP_V01` now has `Q-MAP_APP` **and** `Q-MAP_APP_round2`, and the checklist file is in
+   `Q-MAP_APP\docs\acceptance_testing` (situation A, "Yes"). Write the download date for test 00a and go to Step 3.
+   If not, **STOP**.
+
+Do not touch `Q-MAP_DATA`, `Q-MAP_OUTPUT`, `Market_Files` or any other folder during this step.
 
 ### Step 3. Make the evidence folder
 
@@ -393,7 +408,8 @@ want to see them on screen too; the steps are in the Windows manual under the sa
 The checks and expected results are the same as in the round-2c checklist. Only the way of working differs:
 - One evidence folder `Q-MAP_Test_Evidence` with numbered file names, instead of `Evidence_Round2b` with sub-folders.
   The tracker lists the checklist name (V1, W2, ...) for every test.
-- Step 1 lets you skip the download when the new program is already in place (it was, for Claude Code's tests on 07-Nov-26).
+- Step 1 is a look-only decision table: skip the download when the new program is already in place (it was, for Claude
+  Code's tests on 07-Nov-26); download only when `Q-MAP_APP` is clearly the old program; stop in every unclear case.
 - New test folder names `W8_Round2c` and `W11_Check_2c`, so that folders from earlier rounds are not reused.
 - Notepad is suggested for the two CSV checks, and "Don't Save" is stated, so that no file is changed by accident.
 - The RELIANCE reject may be deferred (NOT TESTED) if you prefer; the undo (Restore) is described.
