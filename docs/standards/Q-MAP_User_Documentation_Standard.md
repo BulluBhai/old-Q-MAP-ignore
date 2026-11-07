@@ -1,6 +1,6 @@
 # Q-MAP User Documentation Standard
 
-**Status:** permanent project requirement set by the Project Owner (Sandeep), 07-Nov-26.
+**Status:** permanent project requirement set by the Project Owner, 07-Nov-26.
 **Applies to:** every document written for the Project Owner to follow. That includes installation and setup guides,
 Windows operating instructions, Database Manager and Analytical Workbench guides, MIQP and QLOPB user guides, research
 module manuals, data import and validation instructions, troubleshooting and recovery procedures, acceptance testing
@@ -58,6 +58,10 @@ check (for example "the `Dataset_Summary_....csv` file in the run folder").
   line easy to see");
 - ready-to-copy wording for the tracker or record, where useful.
 
+Ask for a screenshot only where it materially helps: to prove a result (a status, a value, a message, a build
+line) or to help the user recognise the right screen. Do not ask for a screenshot after every action. Where a saved
+file (CSV, PDF, text copy) already proves the result, say whether a screenshot is also needed and why.
+
 **H. Safety and recovery.** For every important operation, state:
 - whether it changes data, the registry or settings;
 - whether it can be undone, and how (for example "**Restore** undoes it");
@@ -86,6 +90,12 @@ technical logs or error traces. If a log is evidence, the document says which fi
 guide and its tracker or record sheet.
 
 **M. Easier, not longer.** Make documents easier to follow, not merely longer.
+
+**N. End with "what next".** Every testing or operating procedure ends with a short, plain section that says:
+- what the user needs to do next (for example "send the ZIP and the tracker to ChatGPT");
+- whether the user should **wait**, **continue**, **stop** or **ask for help**, and in which situation each applies
+  (for example "If every test is PASS: send the files and wait for the review. If any test is FAIL or NOT SURE: do not
+  repeat it; send the files and wait.").
 
 ## 3. Examples from UAT round 2c (07-Nov-26)
 
@@ -120,5 +130,7 @@ That gives 33 files, and Windows never asks to replace anything, because each co
 - [ ] Reversible and data-changing actions are clearly marked, with stop points (rule H).
 - [ ] No code, commands or log reading required (rule K).
 - [ ] Numbering and file names are consistent across guide and tracker (rule L).
+- [ ] Screenshots are asked for only where they prove a result or help find the right screen (rule G).
+- [ ] The procedure ends with what to do next and whether to wait, continue, stop or ask for help (rule N).
 - [ ] Read through once as a first-time Windows user with no programming knowledge.
 - [ ] The delivery report states what was checked against the application and what could not be checked.

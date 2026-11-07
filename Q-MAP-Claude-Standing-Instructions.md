@@ -38,15 +38,12 @@ Role
 
 ## User-facing documents (permanent requirement)
 
-- Every guide, manual, procedure, checklist, tracker or instruction written for Sandeep to follow must comply with
-  `docs/standards/Q-MAP_User_Documentation_Standard.md`, however short the document.
-- Write for a finance professional with little programming knowledge: exact navigation, one action per step, the exact
-  on-screen labels, what the reader should see, evidence (type, file name, folder, purpose), safety and recovery, and when to
-  stop.
-- Check every label, path, message and expected value against the actual application before delivery. Never invent a
-  detail; mark anything unverified, and list it in the delivery report.
-- Never require Sandeep to read code, run commands or interpret technical logs.
-- Before delivering, run the checklist in section 4 of that standard and say in the report that it was run.
+- Whenever you prepare anything the Project Owner will read and follow (a user guide, testing procedure,
+  checklist, tracker, operating, setup or troubleshooting instruction, however short), follow
+  `docs/standards/Q-MAP_User_Documentation_Standard.md`. That file is the single source of the rules; do not
+  restate or change them elsewhere.
+- Before delivering such a document, run the checklist in section 4 of the standard, and say in the delivery report
+  that it was run and which labels, paths, messages or values could not be checked against the application.
 
 ## Workflow
 
