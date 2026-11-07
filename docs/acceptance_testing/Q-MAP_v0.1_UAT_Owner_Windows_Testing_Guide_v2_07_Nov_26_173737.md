@@ -4,16 +4,13 @@
 
 **Written to `docs/standards/Q-MAP_User_Documentation_Standard.md`.**
 
-This guide is for the Project Owner. It is used for any further owner test of Q-MAP v0.1, and in particular for the
-**additional calendar check in test 21** (the only item still open from round 2c; see the results review, section 6).
+This guide is for the Project Owner. It is used for any further owner test of Q-MAP v0.1. Round 2c is complete,
+and the test 21 pop-up calendar has been checked and accepted by the Project Owner (results review, section 6).
 The round-2c guide (`Q-MAP_v0.1_UAT_Round2c_Easy_Windows_Testing_Guide_07_Nov_26_063903.md`) is kept unchanged as the
 record of what was used on 07-Nov-26.
 
 The tests, their numbers (00-27) and their expected results are those of round 2c. Changes caused by Q-MAP's state after
 round 2c are listed in section 7.
-
-**If you are only doing the test 21 calendar check:** do sections 3.6 and 4.1, then test 21 Parts 1 and 2, then
-section 6. You do not need to run the analysis again.
 
 ---
 
@@ -94,7 +91,7 @@ take a picture instead and give it the same name ending in `.png`.**
 ### 3.2 What you need
 
 - Your laptop with IDLE (Python 3.12). **Do not install or update anything.**
-- About 75 minutes for all tests, or about 10 minutes for the test 21 calendar check only. You may stop after any test;
+- About 75 minutes for all tests. You may stop after any test;
   close Q-MAP with the **X** at the top right of each window.
 - Notepad (part of Windows). Excel only to look at CSV files.
 
@@ -472,9 +469,8 @@ Do not change any value.
 Choosing a date in the calendar only fills the date box; it never starts an analysis. Nothing runs until you click
 **RUN ANALYSIS**.
 
-**Status:** round-2c test 21 was completed on 07-Nov-26 with typed dates (PASS). The calendar check (Parts 1 and 2) is an
-**additional item**. Do it only when the Project Owner has decided to (results review, section 6). For that item alone,
-stop after Part 2: Part 3 is not needed again.
+**Status:** round-2c test 21 was completed on 07-Nov-26 (PASS), and the Project Owner has checked and accepted the
+pop-up calendar. This procedure is for a future owner test only; it is not a request to repeat test 21.
 
 **Before you start:**
 1. **Do:** Workbench → **Run an analysis** → **Analysis:** list → **Dataset Summary**.
@@ -518,10 +514,7 @@ nothing:
 **If different (dates):** a red line, or a green line with another date: click in that box, delete its text, type the
 date again and check. If it is still wrong, mark **NOT SURE** and go to test 22 **without** clicking **RUN ANALYSIS**.
 
-**Calendar check only:** after Part 2, write the result in the tracker. Then, in the **Start date:** and **End date:**
-boxes, delete the text (Backspace). Do not click **RUN ANALYSIS**. Go to section 6.
-
-**Part 3: the summary (full test only)**
+**Part 3: the summary**
 
 Click **RUN ANALYSIS** only when the two green lines say exactly `= 02-Jan-1998` and `= 02-Nov-2026`.
 1. **Do:** click **RUN ANALYSIS**.

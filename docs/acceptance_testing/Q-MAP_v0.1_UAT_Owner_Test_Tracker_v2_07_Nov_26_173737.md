@@ -20,7 +20,7 @@ The tracker has two parts:
 |---|---|
 | Date testing started (dd-mmm-yy) | |
 | Date testing finished (dd-mmm-yy) | |
-| What was tested: all tests, or the test 21 calendar check only | |
+| What was tested (all tests, or which ones) | |
 | Windows version (Start → Settings → System → About) | |
 | Python version: first IDLE line (test 00b) | |
 | Program in place (test 00a) | |
@@ -68,7 +68,7 @@ All files go in the evidence folder.
 | 18 | Workbench after restore (W7) | VERANDA, 5PAISA, NSE:RELIANCE offered; NSE:RELIANCE_EQ not | PIC `18_Workbench_After_Restore.png` (`_part1`... if needed) | | |
 | 19 | Stop scan (W8) | Window responds; "Stopped by you after N file(s); M file(s) not processed"; counter may show all done (OW-45). Too fast: NOT TESTED | PIC `19_Stop_Scan.png` | | |
 | 20 | MA Affinity settings (V6) | MA types SMA; MA start 10; MA end 250; Forward windows 5,10,20,50; help lines | PIC `20_MA_Affinity_Settings.png` | | |
-| 21 | Dataset Summary with the calendar (A5) | Calendar opens at January 1998; > < >> << change month/year; day 2 gives `02-Jan-98` and green "= 02-Jan-1998"; end date green "= 02-Nov-2026". Full test only: CSV 7166 bars, 02-Jan-98, 02-Nov-26, 7.86, 1387.4 | PIC `21c_Calendar_January_1998.png`, PIC `21a_Dates_Before_Run.png`; full test only: FILE `Dataset_Summary_..._.csv` (PIC `21b_ICICIBANK_Summary.png` optional) | | |
+| 21 | Dataset Summary with the calendar (A5) | Calendar opens at January 1998; > < >> << change month/year; day 2 gives `02-Jan-98` and green "= 02-Jan-1998"; end date green "= 02-Nov-2026"; CSV 7166 bars, 02-Jan-98, 02-Nov-26, 7.86, 1387.4 | PIC `21c_Calendar_January_1998.png`, PIC `21a_Dates_Before_Run.png`, FILE `Dataset_Summary_..._.csv` (PIC `21b_ICICIBANK_Summary.png` optional) | | |
 | 22 | Output folder (A7) | Address bar `...Research_Reports > DSUM_...`; CSV, run_log, run_manifest, Run_Metadata | PIC `22_Output_Folder.png` | | |
 | 23 | Build in the PDF | "Q-MAP build: qmap 0.1.0rc1 / c2 build a202d43d78ed" | PIC `23_Build_Fingerprint_PDF.png`, FILE `QLOPB_MA_Affinity_Report_....pdf`; WRITE in section 1 | | |
 | 24 | Close (W12) | Both windows close; no message; no empty window | WRITE (PIC `24_Closed_Desktop.png` only if something appears) | | |
@@ -81,9 +81,7 @@ All files go in the evidence folder.
 - [ ] TXT: 03, 04, 05, 06, 07, 08, 09, 11, 12, 13, 25, 27
 - [ ] PIC: 00, 01a, 01b, 02a, 02b, 10b, 14, 15a, 15b, 17a, 17b, 18, 19, 20, 21c, 21a, 22, 23, 25a, 26
       (24 and 21b only if applicable)
-- [ ] FILE: `Dataset_Summary_..._.csv` (test 21, full test only), `QLOPB_MA_Affinity_Report_....pdf` (test 23)
-
-For the test 21 calendar check only, the evidence is `21c` and `21a`.
+- [ ] FILE: `Dataset_Summary_..._.csv` (test 21), `QLOPB_MA_Affinity_Report_....pdf` (test 23)
 
 ## 5. Ready-to-copy notes (change the numbers to what you see)
 
@@ -97,7 +95,6 @@ For the test 21 calendar check only, the evidence is `21c` and `21a`.
 | Wrong folder added (tests 19, 27) | `Wrong folder added (path ...), not scanned, stopped using it.` |
 | Calendar worked (test 21) | `PASS - calendar opened at January 1998; > < >> << changed month/year; day 2 filled 02-Jan-98 (green = 02-Jan-1998).` |
 | Calendar did not work (test 21) | `FAIL (calendar) - the calendar did ... (describe); start date typed instead; nothing was run with a wrong date.` |
-| Calendar check only (test 21) | `Calendar check only (Parts 1-2); RUN ANALYSIS not clicked, as instructed.` |
 | Wrong date run (test 21) | `First run DSUM_... used a wrong start date; repeated as DSUM_... with the correct dates.` |
 | Picture in parts | `Picture split into _part1 and _part2.` |
 | STOP followed | `STOP at "...": I saw "...". Nothing changed by me.` |
@@ -173,7 +170,7 @@ Neither is stored in the repository. Review: `Q-MAP_v0.1_UAT_Round2c_Owner_Resul
 | 18 | W7 Workbench | Yes | PASS | "Dataset list was longer than one screen, so three screenshots were captured ... VERANDA and 5PAISA were available again ... NSE:RELIANCE was available; rejected dataset NSE:RELIANCE_EQ was not offered." | `18a`, `18b`, `18c` | Yes | |
 | 19 | W8 | Yes | PASS | "Additional evidence saved: 19_Stop_Scan.txt" | `19_...png`, `.txt` | Yes | Stopped after 2 of 10; counter "10 / 10" (OW-45) |
 | 20 | V6 | Yes | PASS | - | `20_MA_Affinity_Settings.png` | Yes | |
-| 21 | A5 | Yes | PASS | "Dataset Summary completed successfully for NSE:ICICIBANK Daily. All expected results matched: Bars 7,166; First bar 02-Jan-1998; Last bar 02-Nov-2026; First close 7.86; Last close 1,387.4" | `21_ICICIBANK_Summary.png`, `Dataset_Summary_07_Nov_26_222125.csv` | Yes | Earlier run with a wrong start date repeated correctly. Calendar check: **additional item, not done** |
+| 21 | A5 | Yes | PASS | "Dataset Summary completed successfully for NSE:ICICIBANK Daily. All expected results matched: Bars 7,166; First bar 02-Jan-1998; Last bar 02-Nov-2026; First close 7.86; Last close 1,387.4" | `21_ICICIBANK_Summary.png`, `Dataset_Summary_07_Nov_26_222125.csv` | Yes | Earlier run with a wrong start date repeated correctly. Pop-up calendar checked by the Project Owner and **accepted** |
 | 22 | A7 | Yes | PASS | - | `22_Output_Folder.png` | Yes | |
 | 23 | Build in PDF | Yes | PASS | "Additional Evidence (text of live log) saved" | `23_...png`, `23_..._Live_log.txt` | Yes | `a202d43d78ed` |
 | 24 | W12 | Yes | PASS | "Both ... windows closed normally using the X buttons. No error messages, frozen windows or empty windows appeared." | `24_Closed_Desktop.png` | Yes | |
@@ -186,8 +183,8 @@ Neither is stored in the repository. Review: `Q-MAP_v0.1_UAT_Round2c_Owner_Resul
 - Sufficiency: 24 rows "Yes"; 6 rows "Yes, with limitation" (00, 01, 02, 10, 17, 26).
 - No repeat test recommended.
 
-**Open for the Project Owner:**
-- the Windows owner acceptance decision;
-- whether to carry out the additional test 21 calendar check.
+**Open for the Project Owner:** the Windows owner acceptance decision.
+
+**Accepted:** the test 21 pop-up calendar (checked by the Project Owner; no further test).
 
 **Recorded, no action:** Stop scan counter (OW-45, minor future improvement).

@@ -12,6 +12,7 @@
 | | | - The accidental folder scan is recorded only as the Project Owner asked (no investigation, no cleanup). |
 | | | - The Stop scan counter is classed as a minor future improvement (OW-45). |
 | | | - The test 21 calendar check is added as a separate acceptance item. |
+| 3 | 07-Nov-26 | The Project Owner confirmed that the test 21 pop-up calendar was checked and works correctly. The calendar is accepted; section 6 no longer lists it as pending or as a decision. |
 
 ## 1. What was reviewed
 
@@ -38,9 +39,8 @@ Original evidence file names are used unchanged in this review.
   evidence has a documentation limitation (a picture that does not show everything); none of these limitations leaves an
   important result unverified.
 - **No repeat test is needed.**
-- Open items for the Project Owner:
-  - the decision on Windows owner acceptance;
-  - whether to carry out the **new calendar check in test 21**, which was added after the tests were completed (section 6).
+- The **test 21 pop-up calendar** was checked by the Project Owner and works correctly; it is **accepted** (section 6).
+- Open item for the Project Owner: the decision on Windows owner acceptance.
 - The Stop scan counter display is recorded as a minor future improvement (OW-45).
 
 ## 3. Reconciliation of all tests
@@ -75,7 +75,7 @@ Original evidence file names are used unchanged in this review.
 | 18 | Workbench after restore (W7) | Yes | PASS | `18a/18b/18c_Workbench_After_Restore_*.png` | Yes | NSE:RELIANCE (18) offered, RELIANCE_EQ (13) not; VERANDA and 5PAISA offered. |
 | 19 | Stop scan (W8) | Yes | PASS | `19_Stop_Scan.png`, `19_Stop_Scan.txt` | Yes | Run `SCAN_20261107_161523`: "Stopped by you after 2 file(s); 8 file(s) not processed ... Work already done is kept"; no error. The folder held 10 files, not 30 or more (the paste method in the guide caused this; corrected in guide v2). The counter showed "10 / 10" (section 5). |
 | 20 | MA Affinity settings (V6) | Yes | PASS | `20_MA_Affinity_Settings.png` | Yes | SMA, 10, 250, 5,10,20,50, help lines. |
-| 21 | Dataset Summary of ICICIBANK (A5) | Yes | PASS | `21_ICICIBANK_Summary.png`, `Dataset_Summary_07_Nov_26_222125.csv` | Yes | Run `DSUM_20261107_165125`: 7166 bars, 02-Jan-98 to 02-Nov-26, first close 7.86, last close 1387.4. An earlier run (`DSUM_20261107_164410`) used a wrong start date, as the Project Owner reported; it was repeated correctly. The new calendar check is a separate item (section 6). |
+| 21 | Dataset Summary of ICICIBANK (A5) | Yes | PASS | `21_ICICIBANK_Summary.png`, `Dataset_Summary_07_Nov_26_222125.csv` | Yes | Run `DSUM_20261107_165125`: 7166 bars, 02-Jan-98 to 02-Nov-26, first close 7.86, last close 1387.4. An earlier run (`DSUM_20261107_164410`) used a wrong start date, as the Project Owner reported; it was repeated correctly. Pop-up calendar checked by the Project Owner and accepted (section 6). |
 | 22 | Output folder opens (A7) | Yes | PASS | `22_Output_Folder.png` | Yes | `Q-MAP_OUTPUT > Research_Reports > DSUM_20261107_165125`. |
 | 23 | Build in the PDF report | Yes | PASS | `23_Build_Fingerprint_PDF.png`, `23_Build_Fingerprint_PDF_Live_log.txt` | Yes | "Q-MAP build: qmap 0.1.0rc1 / c2 build a202d43d78ed". Top-5 and 43,579 interactions identical to the laptop engine runs. |
 | 24 | Clean close (W12) | Yes | PASS | `24_Closed_Desktop.png`; Project Owner's note | Yes | No message and no leftover window, as reported. |
@@ -138,7 +138,7 @@ testing folder, which the evidence covers, and not the private master database.
   `docs/Outstanding_Work_Register.md`.
 - **No program change** in this work, and **no further application testing** for this item.
 
-## 6. Additional acceptance item: the calendar in test 21 (A5)
+## 6. The pop-up calendar in test 21 (A5): accepted
 
 - **What changed:** after the round-2c tests were completed, test 21 in guide v2 was changed to use the **Calendar...**
   button. The Start date is typed as `01-Jan-98`, then the calendar is opened; it must open at January 1998. The four
@@ -152,10 +152,11 @@ testing folder, which the evidence covers, and not the private master database.
   - the green confirmation is shown in the form `= dd-Mmm-yyyy`;
   - the window is titled "Choose a date", with **Today**, **Clear** and **Close**;
   - choosing a date never starts an analysis.
-- **Status: not carried out.** Round-2c test 21 was completed with typed dates and stays PASS. The calendar check is a
-  **new, separate owner-acceptance item**. It does not require repeating the whole of test 21: only Parts 1 and 2 of the
-  revised test (calendar and dates), which can stop before **RUN ANALYSIS**.
-- **Decision:** the Project Owner decides whether to carry it out, after ChatGPT's review of this recommendation.
+- **Status: checked and accepted.** The Project Owner has confirmed that the pop-up calendar was checked and works
+  correctly. The calendar is accepted, and nothing needs changing. Round-2c test 21 (completed with typed dates) stays
+  PASS.
+- **No further calendar test and no repeat of test 21 is needed.** The calendar procedure stays in guide v2 for any
+  future owner test.
 
 ## 7. Other records (no action requested)
 
@@ -173,7 +174,7 @@ testing folder, which the evidence covers, and not the private master database.
 ## 8. Decisions for the Project Owner
 
 1. **Windows owner acceptance** of round 2c. The evidence supports it; the decision is the Project Owner's.
-2. **Test 21 calendar check (section 6):** carry it out (Parts 1-2 of the revised test 21) or not. ChatGPT reviews the
-   recommendation first.
+
+The test 21 pop-up calendar is already accepted (section 6) and needs no decision.
 
 No repeat test is recommended. Controlled analytical use is a separate decision and is not decided by this review.
