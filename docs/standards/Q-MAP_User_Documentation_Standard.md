@@ -17,7 +17,7 @@ software terms, application architecture, folder structures, programming convent
 assumptions.
 
 A document can be technically correct and still be unusable. The goal is that the Project Owner can do the task **correctly, safely
-and on his own**, without having to ask ChatGPT or Claude what the document meant.
+and independently**, without having to ask ChatGPT or Claude what the document meant.
 
 **The acceptance test for every document:** can the Project Owner follow it from beginning to end, understand what they
 are doing, recognise the correct result, save the required evidence, and know what to do if something goes wrong,
