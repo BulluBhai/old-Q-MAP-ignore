@@ -423,19 +423,55 @@ the bar may be full, even though the scan stopped. Trust the red message, not th
 
 **Save:** `20_MA_Affinity_Settings.png`.
 
-#### Test 21: Dataset Summary of ICICIBANK (A5) (PICTURE x 2 + FILE COPY)
+#### Test 21: Dataset Summary of ICICIBANK, with the calendar (A5) (PICTURE x 3 + FILE COPY)
 
 **Do:** in the **Analysis:** list choose **Dataset Summary**.
 **Do:** in the dataset list click **7 NSE:ICICIBANK Daily** (Bars 7166). Only this one line must be selected
 (the counter shows `[1 selected of ...]`).
-**Do:** click in the **Start date:** box (section 3) and type `02-Jan-98`. **Do not use the Calendar... button** (it starts at
-today's month and needs about 30 clicks to reach 1998).
-**You should see:** next to the box, in **green**, `= 02-Jan-1998`.
+**What this test checks:** that the **Calendar...** button works (A5 is "Dates and the calendar"), and that Dataset
+Summary gives the expected figures for the right dates. Choosing a date in the calendar only fills the date box; it
+never starts an analysis. Nothing runs until you click **RUN ANALYSIS** yourself.
+
+**Part 1: the calendar (sets the start date)**
+
+**Do:** click in the **Start date:** box (section 3) and type `01-Jan-98`.
+**You should see:** next to the box, in **green**, `= 01-Jan-1998`. (Typing first makes the calendar open at January
+1998. With an empty box it opens at today's month, which is far from 1998.)
+**Do:** click the **Calendar...** button next to the **Start date:** box.
+**You should see:** a small window called **Choose a date**, with **January 1998** at the top and the day **1** shown
+pressed in. At the top are four buttons: **<<** and **>>** move one year back or forward, **<** and **>** move one
+month back or forward. At the bottom are **Today**, **Clear** and **Close**.
+**Save:** PICTURE `21c_Calendar_January_1998.png` showing the small window.
+**Do:** click **>** once. **You should see:** **February 1998**.
+**Do:** click **<** once. **You should see:** **January 1998** again.
+**Do:** click **>>** once. **You should see:** **January 1999**.
+**Do:** click **<<** once. **You should see:** **January 1998** again.
+**Do:** click the day **2**.
+**You should see:** the small window closes by itself; the **Start date:** box now shows `02-Jan-98` and, in **green**,
+`= 02-Jan-1998`. The calendar has set the correct start date for this test.
+**Do not click** **Today** or **Clear** in the small window: **Today** would put today's date in the box and **Clear**
+would empty it. If you clicked one by mistake, nothing has run: click in the **Start date:** box, delete its text
+(Backspace) and type `02-Jan-98`.
+
+**Part 2: the end date**
+
 **Do:** click in the **End date:** box and type `02-Nov-26`.
 **You should see:** in green, `= 02-Nov-2026`.
 **Save:** PICTURE `21a_Dates_Before_Run.png` showing both boxes and both green lines.
-**If different:** a red line or another date → click in that box, delete its text (Backspace), type it again, check again.
-If it is still not right, mark **NOT SURE** and go to test 22 without running.
+
+**If different (calendar):** the small window does not open, does not show **January 1998**, or a button or a day
+does nothing. Click **Close** (or the X of the small window) if it is open. Nothing has run. Then:
+1. Click in the **Start date:** box, delete its text (Backspace) and type `02-Jan-98`.
+2. Check the green `= 02-Jan-1998`.
+3. Continue with Part 2, and record in the tracker what the calendar did (see the ready-to-copy note).
+**If different (dates):** a red line, or a green line with another date: click in that box, delete its text, type the
+date again and check again. If it is still not right, mark **NOT SURE** and go to test 22 **without** clicking
+**RUN ANALYSIS**.
+**Stop and check before running:** click **RUN ANALYSIS** only when the two green lines say exactly `= 02-Jan-1998`
+and `= 02-Nov-2026`.
+
+**Part 3: the summary**
+
 **Do:** click **RUN ANALYSIS**. Wait until the Live Log shows `... completed: 1 output file(s).`
 **Do:** click **Open Output Folder**. A File Explorer window opens on the run's folder `DSUM_...`.
 **Do:** copy the file `Dataset_Summary_....csv` into your evidence folder (section 3.5). Then open the **copy** in Excel or Notepad.

@@ -66,7 +66,7 @@ Evidence types: **PIC** = picture (.png), **TXT** = text copy (.txt), **FILE** =
 | 18 | Workbench after restore (W7) | VERANDA, 5PAISA and NSE:RELIANCE offered; NSE:RELIANCE_EQ not offered | PIC `18_Workbench_After_Restore.png` (or `_part1`...) | | |
 | 19 | Stop scan (W8) | Window responds; "Stopped by you after N file(s); M file(s) not processed"; counter may wrongly show all done (F3). Too fast: NOT TESTED | PIC `19_Stop_Scan.png`, TXT `19_Stop_Scan_Log.txt` (only if no personal file names) | | |
 | 20 | MA Affinity settings (V6) | SMA; 10; 250; 5,10,20,50; help lines | PIC `20_MA_Affinity_Settings.png` | | |
-| 21 | ICICIBANK Dataset Summary (A5) | Before run: green "= 02-Jan-1998", "= 02-Nov-2026"; CSV: 7166 bars, 02-Jan-98, 02-Nov-26, first close 7.86, last close 1387.4 | PIC `21a_Dates_Before_Run.png`, PIC `21b_ICICIBANK_Summary.png`, FILE `Dataset_Summary_..._.csv` | | |
+| 21 | ICICIBANK Dataset Summary, with the calendar (A5) | Calendar opens at January 1998; > < >> << change the month/year; clicking 2 fills "02-Jan-98" and closes it. Before run: green "= 02-Jan-1998", "= 02-Nov-2026"; CSV: 7166 bars, 02-Jan-98, 02-Nov-26, first close 7.86, last close 1387.4 | PIC `21c_Calendar_January_1998.png`, PIC `21a_Dates_Before_Run.png`, PIC `21b_ICICIBANK_Summary.png`, FILE `Dataset_Summary_..._.csv` | | |
 | 22 | Output folder (A7) | Address bar `...Research_Reports > DSUM_...`; CSV, run_log, run_manifest, Run_Metadata | PIC `22_Output_Folder.png` | | |
 | 23 | Build in PDF | "Q-MAP build: qmap 0.1.0rc1 / c2 build a202d43d78ed" | PIC `23_Build_Fingerprint_PDF.png`; WRITE in section 1 | | |
 | 24 | Close (W12) | Both windows close; no message; no empty window | PIC `24_Closed_Desktop.png` | | |
@@ -76,7 +76,7 @@ Evidence types: **PIC** = picture (.png), **TXT** = text copy (.txt), **FILE** =
 
 ## 4. Evidence checklist (tick when the file is in the evidence folder)
 
-- [ ] PIC: 00, 01a, 01b, 02a, 02b, 03-09, 10a, 10b, 11, 12a, 12b, 13, 14, 15a, 15b, 17a, 17b, 18, 19, 20, 21a, 21b, 22, 23, 24, 25a, 25b, 26, 27
+- [ ] PIC: 00, 01a, 01b, 02a, 02b, 03-09, 10a, 10b, 11, 12a, 12b, 13, 14, 15a, 15b, 17a, 17b, 18, 19, 20, 21a, 21b, 21c, 22, 23, 24, 25a, 25b, 26, 27
 - [ ] TXT: 03-09, 11, 12, 13, 19 (if allowed), 25, 27
 - [ ] FILE: `Dataset_Summary_..._.csv` (test 21)
 
@@ -90,6 +90,8 @@ Evidence types: **PIC** = picture (.png), **TXT** = text copy (.txt), **FILE** =
 | Stop scan worked (test 19) | `PASS - stopped after N file(s), M not processed; window responded; counter showed all done (F3).` |
 | Stop too slow (test 19) | `NOT TESTED - scan finished too quickly to stop (one try).` |
 | Wrong folder added (tests 19, 27) | `Wrong folder added by mistake (path ...), not scanned, stopped using it.` |
+| Calendar worked (test 21) | `PASS - calendar opened at January 1998; > < >> << changed month/year; day 2 filled 02-Jan-98.` |
+| Calendar did not work (test 21) | `FAIL (calendar) - the calendar did ... (describe); start date typed instead; nothing was run with a wrong date.` |
 | Wrong date run (test 21) | `First run DSUM_... used a wrong start date; repeated as DSUM_... with the correct dates.` |
 | Picture could not show everything | `Picture split into _part1 and _part2.` |
 | No separate originals folder (test 00) | `No separate originals folder; Market_Files is my master copy.` |
