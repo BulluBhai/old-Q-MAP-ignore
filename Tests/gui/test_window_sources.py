@@ -282,3 +282,19 @@ def test_the_detail_pane_shows_recorded_quality_warnings_and_a_rescan_shows_unch
     row = next(frame.files_tree.item(i, "values") for i, s in frame.file_rows.items())
     assert row[1] == "Unchanged (imported earlier)"
     assert "1 unchanged (imported earlier)" in frame.files_count.cget("text")
+
+
+def test_a_restored_file_shows_the_next_scans_result_on_the_window(gui, world, tmp_path):
+    """UAT round 2 (R2-O2): "Available again (restored by you)" right after Restore; after the next scan the row shows
+    that scan's result ("Unchanged (imported earlier)"). Display only."""
+    app, frame, _ = _scanned_frame(gui, tmp_path, ["AAA.csv", "BBB.csv"])
+    _select(frame, "AAA.csv")
+    frame.reject_button.invoke()
+    _select(frame, "AAA.csv")
+    frame.restore_button.invoke()
+    rows = {s.relative_path: frame.files_tree.item(i, "values")[1] for i, s in frame.file_rows.items()}
+    assert rows == {"AAA.csv": "Available again (restored by you)", "BBB.csv": "Imported"}
+    frame.scan_button.invoke()
+    gui.wait(lambda: not frame.running)
+    rows = {s.relative_path: frame.files_tree.item(i, "values")[1] for i, s in frame.file_rows.items()}
+    assert rows == {"AAA.csv": "Unchanged (imported earlier)", "BBB.csv": "Unchanged (imported earlier)"}

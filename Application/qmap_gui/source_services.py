@@ -101,19 +101,30 @@ def identity_text(s: D.FileState) -> str:
 RESTORED_LABEL = "Available again (restored by you)"
 
 
-def file_row(s: D.FileState, decisions: dict | None = None) -> tuple:
+def _restored_since_last_look(s: D.FileState, decisions: dict | None, restored_at: dict | None) -> bool:
+    """True while the file's datasets are restored AND the restore came after Q-MAP last looked at the file. After the
+    next scan the row shows that scan's result again (UAT round 2, R2-O2). Display only: the restore stays recorded.
+    Without `restored_at` (dataset id -> time of the restore) the restore is shown, as before."""
+    if not (decisions and s.dataset_ids and all(decisions.get(i) == UD.RESTORED for i in s.dataset_ids)):
+        return False
+    if restored_at is None:
+        return True
+    return all((restored_at.get(i) or "") > (s.observed_at or "") for i in s.dataset_ids)
+
+
+def file_row(s: D.FileState, decisions: dict | None = None, restored_at: dict | None = None) -> tuple:
     ds = ", ".join(str(i) for i in s.dataset_ids) or "-"
     result = s.outcome_label
     if decisions and s.dataset_ids and all(decisions.get(i) == "rejected" for i in s.dataset_ids):
         result = "Rejected by you"
-    elif decisions and s.dataset_ids and all(decisions.get(i) == UD.RESTORED for i in s.dataset_ids):
+    elif _restored_since_last_look(s, decisions, restored_at):
         result = RESTORED_LABEL  # Restore re-offers the data; nothing is imported again (UAT finding O3)
     return (s.relative_path, result, detected_timeframe(s), identity_text(s), s.change, ds,
             (s.detail or "")[:160])
 
 
 def file_details(s: D.FileState, decisions: dict | None = None,
-                 warnings: dict | None = None) -> list[tuple[str, str | None]]:
+                 warnings: dict | None = None, restored_at: dict | None = None) -> list[tuple[str, str | None]]:
     """Plain-English description of one file's current state, as (text, tag) parts. `warnings` (dataset id -> the
     quality warnings recorded for that dataset, see dataset_warnings) adds them in plain English (UAT finding O1)."""
     tag = {"imported": "ok", "reused": "ok", "needs_answer": "warning", "missing": "warning"}.get(s.outcome, "error")
@@ -124,7 +135,7 @@ def file_details(s: D.FileState, decisions: dict | None = None,
     inf = _inference(s)
     if inf:  # DQ-7 section 3.6: detected timeframe, sampled blocks, validation, discrepancy, acceptance status
         rejected = bool(decisions and s.dataset_ids and all(decisions.get(i) == "rejected" for i in s.dataset_ids))
-        restored = bool(decisions and s.dataset_ids and all(decisions.get(i) == UD.RESTORED for i in s.dataset_ids))
+        restored = _restored_since_last_look(s, decisions, restored_at)
         status = ("Rejected by you (reversible: Restore)" if rejected else
                   RESTORED_LABEL + "; nothing was imported again" if restored else
                   "Accepted by default" if s.outcome in ("imported", "reused") else s.outcome_label)
@@ -364,6 +375,18 @@ def exceptions_text(groups: list[dict]) -> list[tuple[str, str | None]]:
 
 def dataset_decisions(settings: Settings, dataset_ids) -> dict:
     return _with_db(settings, lambda db: {i: UD.current_decision(db, i) for i in dataset_ids})
+
+
+def dataset_restore_times(settings: Settings, dataset_ids) -> dict:
+    """dataset id -> when it was restored, for datasets whose latest decision is a restore (read only)."""
+    def build(db):
+        out = {}
+        for i in dict.fromkeys(dataset_ids):
+            rows = UD.history(db, i)
+            if rows and rows[-1]["decision"] == UD.RESTORED:
+                out[i] = rows[-1]["decided_at"]
+        return out
+    return _with_db(settings, build)
 
 
 def dataset_warnings(settings: Settings, dataset_ids) -> dict:

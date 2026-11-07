@@ -191,3 +191,42 @@ def test_w5_duplicate_is_removed_from_analyses_by_reversible_rejection(settings,
     assert run.run_dir.is_dir()  # the earlier research run and its record are untouched
     rs.record_decision(settings, [old], "restore", "undo")
     assert offered() == {old, new}  # reversible
+
+
+# ---- UAT round 2, R2-O2: the restored label lasts only until the next scan ------------------------------------------
+
+def _row_and_status(settings, db, source):
+    state = D.file_states(db, source.source_id)[0]
+    decisions = ss.dataset_decisions(settings, state.dataset_ids)
+    restored_at = ss.dataset_restore_times(settings, state.dataset_ids)
+    text = "".join(t for t, _ in ss.file_details(state, decisions, None, restored_at))
+    return ss.file_row(state, decisions, restored_at)[1], text, state
+
+
+def test_after_a_later_scan_a_restored_file_shows_that_scans_result(settings, db, folder):
+    from qmap.data_engine import user_decisions as UD
+
+    daily(folder / "NSE_AAA.csv")
+    src = D.add_folder_source(settings, db, folder)
+    scan(settings, db, src)
+    state = D.file_states(db, src.source_id)[0]
+    ss.reject_files(settings, [state], "test")
+    ss.restore_files(settings, [state], "test")
+    row, text, _ = _row_and_status(settings, db, src)
+    assert row == "Available again (restored by you)" and "nothing was imported again" in text  # right after Restore
+    n_datasets = db.one("SELECT COUNT(*) FROM datasets")[0]
+    r = scan(settings, db, src)  # the next scan: the file is unchanged
+    assert r.counts == {"unchanged_loaded": 1}
+    row, text, after = _row_and_status(settings, db, src)
+    assert row == "Unchanged (imported earlier)" and "Available again" not in text
+    assert "Status: Accepted by default" in text
+    # display only: the restore, the registry and the datasets are exactly as before
+    ds = after.dataset_ids[0]
+    assert [h["decision"] for h in UD.history(db, ds)] == ["rejected", "restored"]
+    assert UD.current_decision(db, ds) == "restored"
+    assert db.one("SELECT COUNT(*) FROM datasets")[0] == n_datasets and after.dataset_ids == state.dataset_ids
+    assert after.outcome == "imported"
+    assert ds in {d.dataset_id for d in ws.ready_datasets(settings)}  # still offered to analyses
+    # rejecting again is still shown at once, whatever the scan said
+    ss.reject_files(settings, [after], "again")
+    assert _row_and_status(settings, db, src)[0] == "Rejected by you"

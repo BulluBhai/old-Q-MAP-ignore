@@ -173,6 +173,7 @@ class SourcesFrame(tk.Frame):
         self._date_ids: dict[str, str] = {}
         self._decisions: dict = {}
         self._warnings: dict = {}
+        self._restored_at: dict = {}
         tk.Label(box, anchor="w", fg=MUTED_COLOR, justify="left", wraplength=940,
                  text="Everything Q-MAP reads is accepted by default. If something is wrong, select the file(s) above "
                       "and Reject (reversible: Restore), correct them, or add their names to the alias registry. "
@@ -285,12 +286,16 @@ class SourcesFrame(tk.Frame):
         except Exception:
             self._decisions = {}
         try:
+            self._restored_at = ss.dataset_restore_times(settings, [i for s in states for i in s.dataset_ids]) if states else {}
+        except Exception:
+            self._restored_at = {}
+        try:
             self._warnings = ss.dataset_warnings(settings, [i for s in states for i in s.dataset_ids]) if states else {}
         except Exception:
             self._warnings = {}
         for s in shown:
             rejected = s.dataset_ids and all(self._decisions.get(i) == "rejected" for i in s.dataset_ids)
-            item = self.files_tree.insert("", "end", values=ss.file_row(s, self._decisions),
+            item = self.files_tree.insert("", "end", values=ss.file_row(s, self._decisions, self._restored_at),
                                           tags=("bad" if rejected else TAGS.get(s.outcome, ""),))
             self.file_rows[item] = s
             if s.relative_path == keep_path:
@@ -320,7 +325,8 @@ class SourcesFrame(tk.Frame):
         keys = ss.question_keys(s) if s is not None else set()
         if s is not None:
             many = len(self.selected_files())
-            self.details.set_parts(ss.file_details(s, getattr(self, "_decisions", {}), getattr(self, "_warnings", {})) +
+            self.details.set_parts(ss.file_details(s, getattr(self, "_decisions", {}), getattr(self, "_warnings", {}),
+                                                   getattr(self, "_restored_at", {})) +
                                    ([(f"\n{many} files selected: Reject, Restore, Save correction and Add to alias "
                                       "registry apply to all of them.\n", "bold")] if many > 1 else []))
         opts = ss.date_options(s) if s is not None else []
