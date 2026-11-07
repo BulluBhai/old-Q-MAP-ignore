@@ -489,13 +489,16 @@ treated as uniform, because MA Affinity and other research assume one bar size. 
 
 ### W18 — Sparse instrument, reports and Workbench (REQUIRED)
 
-- **Steps:** click `NSE_SPARSE.csv`; then **Open run folder**; then in the Workbench run **Dataset Summary** on
-  **NSE:EVERYOTHER**.
+- **Steps:** click `NSE_SPARSE.csv`; then **Open run folder** (this button opens the folder of a scan made since
+  Q-MAP was started; if you did not scan `Pattern_Files` in this session, open the folder of the scan in which the six
+  files were first loaded in File Explorer instead: `Q-MAP_OUTPUT\Data_Management\SCAN_...`); then in the Workbench
+  run **Dataset Summary** on **NSE:EVERYOTHER**.
 - **Pass:** SPARSE: no interval warning; "Some days have fewer bars than usual" lists the one-bar dates, and
   "Long gaps between dates" (2025-04-04 -> 2025-04-14) is also shown: a real gap in this test file. Run folder:
   the `issues_event...csv` files of the W15-W17 files mention the interval finding with source rows (two say
   `interval_change_uncertain`, two say `interval_change_detected`); RANDOMGAPS and SPARSE have none;
-  `Scan_Report_...csv` lists all six as imported. Workbench: the readiness box says "Validated with warnings: ...
+  the `Scan_Report_...csv` of the scan that first loaded them lists all six as imported (a later scan of the unchanged
+  files lists them as "Unchanged (imported earlier)" and writes no new `issues_event` files). Workbench: the readiness box says "Validated with warnings: ...
   interval_change_uncertain ..." and the summary runs.
 - **Evidence:** `Evidence\05_Patterns\W18_sparse.png`, `W18_run_folder.png`, `W18_workbench.png`.
 
@@ -512,7 +515,8 @@ treated as uniform, because MA Affinity and other research assume one bar size. 
 - **Steps:** open `database_manager.py` and `analytical_workbench.py` again from IDLE (F5 each); in Sources, select
   `Market_Files` and scan again.
 - **Pass:** folders remembered; every dataset still listed; the Workbench's "Last run folder" shows your latest
-  completed run; the scan reports every file "Unchanged (imported earlier)" (AKZOINDIA "Unchanged (rejected earlier)").
+  completed run; the scan reports 10 files "Unchanged (imported earlier)" and AKZOINDIA "Unchanged (rejected
+  earlier)" (`Market_Files` holds 11 files; AKZOINDIA is never imported).
 - **Evidence:** `Evidence\06_Originals\V14_restart.png`.
 
 ### W11 — Your original files were not changed (REQUIRED, at the very end)

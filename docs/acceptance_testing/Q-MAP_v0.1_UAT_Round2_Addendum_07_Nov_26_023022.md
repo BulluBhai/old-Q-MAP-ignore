@@ -53,17 +53,35 @@ no dataset, observation or import is added or changed.
 |---|---|---|---|---|---|
 | Local Linux (Ubuntu 24.04.5, Xvfb, GUI required; 214 GUI passed) | 3.11.15 | 1,354 | 2 | 0 | Windows-junction tests |
 | Local Linux (same) | 3.12.13 | 1,354 | 2 | 0 | same |
-| GitHub CI | 3.11, 3.12 × Windows, Ubuntu | see PR #12 and section 4a | | | |
+| GitHub CI Windows (GUI required; 214 GUI passed) | 3.11 | 1,355 | 1 | 0 | hard-link fallback test (macOS/Linux only) |
+| GitHub CI Windows (same) | 3.12 | 1,355 | 1 | 0 | same |
+| GitHub CI Ubuntu (no display) | 3.11 | 1,247 | 109 | 0 | 107 window tests (no display), 2 Windows-junction tests |
+| GitHub CI Ubuntu (no display) | 3.12 | 1,247 | 109 | 0 | same |
 
 Details: `uat_round2b_07_Nov_26/Local_pytest_py311.txt`, `Local_pytest_py312.txt`. MA Affinity output on the same
 synthetic file is byte-identical on `56a72f4` and `06d8659` (and on `efb4bd9`):
 `uat_round2b_07_Nov_26/MA_Affinity_output_unchanged.txt`.
 
-**4a. GitHub CI on `06d8659`:** recorded after the runs complete (PR #12 and the round-2b close-out message).
+**4a. GitHub CI (07-Nov-26), totals read from each job's log.**
+
+| Run | Commit | Attempt | Result |
+|---|---|---|---|
+| #116 (push), #117 (pull_request) | `06d8659` | 1, and #117 attempt 2 at 02:32 UTC | **Not run (unavailable):** every job ended within seconds without a runner. GitHub's annotation: "The job was not started because recent account payments have failed or your spending limit needs to be increased." Account billing, not the code |
+| #118 (push), #119 (pull_request) | `3b25fe8` (documents only) | 1 | **Not run (unavailable)**, same annotation |
+| #117 | `06d8659` | 3 (02:50 UTC, after the repository was made public) | **Success, all four jobs**: the table above |
+| #119 | `3b25fe8` | 2 (04:52 UTC) | **Success, all four jobs**, identical totals: Windows 3.11 and 3.12 1,355 passed, 1 skipped; Ubuntu 3.11 and 3.12 1,247 passed, 109 skipped; 0 failed |
+
+No workflow, test or application change was made to obtain these results. The commit that adds this table changes
+documents only; its own CI result is reported on PR #12 (a commit cannot record its own run).
 
 ## 5. What the owner repeats
 
-Use `Q-MAP_v0.1_UAT_Round2b_Owner_Screen_Checklist_07_Nov_26_023022.md` with the new download (build `a202d43d78ed`).
+Use `Q-MAP_v0.1_UAT_Round2c_Owner_Screen_Checklist_07_Nov_26_050239.md` with the new download (build `a202d43d78ed`).
+Round 2c (07-Nov-26) supersedes the round-2b checklist (kept unchanged): V14 (step 21) and A4 (step 11) now expect 10
+files "Unchanged (imported earlier)" and AKZOINDIA "Unchanged (rejected earlier)"; W18 (step 10) expects both SPARSE
+warnings and includes the scan-folder check of the full Windows manual (folder
+`Q-MAP_OUTPUT\Data_Management\SCAN_20261106_174124`, whose Scan_Report lists the six pattern files as Imported, as
+verified in the round-1 evidence).
 **A4 (step 11), W7 (step 14) and V14 (step 21)** are the checks this change affects. The other screen steps remain to
 be done as before; Claude's round-2 engine results for them stay valid (the change touches only the restored-file
 wording).
