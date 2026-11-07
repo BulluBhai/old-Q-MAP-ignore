@@ -1,163 +1,179 @@
-# Q-MAP v0.1: UAT round 2c, review of the owner's Windows test results
+# Q-MAP v0.1: UAT round 2c, review of the Project Owner's Windows test results
 
-**Reviewed 07-Nov-26 by Claude (cloud session). Build `a202d43d78ed`. Documents only; no program, data or registry changed.**
+**Build `a202d43d78ed`. Documents only: no program, data, registry or research output was changed for this review.**
+
+| Version | Date | Change |
+|---|---|---|
+| 1 | 07-Nov-26 | First review of the round-2c owner tests |
+| 2 | 07-Nov-26 | Consolidated review, changed as follows: |
+| | | - Every test is reconciled as completed / result / evidence / sufficiency / decision. |
+| | | - The four evidence gaps (tests 00, 10, 17, 26) are assessed one by one. |
+| | | - `Market_Files` is recorded as the separate Q-MAP testing folder, and the repeat requests for tests 00, 26 and 27 are withdrawn. |
+| | | - The accidental folder scan is recorded only as the Project Owner asked (no investigation, no cleanup). |
+| | | - The Stop scan counter is classed as a minor future improvement (OW-45). |
+| | | - The test 21 calendar check is added as a separate acceptance item. |
 
 ## 1. What was reviewed
 
 | Item | Detail |
 |---|---|
-| Owner tracker | `Q-MAP_v0.1_UAT_Round2c_Test_Tracker_07_Nov_26_063903.docx` (27,138 bytes), SHA-256 `a3fba6af4ccc69f68945565d650f8c2393d76b33e7e63130449ee28f26eb28a6` |
-| Evidence ZIP | `Q-MAP_Test_Evidence.zip` (3,386,322 bytes, 48 files), SHA-256 `8a27ad65e8c3824262d9310c4c8cbd1db8cdbd20322fc1dfa0280bc4a80ce6ea`: 32 pictures, 14 text files (screen text and live-log copies), 1 CSV |
-| Testing | 07-Nov-26, evening, owner's laptop (Windows 11 Pro 10.0.26300, Python 3.12.10) |
-| Method | Every one of the 27 tracker entries was compared with its pictures and text files, then with the run IDs, dataset numbers and counts in the live logs, and with the expected results of the round-2c guide and checklist. Unclear points were checked against the code (`qmap/data_engine/discovery.py`, `qmap_gui/sources.py`, `qmap_gui/widgets.py`). |
+| Project Owner's tracker | `Q-MAP_v0.1_UAT_Round2c_Test_Tracker_07_Nov_26_063903.docx` (27,138 bytes), SHA-256 `a3fba6af4ccc69f68945565d650f8c2393d76b33e7e63130449ee28f26eb28a6` |
+| Evidence ZIP | `Q-MAP_Test_Evidence.zip` (3,386,322 bytes, 48 files: 32 pictures, 14 text copies of screen boxes or the Live Log, 1 CSV), SHA-256 `8a27ad65e8c3824262d9310c4c8cbd1db8cdbd20322fc1dfa0280bc4a80ce6ea` |
+| Testing | 07-Nov-26, evening; Project Owner's laptop (Windows 11 Pro 10.0.26300, Python 3.12.10); program in `D:\Q-MAP_V01\Q-MAP_APP` |
+| Method | Each tracker row compared with its pictures and text copies, with the run IDs, dataset numbers and counts in the Live Log copies, and with the round-2c expected results. Wording and behaviour that the evidence left open were checked in the program code (read only). |
 
-**The two uploads are not added to the repository.** One live-log copy (`19_Stop_Scan.txt`) lists the names of personal
-files from a folder on the owner's computer (see finding F1), and the repository is public. Their checksums are recorded
-above for traceability. Whether to add the evidence, with that file removed or redacted, is for the owner to decide.
+The tracker and the evidence ZIP are **not** stored in the repository (public). Their checksums above identify them.
+Original evidence file names are used unchanged in this review.
 
-## 2. Overall result
+**Terms used below:**
+- **Market_Files** (`D:\Q-MAP_V01\Market_Files`) is the separate **Q-MAP testing folder**. The Project Owner copied a
+  small selection of files into it from a private master database.
+- The private master database is **not** part of Q-MAP testing. It is not requested, inspected or referred to by any
+  test, and nothing in this review makes a claim about it.
 
-- **No test failed.** The tracker has 30 rows: tests 01-27 plus 00, 00a and 00b.
-  - 18 rows: **Verified**.
-  - 8 rows: **Verified with observation** (01, 02, 05, 15, 19, 21, 25, 27).
-  - 4 rows: **Partly evidenced**, meaning the result is likely but the pictures do not show everything asked (00, 10, 17, 26).
-  - None: **Not verified**.
-- **Two matters need the owner's decision before acceptance:**
-  - **F1:** during the W8 test a personal folder ("My Desktop") was added and scanned by mistake.
-  - **F2:** the W11 "originals" checks were not shown to have used the folder of real originals outside `D:\Q-MAP_V01`.
-- **One small display defect was found (F3):** after Stop scan the counter shows all files as done. It is reported, not fixed.
-- **Windows owner acceptance is not yet complete.** That decision stays with the owner, after ChatGPT's review.
+## 2. Result in one paragraph
 
-Status key used below:
-- **Verified:** the evidence supports the owner's PASS.
-- **Verified with observation:** the evidence supports PASS, but something should be noted.
-- **Partly evidenced:** the result is likely, but the evidence does not show everything the test asks for.
-- **Not verified:** the evidence does not support the test as specified.
+- **All tests were completed** (tests 01-27 and the preparation records 00a, 00 and 00b), and **no test failed**.
+- The Project Owner reported PASS for every test. The evidence supports every reported result. For some tests the
+  evidence has a documentation limitation (a picture that does not show everything); none of these limitations leaves an
+  important result unverified.
+- **No repeat test is needed.**
+- Open items for the Project Owner:
+  - the decision on Windows owner acceptance;
+  - whether to carry out the **new calendar check in test 21**, which was added after the tests were completed (section 6).
+- The Stop scan counter display is recorded as a minor future improvement (OW-45).
 
-## 3. Test by test
+## 3. Reconciliation of all tests
 
-| No. | Check | Owner | Review | Evidence and reasoning |
-|---|---|---|---|---|
-| 00a | New program in place | PASS | Verified | The build in the PDF (test 23) is `a202d43d78ed`, which proves the program in use. The tracker does not record which Step 1 situation applied. |
-| 00 | Originals before (W11) | PASS | Partly evidenced | 11 files with sizes and dates are visible, but **no address bar**, so the folder is not identified. See F2. |
-| 00b | Python version | recorded | Verified | `Python 3.12.10 (tags/v3.12.10:0cc8128, Apr 8 2025, ...) on win32`. |
-| 01 | V1, V2 folders | PASS | Verified with observation | Both folders show "OK - this folder can be used" and "Both folders are ready and remembered". The READY labels of the Database Manager modules are below the picture's edge. |
-| 02 | V3 Workbench home | PASS | Verified with observation | Folders OK; Dataset Summary and MA Research: MA Affinity (QLOPB) READY. "Market Intelligence (MIQP) COMING SOON" is further down the screen and not in the picture. |
-| 03 | W2 OLAELEC | PASS | Verified | Text file: 1 minute; Accepted by default; "Quality warnings recorded for dataset 11"; "Some dates/times have more than one different value" (183 timestamps). Also shows "Rows were not in date order" (expected for this file). |
-| 04 | W14 RANDOMGAPS | PASS | Verified | Only "Some days have fewer bars than usual"; no bar-interval warning. |
-| 05 | W15 EVERYOTHER | PASS | Verified with observation | "Part of the file may have another bar interval", rows 1126-1163, "cannot show whether", 5 minutes. **Also** "Long gaps between dates" and "Some days have fewer bars than usual". These are correct for this file, but the guide did not mention them. |
-| 06 | W16 GENUINE3M | PASS | Verified | "Part of the file has another bar interval", rows 2251-2375, 3-minute steps. |
-| 07 | W16 DAILY0000 | PASS | Verified | "has another bar interval"; "outside the times of the intraday bars". |
-| 08 | W17 DAILY0915 | PASS | Verified | "may have another bar interval"; "a time the intraday bars also use". |
-| 09 | W18 SPARSE | PASS | Verified | "Long gaps between dates 2025-04-04 -> 2025-04-14" and "fewer bars"; no bar-interval warning. |
-| 10 | W18 scan folder and report | PASS | Partly evidenced | `10b`: the Scan_Report lists all six pattern files as Imported (source Pattern_Files). **`10a_Pattern_Scan_Folder.png` is missing**, so the scan folder itself is not shown. |
-| 11 | W18 Workbench warning | PASS | Verified | Readiness: "READY", "NOTE Validated with warnings ... interval_change_uncertain", 3413 bars. The tracker's note names the wrong text file (11 and 12 are swapped in the notes; the files themselves are correct). |
-| 12 | A4 repeat scan | PASS | Verified | Run `SCAN_20261107_145104`: "10 unchanged (imported earlier), 1 unchanged (rejected earlier)"; all 11 files listed; nothing imported. |
-| 13 | W5 RELIANCE name | PASS | Verified | "Instrument: NSE:RELIANCE (alias)", dataset 18. |
-| 14 | W5 alias registry | PASS | Verified | The Excel picture shows `RELIANCE` / `RELIANCE EQ`. It was opened in Excel, not Notepad. The later scans (tests 25 and 27) show "same validation settings", so the registry was not changed by Excel. |
-| 15 | W5 comparison | PASS | Verified with observation | Bars 7746 and 07-Nov-94 to 30-Dec-25 are the same for datasets 13 and 18, and 13 is the lower number. The pictures come from the **Workbench readiness box**, not from Datasets and Storage as the guide asked, so "Original file(s)" is not shown there. It is shown for dataset 13 in picture 16, and dataset 18 is linked to `RELIANCE_EQ.csv` in text file 13. Together this supports the comparison. |
-| 16 | W5 reject (real record) | PASS | Verified | Datasets and Storage: dataset 13 "State: Rejected by you", reason `duplicate after alias correction (W5)`, message "Rejected 1 dataset(s) ... Restore undoes it". The Workbench list (18b) offers dataset 18 NSE:RELIANCE Daily and not 13; 18 datasets are offered (19 before). **This real-record decision is now in effect.** |
-| 17 | W6/W7 reject and restore | PASS | Partly evidenced | The live log shows "Rejected 2 dataset(s) [2, 17]" then "Restored 2 dataset(s) [2, 17]" (5PAISA = 2, VERANDA = 17), and the status messages agree. The pictures do **not** show the two file rows with "Rejected by you" / "Available again (restored by you)", which was the check the guide asked for. |
-| 18 | W7 Workbench after restore | PASS | Verified | 18a-c: the full list is visible; NSE:RELIANCE (18) offered, RELIANCE_EQ (13) not offered; VERANDA and 5PAISA offered. |
-| 19 | W8 stop scan | PASS | Verified with observation, see **F1** and **F3** | Run `SCAN_20261107_161523` on `W8_Round2c`: "Stopped by you after 2 file(s); 8 file(s) not processed ... Work already done is kept"; no error. Window responsiveness is not shown, and the folder held 10 files, not 30 or more. Before this, the first scan of `W8_Round2c` found no supported files, and a personal folder was added and scanned (F1). |
-| 20 | V6 MA Affinity settings | PASS | Verified | SMA, MA start 10, MA end 250, forward windows 5,10,20,50, a help line under each. |
-| 21 | A5 Dataset Summary | PASS | Verified with observation, see **F4** | First run `DSUM_20261107_164410` (wrong start date, as the owner reported). Second run `DSUM_20261107_165125`: CSV Bars 7166, First bar 02-Jan-98, Last bar 02-Nov-26, First close 7.86, Last close 1387.4. **All expected values match.** The date boxes before the run are not pictured; the CSV and the PDF data line (test 23) confirm the period. |
-| 22 | A7 output folder | PASS | Verified | Explorer opened `Q-MAP_OUTPUT\Research_Reports\DSUM_20261107_165125` with the CSV, run log, manifest and metadata. |
-| 23 | Build in PDF | PASS | Verified | PDF header: "Q-MAP build: qmap 0.1.0rc1 / c2 build a202d43d78ed", source fingerprint `a202d43d78ed...9bea2`, run `MAAF_20261107_170332`. The live log shows 7166 bars, Top-5 SMA-243/244/245/242/246 and 43,579 interactions, **identical to the laptop engine runs** (reproducibility confirmed again). The tracker's "Build shown in the PDF" field was left empty. |
-| 24 | W12 close | PASS | Verified | Desktop picture; the owner reports no error and no leftover window. |
-| 25 | V14 restart and rescan | PASS | Verified with observation | Run `SCAN_20261107_172216`: 10 "Unchanged (imported earlier)" (VERANDA and 5PAISA included, no longer "Available again"); AKZOINDIA "Unchanged (rejected earlier)". "Folders remembered" and "Last run folder" are stated by the owner but not pictured. |
-| 26 | W11 originals after | PASS | Partly evidenced, see **F2** | Same 11 names, sizes and dates as picture 00. No address bar. The owner's note says "Compared the original Market_Files folder" and "I had 11 files". |
-| 27 | W11 content check | PASS | Verified with observation, see **F2** | Run `SCAN_20261107_172713` on `W11_Check_2c`: **11 files**, 10 "Already loaded" and AKZOINDIA "Rejected earlier (unchanged)"; every stored copy verified ("stored copy verified, no new copy"). Expected was 8 files (7 + AKZOINDIA). The tracker note says "eight original market files". |
+**Sufficiency:**
+- **Yes:** the evidence alone supports the result.
+- **Yes, with limitation:** the result is supported, and the limitation is about documentation (what a picture shows),
+  not about whether the function worked.
 
-## 4. Findings
+| No. | Purpose (checklist name) | Completed | Result reported | Evidence available (original file names) | Sufficient | Limitation / note |
+|---|---|---|---|---|---|---|
+| 00a | Tested program in place | Yes | PASS | Build line in the PDF (test 23) | Yes | The Step 1 situation was not written in the tracker; the PDF proves the tested build. |
+| 00 | Testing folder before testing (W11) | Yes | PASS | `00_Original_Files_Before.png` | Yes, with limitation | See section 4 (no address bar). |
+| 00b | Python version | Yes | Recorded | Tracker: `Python 3.12.10 (tags/v3.12.10:0cc8128, Apr 8 2025, ...) on win32` | Yes | |
+| 01 | Database Manager opens, folders accepted (V1, V2) | Yes | PASS | `01_Database_Manager_Folders.png` | Yes, with limitation | Both folders "OK - this folder can be used." and "Both folders are ready and remembered."; the READY labels lower on the Home screen are not in the picture. |
+| 02 | Workbench opens (V3) | Yes | PASS | `02_Workbench_Home.png` | Yes, with limitation | Folders OK; Dataset Summary and MA Research: MA Affinity (QLOPB) READY. The "Market Intelligence (MIQP)" line is further down and not in the picture. |
+| 03 | OLAELEC warnings (W2) | Yes | PASS | `03_OLAELEC_Details.png`, `03_OLAELEC_Details.txt` | Yes | 1 minute; Accepted by default; "Quality warnings recorded for dataset 11"; "Some dates/times have more than one different value". |
+| 04 | RANDOMGAPS (W14) | Yes | PASS | `04_RandomGaps.png`, `.txt` | Yes | Only "Some days have fewer bars than usual". |
+| 05 | EVERYOTHER (W15) | Yes | PASS | `05_EveryOther.png`, `.txt` | Yes | "may have another bar interval", rows 1126-1163, "cannot show whether", 5 minutes. Also "Long gaps between dates" and "fewer bars", which are correct for this file. |
+| 06 | GENUINE3M (W16) | Yes | PASS | `06_Genuine3M.png`, `.txt` | Yes | "has another bar interval", rows 2251-2375. |
+| 07 | DAILY0000 (W16) | Yes | PASS | `07_Daily0000.png`, `.txt` | Yes | "outside the times of the intraday bars". |
+| 08 | DAILY0915 (W17) | Yes | PASS | `08_Daily0915.png`, `.txt` | Yes | "a time the intraday bars also use". |
+| 09 | SPARSE (W18) | Yes | PASS | `09_Sparse_File_Details.png`, `.txt` | Yes | "Long gaps between dates 2025-04-04 -> 2025-04-14" and "fewer bars"; no interval warning. |
+| 10 | Scan report of the pattern files (W18) | Yes | PASS | `10b_Pattern_Scan_Report.png` | Yes, with limitation | See section 4 (`10a` not supplied). |
+| 11 | Dataset with warnings usable (W18) | Yes | PASS | `11_Workbench_Warning.png`, `.txt` | Yes | "READY"; "NOTE Validated with warnings". The tracker notes for 11 and 12 name each other's text file; the files themselves are correct. |
+| 12 | Repeat scan (A4) | Yes | PASS | `12_Repeat_Scan.png`, `.txt` | Yes | Run `SCAN_20261107_145104`: "10 unchanged (imported earlier), 1 unchanged (rejected earlier)"; nothing imported. |
+| 13 | RELIANCE name (W5) | Yes | PASS | `13_Reliance_After_Scan.png`, `.txt` | Yes | "Instrument: NSE:RELIANCE (alias)", dataset 18. |
+| 14 | Alias registry (W5) | Yes | PASS | `14_Alias_Registry.png` | Yes | Row RELIANCE / RELIANCE EQ. Later scans report the same settings, so the registry file was not changed. |
+| 15 | RELIANCE comparison (W5) | Yes | PASS | `15a_Reliance_EQ_Details.png`, `.txt`, `15b_Reliance_Details.png`, plus `16` and `13` | Yes | Same bars (7746) and dates (07-Nov-94 to 30-Dec-25); 13 is the lower number; original file shown in `16` (dataset 13) and in `13_...txt` (dataset 18). The pictures come from the Workbench readiness box, not Datasets and Storage. |
+| 16 | Reject the old RELIANCE_EQ duplicate (W5) | Yes | PASS | `16_Old_Reliance_Rejected.png` | Yes | Dataset 13 "Rejected by you", reason recorded; 18 Active (also shown in `18b`). **This decision is in effect.** |
+| 17 | Reject and restore VERANDA and 5PAISA (W6, W7) | Yes | PASS | `17a_Files_Rejected.png`, `17b_Files_Restored.png` | Yes, with limitation | See section 4 (file rows not pictured). |
+| 18 | Workbench after restore (W7) | Yes | PASS | `18a/18b/18c_Workbench_After_Restore_*.png` | Yes | NSE:RELIANCE (18) offered, RELIANCE_EQ (13) not; VERANDA and 5PAISA offered. |
+| 19 | Stop scan (W8) | Yes | PASS | `19_Stop_Scan.png`, `19_Stop_Scan.txt` | Yes | Run `SCAN_20261107_161523`: "Stopped by you after 2 file(s); 8 file(s) not processed ... Work already done is kept"; no error. The folder held 10 files, not 30 or more (the paste method in the guide caused this; corrected in guide v2). The counter showed "10 / 10" (section 5). |
+| 20 | MA Affinity settings (V6) | Yes | PASS | `20_MA_Affinity_Settings.png` | Yes | SMA, 10, 250, 5,10,20,50, help lines. |
+| 21 | Dataset Summary of ICICIBANK (A5) | Yes | PASS | `21_ICICIBANK_Summary.png`, `Dataset_Summary_07_Nov_26_222125.csv` | Yes | Run `DSUM_20261107_165125`: 7166 bars, 02-Jan-98 to 02-Nov-26, first close 7.86, last close 1387.4. An earlier run (`DSUM_20261107_164410`) used a wrong start date, as the Project Owner reported; it was repeated correctly. The new calendar check is a separate item (section 6). |
+| 22 | Output folder opens (A7) | Yes | PASS | `22_Output_Folder.png` | Yes | `Q-MAP_OUTPUT > Research_Reports > DSUM_20261107_165125`. |
+| 23 | Build in the PDF report | Yes | PASS | `23_Build_Fingerprint_PDF.png`, `23_Build_Fingerprint_PDF_Live_log.txt` | Yes | "Q-MAP build: qmap 0.1.0rc1 / c2 build a202d43d78ed". Top-5 and 43,579 interactions identical to the laptop engine runs. |
+| 24 | Clean close (W12) | Yes | PASS | `24_Closed_Desktop.png`; Project Owner's note | Yes | No message and no leftover window, as reported. |
+| 25 | Restart and rescan (V14) | Yes | PASS | `25_Restart_Check.png`, `.txt`; Project Owner's note | Yes | Run `SCAN_20261107_172216`: 10 unchanged (imported earlier), 1 unchanged (rejected earlier); folders remembered and last run folder, as reported. |
+| 26 | Testing folder after testing (W11) | Yes | PASS | `26_Original_Files_After.png` | Yes, with limitation | See section 4 (no address bar). |
+| 27 | Content check of the testing files (W11) | Yes | PASS | `27_Original_Content_Check.png`, `.txt` | Yes | Run `SCAN_20261107_172713` on a copy of the 11 testing files: 10 "Already loaded", AKZOINDIA "Rejected earlier (unchanged)", each "stored copy verified, no new copy". The guide expected 8 files; the testing folder holds 11, so the count, not the result, differs. |
 
-**F1: a personal folder was added and scanned during the W8 test (matter for the owner; data protection).**
-- **What happened:** the live log shows "Folder added: My Desktop (C:\Users\...\OneDrive - ...\My Desktop)" and run
-  `SCAN_20261107_155640`: 27 files "Ignored (not a data file type)" and 9 "Rejected". Both test folders were then
-  removed with **Stop using selected folder**, and `W8_Round2c` was added again.
-- **What Q-MAP kept:** files rejected at the interpretation stage are **not copied** into Q-MAP_DATA. In
-  `discovery.py`, a rejected interpretation is recorded and returned before `ingest_file`. The log has no "Receipt" lines
-  for that scan, which confirms it. Q-MAP did record, permanently, for each of those files:
-  - its name, size and checksum;
-  - the rejection message, which for some files names sheet or column headings;
-  - this record is in the Q-MAP_DATA registry and in the scan report folder
-    `Q-MAP_OUTPUT\Data_Management\SCAN_20261107_155640`.
-- **The source:** it stays listed with its history ("Folder no longer scanned (its history and data are kept)").
-- **Not a program fault.** The folder picker opens in the user's home folder (`Path.home()`), and any folder can be chosen.
-- **Owner decision needed:** accept these records as they are, or ask for a controlled, reviewed removal. That would be
-  a registry change and needs separate approval. **Do not delete anything by hand.**
-- **Guide change:** precise folder-picker steps, a path check in the Live Log before scanning, and a stop rule for a
-  wrong folder.
+**Totals:**
+- 30 rows: tests 01-27 plus 00a, 00 and 00b.
+- Completed: 30. Results supported: 30. Failed: 0. Pending: 0.
+- Sufficiency: "Yes" for 24 rows; "Yes, with limitation" for 6 rows (00, 01, 02, 10, 17, 26).
 
-**F2: the W11 checks did not clearly use the folder of real originals.**
-- **Expected:** the eight original files kept **outside** `D:\Q-MAP_V01`, pictured with the address bar.
-- **Recorded:**
-  - 11 files, matching `Market_Files` exactly (including `ICICIBANK - Copy` and `ICICIBANK (1)`);
-  - no address bar in either picture;
-  - the owner's note "Compared the original Market_Files folder".
-- **What is proved:** the 11 files in the folder used are unchanged, and Q-MAP holds exactly their content. Every file
-  was "Already loaded" or "Rejected earlier (unchanged)", with "stored copy verified".
-- **What is not proved:** that a separate folder of original files outside `D:\Q-MAP_V01` is unchanged.
-- **Owner decision needed (any one):**
-  - confirm that `D:\Q-MAP_V01\Market_Files` is where you keep your originals (then W11 is verified, with 11 files);
-  - or repeat tests 00, 26 and 27 on the real originals folder with the revised guide;
-  - or record W11 as "verified for Market_Files only".
-- **Guide change:** define "originals folder", require the address bar, and set the expected result by file count
-  rather than a fixed "seven".
+## 4. The four evidence gaps
 
-**F3: after Stop scan the progress counter shows every file as done (display defect, low).**
-- **Seen:** picture 19 shows "Files done: 10 / 10" and a full green bar, while the message correctly says "Stopped by
-  you after 2 file(s); 8 file(s) not processed".
-- **Cause:** `discovery.py` calls `progress(len(files), len(files), "")` after the loop, even when the scan was stopped.
-- **Effect:** display only. No data is affected, and the message, log and scan report are correct.
-- **Not fixed** (this is a documents-only change). The owner decides whether to log it as a correction item.
+**Test 00 and test 26: testing folder before and after (W11, part 1)**
+- **Available:** two pictures with the same 11 files, in the same order, with the same names, Date modified and Size.
+  The Project Owner's note on test 26 identifies the folder as `Market_Files`. The 11 names are exactly the 11 files
+  that every scan of `Market_Files` lists (tests 12 and 25).
+- **Missing:** the address bar, so the folder path is not in the pictures.
+- **Effect:** none on an important result. The folder is identified by the Project Owner's note and by the matching
+  file list. The pictures show no change in name, size or date. Test 27 proves independently that the content is unchanged.
+- **Classification:** documentation limitation (picture framing), not a verification gap.
+- **Resolution:** accept as is. Guide v2 asks for the address bar in future runs. **No repeat.**
 
-**F4: the start date was entered wrongly the first time (test 21).**
-- **What happened:** the owner reported different results in the first run. The live log shows two Dataset Summary runs
-  on dataset 7 (`DSUM_20261107_164410`, then `DSUM_20261107_165125`). Only the second one is in the evidence, and it
-  matches every expected value.
-- **Likely cause:** the guide asked for the calendar. The calendar opens at the current month, so reaching January 1998
-  takes about 28 clicks on `<<` (one year each) and then `<` for the months. That is easy to get wrong.
-- **What the program did:** it showed the chosen date in green next to the box ("= dd-Mmm-yyyy"). There is no evidence
-  of a program fault.
-- **Remains in Q-MAP_OUTPUT:** the first run's folder, which is harmless and should not be deleted.
-- **Guide change:** type `02-Jan-98` and `02-Nov-26` instead, read the two green confirmations, picture them before
-  running, and record any repeated run with its run ID.
+**Test 10: scan report of the pattern files (W18)**
+- **Available:** `10b_Pattern_Scan_Report.png`. It shows the Scan_Report contents: source `Pattern_Files`, folder
+  `D:\Q-MAP_V01\Pattern_Files`, and all six pattern files with Result "Imported", "1 dataset(s) created".
+- **Missing:** `10a_Pattern_Scan_Folder.png`, the picture of the scan folder `SCAN_20261106_174124` in File Explorer.
+- **Effect:** none. The result that matters (all six files imported) is in `10b`, and tests 04-09 and 11 confirm each
+  file's warnings. The folder picture only showed where the report was found.
+- **Classification:** documentation limitation.
+- **Resolution:** accept as is. Guide v2 no longer requires the folder picture. **No repeat.**
 
-**F5: evidence gaps (not failures).**
-- `10a` is missing.
-- Test 17 pictures do not show the two file rows.
-- Test 15 pictures come from the Workbench instead of Datasets and Storage.
-- No address bars in 00 and 26.
-- The MIQP line and "Last run folder" are not pictured.
-- The tracker fields "Date testing finished", "Build shown in the PDF", the Notes table and the Final summary were left
-  empty.
-- The text-file notes for tests 11 and 12 are swapped.
+**Test 17: reject and restore VERANDA and 5PAISA (W6, W7)**
+- **Available:**
+  - `17a` and `17b` show the messages "Rejected 2 dataset(s). They are kept unchanged and no longer offered to analyses;
+    Restore undoes it." and "Restored 2 dataset(s). They are offered to analyses again.";
+  - the Live Log in both pictures shows "Rejected 2 dataset(s) [2, 17]" then "Restored 2 dataset(s) [2, 17]"
+    (dataset 2 = 5PAISA, 17 = VERANDA, as listed in `12_Repeat_Scan.txt`);
+  - test 18 shows both offered again in the Workbench;
+  - test 25 shows both back to "Unchanged (imported earlier)" after the next scan.
+- **Missing:** the file list rows themselves, with "Rejected by you" and "Available again (restored by you)".
+- **Effect:** the function (reject, then restore, of exactly those two datasets) is proved by the messages, the logged
+  dataset numbers and tests 18 and 25. Only the row wording is not pictured. That wording was tested on the program in
+  automated tests and in the round-2c laptop engine checks (W6/W7 PASS).
+- **Classification:** documentation limitation.
+- **Resolution:** accept as is. Guide v2 asks for the rows in future runs. **No repeat.**
 
-The revised guide states exactly what each picture must show.
+**Repeat recommendation:** none. No important function or result is left unverified, so **no repeat of any test is
+recommended**. The earlier requests to repeat tests 00, 26 and 27 are **withdrawn**: those tests concern the Q-MAP
+testing folder, which the evidence covers, and not the private master database.
 
-**F6: wording that may confuse (observation).**
-- For `RELIANCE_EQ.csv` the scan list reads "Unchanged (imported earlier) ... Unchanged since 2026-11-07: Imported.
-  1 dataset(s) created".
-- This repeats the result of its last processing (the alias correction). It is correct, but it can look like a new import.
-- No change is proposed now; it is recorded for the owner.
+## 5. Stop scan counter (minor future improvement)
 
-## 5. State of the owner's Q-MAP after round 2c (relevant to any re-test)
+- **Seen in test 19:** after **Stop scan**, the Progress / Status area showed "Files done: 10 / 10" and a full green
+  bar. The message under it correctly said "Stopped by you after 2 file(s); 8 file(s) not processed (listed in the scan
+  report). Work already done is kept.", and the Live Log and scan report agree with the message.
+- **Effect:** display only. No data, result or record is affected.
+- **Classification:** minor future display correction, agreed by the Project Owner. Recorded as **OW-45** in
+  `docs/Outstanding_Work_Register.md`.
+- **No program change** in this work, and **no further application testing** for this item.
 
-- **RELIANCE:** NSE:RELIANCE_EQ (dataset 13) is **Rejected by you**; NSE:RELIANCE (dataset 18) is Active; 18 datasets are offered.
-- **Sources:** `W8_Round2c` and `W11_Check_2c` are folder sources. "My Desktop" is no longer scanned, but its history is kept (F1).
-- **Q-MAP_OUTPUT:** the two Dataset Summary runs (`DSUM_20261107_164410` with the wrong date, and `DSUM_20261107_165125`)
-  and the MA Affinity run `MAAF_20261107_170332` are kept.
+## 6. Additional acceptance item: the calendar in test 21 (A5)
 
-The revised guide's expectations take this state into account. These changes are listed, not hidden: see section 7 of
-the guide.
+- **What changed:** after the round-2c tests were completed, test 21 in guide v2 was changed to use the **Calendar...**
+  button. The Start date is typed as `01-Jan-98`, then the calendar is opened; it must open at January 1998. The four
+  arrows are checked: `<<` and `>>` move one year, `<` and `>` one month. Clicking day **2** fills `02-Jan-98` and shows
+  the green "= 02-Jan-1998". Then the End date `02-Nov-26` is entered. **RUN ANALYSIS** is clicked only when both green
+  lines are right. New picture: `21c_Calendar_January_1998.png`; `21a` and `21b` are unchanged.
+- **Checked against the program (read only):**
+  - the calendar opens at the month of the date already in the box, or at today's month if the box is empty;
+  - `<<` `>>` shift 12 months and `<` `>` one month;
+  - clicking a day fills the box and closes the calendar;
+  - the green confirmation is shown in the form `= dd-Mmm-yyyy`;
+  - the window is titled "Choose a date", with **Today**, **Clear** and **Close**;
+  - choosing a date never starts an analysis.
+- **Status: not carried out.** Round-2c test 21 was completed with typed dates and stays PASS. The calendar check is a
+  **new, separate owner-acceptance item**. It does not require repeating the whole of test 21: only Parts 1 and 2 of the
+  revised test (calendar and dates), which can stop before **RUN ANALYSIS**.
+- **Decision:** the Project Owner decides whether to carry it out, after ChatGPT's review of this recommendation.
 
-## 6. Recommendation
+## 7. Other records (no action requested)
 
-- The round-2c owner tests support the build's behaviour on Windows. **No functional failure was found.**
-- Before deciding on Windows owner acceptance, the owner should:
-  1. decide F1 (accept the "My Desktop" records, or request a reviewed removal);
-  2. decide F2 (confirm `Market_Files` as the originals, or repeat tests 00, 26 and 27);
-  3. decide whether F3 becomes a correction item;
-  4. optionally re-take the pictures listed in F5 (tests 10a, 17, 15, 25) with the revised guide.
-- **Controlled analytical use is not approved by this review.**
+- **Accidental folder scan:** during test 19 a folder outside `D:\Q-MAP_V01` was added and scanned by mistake. The Project
+  Owner has asked that this be ignored. It is not investigated further and nothing is cleaned up.
+- **Wording observation:** for `RELIANCE_EQ.csv` the scan list reads "Unchanged (imported earlier) ... Imported. 1
+  dataset(s) created". This repeats the result of its last processing, so it is correct but can look like a new import.
+  Noted only.
+- **State after round 2c:**
+  - dataset 13 (NSE:RELIANCE_EQ) is "Rejected by you"; 18 datasets are offered;
+  - `W8_Round2c` and `W11_Check_2c` are folder sources;
+  - the runs `DSUM_20261107_164410`, `DSUM_20261107_165125` and `MAAF_20261107_170332` are kept in `Q-MAP_OUTPUT`.
+  - Guide v2 takes this into account.
+
+## 8. Decisions for the Project Owner
+
+1. **Windows owner acceptance** of round 2c. The evidence supports it; the decision is the Project Owner's.
+2. **Test 21 calendar check (section 6):** carry it out (Parts 1-2 of the revised test 21) or not. ChatGPT reviews the
+   recommendation first.
+
+No repeat test is recommended. Controlled analytical use is a separate decision and is not decided by this review.
