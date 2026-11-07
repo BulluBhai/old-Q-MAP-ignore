@@ -4,8 +4,9 @@
 
 **Written to `docs/standards/Q-MAP_User_Documentation_Standard.md`.**
 
-This guide is for the Project Owner. It is used for any further owner test of Q-MAP v0.1. Round 2c is complete,
-and the test 21 pop-up calendar has been checked and accepted by the Project Owner (results review, section 6).
+This guide is for the Project Owner. It is used for any further owner test of Q-MAP v0.1. Round 2c is complete
+and was formally accepted by the Project Owner on 07-Nov-26; the test 21 pop-up calendar was accepted separately
+(results review, sections 6 and 8).
 The round-2c guide (`Q-MAP_v0.1_UAT_Round2c_Easy_Windows_Testing_Guide_07_Nov_26_063903.md`) is kept unchanged as the
 record of what was used on 07-Nov-26.
 

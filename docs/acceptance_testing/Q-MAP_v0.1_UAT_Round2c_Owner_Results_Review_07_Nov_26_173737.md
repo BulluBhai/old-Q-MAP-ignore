@@ -13,6 +13,7 @@
 | | | - The Stop scan counter is classed as a minor future improvement (OW-45). |
 | | | - The test 21 calendar check is added as a separate acceptance item. |
 | 3 | 07-Nov-26 | The Project Owner confirmed that the test 21 pop-up calendar was checked and works correctly. The calendar is accepted; section 6 no longer lists it as pending or as a decision. |
+| 4 | 07-Nov-26 | The Project Owner formally accepted the round-2c Windows UAT results recorded in PR #16. Recorded in sections 2 and 8 (and D6-27, OW-34). Results, evidence assessment and limitations unchanged. |
 
 ## 1. What was reviewed
 
@@ -40,7 +41,8 @@ Original evidence file names are used unchanged in this review.
   important result unverified.
 - **No repeat test is needed.**
 - The **test 21 pop-up calendar** was checked by the Project Owner and works correctly; it is **accepted** (section 6).
-- Open item for the Project Owner: the decision on Windows owner acceptance.
+- **Windows owner acceptance: ACCEPTED.** On 07-Nov-26 the Project Owner stated: "I formally accept the Round 2c Windows
+  UAT results recorded in PR #16." (section 8).
 - The Stop scan counter display is recorded as a minor future improvement (OW-45).
 
 ## 3. Reconciliation of all tests
@@ -171,10 +173,19 @@ testing folder, which the evidence covers, and not the private master database.
   - the runs `DSUM_20261107_164410`, `DSUM_20261107_165125` and `MAAF_20261107_170332` are kept in `Q-MAP_OUTPUT`.
   - Guide v2 takes this into account.
 
-## 8. Decisions for the Project Owner
+## 8. Owner acceptance
 
-1. **Windows owner acceptance** of round 2c. The evidence supports it; the decision is the Project Owner's.
+**Windows owner acceptance of round 2c: ACCEPTED by the Project Owner, 07-Nov-26.**
 
-The test 21 pop-up calendar is already accepted (section 6) and needs no decision.
+> "I formally accept the Round 2c Windows UAT results recorded in PR #16."
 
-No repeat test is recommended. Controlled analytical use is a separate decision and is not decided by this review.
+- The acceptance covers the results, evidence assessment and limitations recorded in this review (sections 3-5). They are
+  unchanged.
+- The test 21 pop-up calendar was accepted separately (section 6).
+- No repeat test and no further screenshot is requested.
+- Recorded as decision D6-27 (`docs/decision_log.md`). OW-34 is resolved (`docs/Outstanding_Work_Register.md`).
+
+**What this acceptance does not decide:**
+- **controlled analytical use** of Q-MAP v0.1, which is a separate approval and has not been given;
+- the merge of any PR;
+- the other open owner decisions (D3-15, D6-18, D6-19, D6-20, D6-21, OW-41) and the independent review OW-35.

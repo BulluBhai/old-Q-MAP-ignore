@@ -183,7 +183,8 @@ Neither is stored in the repository. Review: `Q-MAP_v0.1_UAT_Round2c_Owner_Resul
 - Sufficiency: 24 rows "Yes"; 6 rows "Yes, with limitation" (00, 01, 02, 10, 17, 26).
 - No repeat test recommended.
 
-**Open for the Project Owner:** the Windows owner acceptance decision.
+**Windows owner acceptance: ACCEPTED** by the Project Owner on 07-Nov-26 ("I formally accept the Round 2c Windows UAT
+results recorded in PR #16."). Controlled analytical use is a separate decision, not yet taken.
 
 **Accepted:** the test 21 pop-up calendar (checked by the Project Owner; no further test).
 
