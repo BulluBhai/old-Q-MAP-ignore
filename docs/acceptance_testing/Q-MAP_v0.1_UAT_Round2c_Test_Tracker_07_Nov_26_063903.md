@@ -36,7 +36,7 @@ Tests marked **(real record)** make a recorded, reversible change in your real Q
 
 | No. | Step | Checklist name | Test | Expected result (short) | Evidence | File name(s) | Your result | What happened |
 |---:|---:|---|---|---|---|---|---|---|
-| 00a | 1-2 | Download | New program in place | Round-2c checklist file present in `Q-MAP_APP`; old program kept as `Q-MAP_APP_round2` | Write down | - | | |
+| 00a | 1-2 | Download | New program in place | Round-2c checklist file present in `Q-MAP_APP`; old program kept as `Q-MAP_APP_round2`. Any other situation: stop, rename nothing, NOT TESTED, write which folders you see | Write down | - | | |
 | 00 | 4 | W11 (before) | Originals before | Names, sizes, Date modified and address bar visible | Picture | `00_Original_Files_Before.png` | | |
 | 00b | 5 | - | Python version | First line of IDLE written in the session details | Write down | - | | |
 | 01 | 6-7 | V1, V2 | Database Manager and folders | Window opens; both folders green OK; buttons READY | Picture | `01_Database_Manager_Folders.png` | | |
@@ -55,11 +55,11 @@ Tests marked **(real record)** make a recorded, reversible change in your real Q
 | 14 | 13 | W5 | Alias registry | Row `RELIANCE,RELIANCE EQ`; closed with Don't Save | Picture | `14_Alias_Registry.png` | | |
 | 15 | 14 | W5 | RELIANCE comparison (looks only) | Same original file `RELIANCE_EQ.csv`, same bars (7,746), same From/To (07-Nov-94 to 30-Dec-25); RELIANCE_EQ has the lower number (13 vs 18) | Picture (2) | `15a_Reliance_EQ_Details.png`, `15b_Reliance_Details.png` | | |
 | 16 | 14 | W5 | Old duplicate rejected **(real record, your decision)** | Only NSE:RELIANCE_EQ "Rejected by you"; NSE:RELIANCE Active. If deferred: NOT TESTED (decision deferred) | Picture | `16_Old_Reliance_Rejected.png` | | |
-| 17 | 15 | W6, W7 | Reject then restore VERANDA and 5PAISA **(real record, restored at once)** | "Rejected by you", then "Available again (restored by you)" | Picture (2) | `17a_Files_Rejected.png`, `17b_Files_Restored.png` | | |
+| 17 | 15 | W6, W7 | Reject then restore VERANDA and 5PAISA **(real record, restored at once)** | **Both** files "Rejected by you", then **both** "Available again (restored by you)". If either does not: stop, FAIL, say which file, test 18 NOT TESTED | Picture (2) | `17a_Files_Rejected.png`, `17b_Files_Restored.png` | | |
 | 18 | 15 | W7 | Workbench after restore | VERANDA and 5PAISA offered; only NSE:RELIANCE offered (both RELIANCE lines if test 16 was deferred) | Picture | `18_Workbench_After_Restore.png` | | |
-| 19 | 16 | W8 | Stop scan | Window responds; scan stops without error. If too fast: NOT TESTED: scan too fast to stop | Picture if possible | `19_Stop_Scan.png` | | |
+| 19 | 16 | W8 | Stop scan | Window responds; scan stops without error. If it finishes first: one try only, NOT TESTED "scan finished too quickly to stop" (not a failure) | Picture if possible | `19_Stop_Scan.png` | | |
 | 20 | 17 | V6 | MA Affinity settings | SMA; MA 10-250; windows 5,10,20,50; one-line help each | Picture | `20_MA_Affinity_Settings.png` | | |
-| 21 | 18 | A5 | ICICIBANK Dataset Summary | 02-Jan-98 to 02-Nov-26: 7166 bars; first close 7.86; last close 1387.4 | Picture | `21_ICICIBANK_Summary.png` | | |
+| 21 | 18 | A5 | ICICIBANK Dataset Summary | Before running, green "= 02-Jan-1998" and "= 02-Nov-2026" next to the date boxes; then 7166 bars; first close 7.86; last close 1387.4 | Picture | `21_ICICIBANK_Summary.png` | | |
 | 22 | 19 | A7 | Open output folder | Folder of the run just made opens | Picture | `22_Output_Folder.png` | | |
 | 23 | 20 | Build check | PDF build line | "Q-MAP build: qmap 0.1.0rc1 / c2 build a202d43d78ed" | Picture | `23_Build_Fingerprint_PDF.png` | | |
 | 24 | 21 | W12 | Close Q-MAP | Both windows close; no error; no empty window | Picture | `24_Closed_Desktop.png` | | |

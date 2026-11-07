@@ -83,9 +83,17 @@ Claude Code already tested the new program in `D:\Q-MAP_V01\Q-MAP_APP` on 07-Nov
    `Q-MAP_APP\docs\acceptance_testing`. If the file `Q-MAP_v0.1_UAT_Round2c_Owner_Screen_Checklist_07_Nov_26_050239.md`
    is there, **the new program is in place. Skip Step 2 and go to Step 3.** Write "already in place" in the tracker
    (test 00a).
-3. Otherwise do Step 2.
+3. If you see `Q-MAP_APP` but **no** `Q-MAP_APP_round2`, do Step 2.
+4. **Stop and ask for help** in any other situation. Do not rename, overwrite, move or delete any folder. Mark test 00a
+   NOT TESTED, write which folders you see, and tell ChatGPT. For example:
+   - `Q-MAP_APP_round2` exists but `Q-MAP_APP` is missing;
+   - `Q-MAP_APP` exists but the round-2c checklist file is not inside it;
+   - both folders are there and you are not sure which one is the new program.
 
 ### Step 2. Only if needed: keep the old program and download the new one
+
+Do this step **only** if Step 1 sent you here (`Q-MAP_APP` exists and `Q-MAP_APP_round2` does **not**). If
+`Q-MAP_APP_round2` already exists, do not do this step: stop and ask for help (Step 1, point 4).
 
 1. Rename `D:\Q-MAP_V01\Q-MAP_APP` to `Q-MAP_APP_round2`. Do not delete it. (If Windows says the folder is in use, close Q-MAP first.)
 2. Open <https://github.com/BulluBhai/Q-MAP/tree/claude/epic-darwin-33o518>, click the green **Code** button,
@@ -94,7 +102,8 @@ Claude Code already tested the new program in `D:\Q-MAP_V01\Q-MAP_APP` on 07-Nov
 4. A folder named like `Q-MAP-claude-epic-darwin-33o518` appears in `D:\Q-MAP_V01`. Open it: you should see
    `database_manager.py` directly inside. (If you see another folder with the same name instead, that inner folder is the
    program.) Rename the folder that contains `database_manager.py` to `Q-MAP_APP` and make sure it sits directly in
-   `D:\Q-MAP_V01`.
+   `D:\Q-MAP_V01`. If Windows says a folder with that name already exists, click **Cancel** or **No**, stop, and ask for help.
+6. Check: `D:\Q-MAP_V01\Q-MAP_APP\docs\acceptance_testing` contains the round-2c checklist file. If not, stop and ask for help.
 5. Do not touch `Q-MAP_DATA`, `Q-MAP_OUTPUT`, `Market_Files` or the other folders.
 
 ### Step 3. Make the evidence folder
@@ -227,9 +236,19 @@ Picture → `12_Repeat_Scan.png`.
 1. Back in **Sources**, click the `Market_Files` folder line. Hold **Ctrl** and click `VERANDA_1min.csv` and `5PAISA_30min.csv`.
 2. Type any short reason (for example `UAT 2c test`) in **Reason (recorded)** and click **Reject selected**. Both show
    **"Rejected by you"**. Picture → `17a_Files_Rejected.png`.
-3. Keep both selected and click **Restore selected**. Both show **"Available again (restored by you)"**. This label stays
-   until the next scan (Step 21). Picture → `17b_Files_Restored.png`.
-4. **Test 18.** In the Workbench click **Refresh**. Expected: VERANDA and 5PAISA are offered again, and **only NSE:RELIANCE**
+   **Check both lines.** If either file does not show "Rejected by you", do not continue: take a picture, mark test 17
+   FAIL, and tell ChatGPT. Do not click Restore yet.
+3. Keep both selected and click **Restore selected**. Picture → `17b_Files_Restored.png`.
+4. **Check both lines before you continue:**
+   - `VERANDA_1min.csv` shows **"Available again (restored by you)"**, **and**
+   - `5PAISA_30min.csv` shows **"Available again (restored by you)"**.
+
+   This label stays until the next scan (Step 22).
+   **If either file does not show it** (for example it still says "Rejected by you"): stop here. Do not click anything else
+   for these files and do not try to fix it. Keep the picture, mark test 17 **FAIL**, write which file shows what, mark
+   test 18 NOT TESTED, and tell ChatGPT before going on. Leaving it like that is safe: nothing is deleted, and it can be
+   restored later with help.
+5. **Test 18.** In the Workbench click **Refresh**. Expected: VERANDA and 5PAISA are offered again, and **only NSE:RELIANCE**
    (not NSE:RELIANCE_EQ) is offered. If you skipped the RELIANCE reject in Step 14, both RELIANCE lines are offered; that is
    expected then, so write "RELIANCE reject deferred". Picture → `18_Workbench_After_Restore.png`.
 
@@ -243,8 +262,17 @@ Picture → `12_Repeat_Scan.png`.
 3. In Sources: **Add folder...** → choose `W8_Round2c` → **SCAN SELECTED FOLDER NOW**, and within 2-3 seconds click **Stop scan**.
 4. While it stops, scroll the file list. Expected: the window responds and the scan stops without an error.
 
-Picture → `19_Stop_Scan.png`. If the scan finishes before you can stop it, write **NOT TESTED: scan too fast to stop**.
-This is not a failure (stopping was already proved in round 1).
+Picture → `19_Stop_Scan.png`.
+
+**If the scan finishes before you can click Stop scan:**
+- Do **not** try again. One try is enough.
+- Do not add more files and do not add another folder.
+- Mark test 19 **NOT TESTED** and write **"scan finished too quickly to stop"**. Save a picture of the finished scan as
+  `19_Stop_Scan.png` if you can.
+- This is not a failure: stopping a scan was already proved in round 1. Continue with Step 17.
+
+**If you clicked Stop scan but the window froze or showed an error:** take a picture, mark test 19 **FAIL**, write what
+happened, and continue with Step 17 if Q-MAP still works.
 
 ## Part 6: Workbench, analysis and report
 
@@ -256,10 +284,16 @@ windows 5,10,20,50, each with a one-line help. Picture → `20_MA_Affinity_Setti
 ### Step 18. Dataset Summary of ICICIBANK (A5, test 21)
 
 1. **Dataset Summary** → choose **NSE:ICICIBANK Daily**.
-2. Start date: click **Calendar...**, use `<<` to reach **January 1998**, click **2** (02-Jan-98).
-3. End date: type `02-Nov-26`.
-4. Click **RUN ANALYSIS**.
-5. Expected: **7166 bars**, first close **7.86**, last close **1387.4**.
+2. Start date: click **Calendar...** next to the start date, use `<<` to reach **January 1998**, click **2**.
+3. End date: click in the end-date box and type `02-Nov-26`.
+4. **Check both dates before running.** Next to each date box Q-MAP repeats the date in green with a four-digit year:
+   - start date box shows `02-Jan-98` and, next to it in green, **`= 02-Jan-1998`**;
+   - end date box shows `02-Nov-26` and, next to it in green, **`= 02-Nov-2026`**.
+
+   If either line is red, shows another date, or is empty: correct that box (Calendar... again, or retype) and check
+   again. If you cannot get both green lines right, do not run; mark test 21 NOT SURE and write what you see.
+5. Click **RUN ANALYSIS**.
+6. Expected: **7166 bars**, first close **7.86**, last close **1387.4**.
 
 Picture → `21_ICICIBANK_Summary.png`.
 
