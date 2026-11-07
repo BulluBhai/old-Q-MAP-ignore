@@ -11,16 +11,16 @@ document to follow this standard.
 
 ## 1. Who the reader is
 
-The Project Owner is a finance professional, not a software developer, and a beginner in Python. He understands
-markets, research requirements, quantitative concepts and business processes. He should not be expected to understand
+The Project Owner is a finance professional, not a software developer, and a beginner in Python. The Project Owner understands
+markets, research requirements, quantitative concepts and business processes. The Project Owner should not be expected to understand
 software terms, application architecture, folder structures, programming conventions or unstated technical
 assumptions.
 
-A document can be technically correct and still be unusable. The goal is that he can do the task **correctly, safely
+A document can be technically correct and still be unusable. The goal is that the Project Owner can do the task **correctly, safely
 and on his own**, without having to ask ChatGPT or Claude what the document meant.
 
-**The acceptance test for every document:** can the Project Owner follow it from beginning to end, understand what he
-is doing, recognise the correct result, save the required evidence, and know what to do if something goes wrong,
+**The acceptance test for every document:** can the Project Owner follow it from beginning to end, understand what they
+are doing, recognise the correct result, save the required evidence, and know what to do if something goes wrong,
 without someone explaining the instructions?
 
 ## 2. Rules
