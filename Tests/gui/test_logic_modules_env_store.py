@@ -20,8 +20,10 @@ REPO = Path(__file__).resolve().parents[2]
 # ---- module readiness is genuine ---------------------------------------------------------------------
 def test_only_genuinely_working_modules_are_ready():
     # Requirement changed 01-Nov-26 (two applications): Database Manager has Data Management and Datasets and
-    # Storage; Analytical Workbench has Dataset Summary. Everything else must stay COMING SOON.
-    assert [(m.key, m.app) for m in ready_modules()] == [("data_management", DATABASE_MANAGER),
+    # Storage; Analytical Workbench has Dataset Summary. Changed 02-Nov-26 (Blueprint v1.3 §8.5): Database Manager
+    # also has Sources (automatic loading). Everything else must stay COMING SOON.
+    assert [(m.key, m.app) for m in ready_modules()] == [("sources", DATABASE_MANAGER),
+                                                         ("data_management", DATABASE_MANAGER),
                                                          ("datasets", DATABASE_MANAGER),
                                                          ("dataset_summary", ANALYTICAL_WORKBENCH)]
     assert all(m.status in (READY, COMING_SOON) for m in MODULES)
@@ -30,7 +32,7 @@ def test_only_genuinely_working_modules_are_ready():
 
 
 def test_research_modules_belong_to_the_workbench_and_data_preparation_to_the_database_manager():
-    assert {m.key for m in modules_for(DATABASE_MANAGER)} == {"data_management", "datasets"}
+    assert {m.key for m in modules_for(DATABASE_MANAGER)} == {"sources", "data_management", "datasets"}
     research = {m.key for m in modules_for(ANALYTICAL_WORKBENCH)}
     assert {"market_intelligence", "ma_research", "stage_analysis", "dataset_summary"} <= research
     assert "data_management" not in research

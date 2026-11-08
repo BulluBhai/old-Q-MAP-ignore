@@ -52,7 +52,7 @@ def test_both_applications_can_be_open_at_the_same_time_and_share_folders(gui, w
     awb = gui.start(app_key="analytical_workbench")  # remembered folders are shared
     assert awb.core_settings is not None and awb.core_settings.data_root == dbm.core_settings.data_root
     assert "Database Manager" in dbm.title() and "Analytical Workbench" in awb.title()
-    assert set(dbm.screens) == {"home", "data", "datasets"} and set(awb.screens) == {"home", "analysis"}
+    assert set(dbm.screens) == {"home", "sources", "data", "datasets"} and set(awb.screens) == {"home", "analysis"}
     assert "data" not in awb.screens  # the Workbench has no import screen
 
 

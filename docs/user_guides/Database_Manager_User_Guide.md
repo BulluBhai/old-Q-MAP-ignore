@@ -13,9 +13,64 @@ Database Manager prepares the data every analysis depends on. It **never changes
   superseded datasets, datasets you deleted, and preserved original files.
 - The two working areas below, each with an **Open** button.
 
-## Data Management: loading files
+## Sources: automatic loading (the normal way to load data)
 
-The screen and its rules are unchanged from the first graphical version:
+Added 02-Nov-26 for Blueprint v1.3 §8.5. You do not choose profiles or type layouts here.
+
+1. **Input - folders.** Press **Add folder...** and choose the folder that holds your files (any folder on this
+   computer, including a synchronised OneDrive or Google Drive folder; files must be downloaded, not "online only").
+   Before adding, set:
+   - **Market time zone** (for Indian exchanges `Asia/Kolkata`): used to work out each bar's trading date and for
+     times written without an offset. Leave it empty and Q-MAP asks for it when a file needs it.
+   - **Default exchange** (for example `NSE`), used when a file does not say its exchange.
+   - **File name is the symbol** (optional): `RELIANCE.csv` is read as symbol RELIANCE on the default exchange. Off
+     by default, so a name like `prices.csv` is never mistaken for a symbol.
+   - **Include sub-folders** and **Skip files matching** (for example `*backup*`).
+   Q-MAP's own data, output and program folders are refused as sources. To change settings later, select the folder,
+   edit the boxes and press **Save settings of selected folder**. **Stop using selected folder** stops scanning; it
+   deletes nothing.
+2. **Output - files.** After a scan, every file in the folder is listed with its result: *Imported*, *Already
+   loaded*, *Needs your answer*, *Rejected* (with the reason), *Ignored* (not a data file type), *Failed* (for example
+   unreadable) or *No longer in the folder*. Select a file to see exactly how Q-MAP read it (separator, header,
+   which column is which, date layout, time zone, instrument, timeframe) and any question. Each scan also writes a
+   `Scan_Report_<dd_Mmm_yy_hhmmss>.csv` into its run folder in `Q-MAP_OUTPUT/Data_Management`.
+3. **Options - scan and answer.** **SCAN SELECTED FOLDER NOW** looks at the folder. For a file that needs an answer,
+   select it: only the boxes its question needs are switched on (exchange and symbol, timeframe, date layout, or market
+   time zone). **Save answer**, then scan again. An answer is reused only while the file keeps the same layout.
+
+What a scan does, and does not do:
+
+- Files whose contents have not changed since the last scan are skipped. Q-MAP compares the file's checksum on every
+  scan, so an edited file is always read again, even if its size and date did not change. Scanning twice never
+  creates duplicates; the same content under two names is loaded once.
+- If a folder inside the source cannot be read (for example, access is denied) and **Include sub-folders** is ticked,
+  the scan does not stop: the files it
+  can read are processed, and the message under Progress / Status turns red and starts with **Scan INCOMPLETE:**,
+  naming the folder. Files last seen in that folder show as *Failed* ("Not checked: the folder ... could not be
+  read"), never as *No longer in the folder*, and their data are unchanged. Fix the folder's access and scan again.
+- Shortcuts and links inside the folder (symbolic links, Windows junctions) are never followed. They are listed in
+  the scan report as "Link not followed". Copy the files into the folder if they should be scanned.
+- A changed file is loaded as a new version. If its bars overlap an existing dataset of the same instrument and
+  timeframe, identical bars are noted, and **different values are shown as a warning** on the new dataset. Neither
+  dataset is changed and nothing is merged: you choose which one to analyse (your decision DQ-1, 02-Nov-26: report only).
+- Every loaded file goes through exactly the same checks as Data Management. A file that fails a check is rejected
+  and never becomes available to the Workbench. A file rejected only because its last dates are in the future is
+  loaded again automatically by a scan on or after the date that allows them.
+- Nothing in your folder is ever created, changed, moved or deleted.
+
+How layouts are recognised (rules A-1 to A-9, in `docs/architecture/Blueprint_v1.3_Implementation_Audit.md`,
+section 6): column names such as `date`/`time`, `open`, `high`, `low`, `close`, `volume`; files without a header only
+when columns 2-5 behave like open, high, low, close on every row; dates in ISO, `25-02-26`, `25/02/2026`, `25-Feb-26`,
+`20260225`, Unix seconds or milliseconds, or spreadsheet date cells. When two date readings both fit (for example
+day-first and month-first) and the order of the rows does not settle it, Q-MAP asks. Two-digit years: 00-68 =
+2000-2068, 69-99 = 1969-1999. Instrument from `exchange`/`symbol` columns in the file first, then your answer, then a file name such as
+`NSE_NIFTY, 1D.csv`. A file whose name contradicts its own exchange or symbol column is rejected, never read with the
+name's value (your decision DQ-2). If only the exchange is missing, only the exchange is asked. Timeframe from the spacing of the bars; a file name that disagrees with the data is asked about.
+
+## Data Management: loading files with a chosen profile
+
+For unusual layouts that automatic reading rejects. The screen and its rules are unchanged from the first graphical
+version:
 
 1. **Input**: add files and preview any of them. Previewing saves nothing.
 2. **Output**: your folders, the last run folder and the problem report.
@@ -122,3 +177,8 @@ at the start of each run.
 - Loading a file whose dataset you deleted does not re-create it unless the profile gets a new `profile_version`
   (owner decision OD-3).
 - New loads are always Permanent; move them afterwards (owner decision OD-6).
+- Sources: folders only. Provider APIs and direct cloud connections are not built; scans run when you press the
+  button (no schedule). Numbers with thousands separators (`22,393.60`) are not read automatically; use Data
+  Management with a profile that declares them.
+- Overlapping datasets with different values are reported, not resolved (owner decision DQ-1). Only files loaded
+  through Sources are compared when they are loaded.

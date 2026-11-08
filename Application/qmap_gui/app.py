@@ -306,14 +306,16 @@ class DatabaseManagerApp(QMapWindow):
     APP_NAME = "Q-MAP Database Manager"
     WINDOW_TITLE = "Q-MAP Database Manager - prepare and manage market data"
     SUBTITLE = "Prepare, validate, store and manage market data"
-    SCREEN_KEYS = ("home", "data", "datasets")
+    SCREEN_KEYS = ("home", "sources", "data", "datasets")
 
     def build_screens(self, container):
         from .data_management import DataManagementFrame
         from .datasets import DatasetsFrame
         from .home import HomeFrame
+        from .sources import SourcesFrame
 
         return [("home", "Home", HomeFrame(container, self)),
+                ("sources", "Sources", SourcesFrame(container, self)),
                 ("data", "Data Management", DataManagementFrame(container, self)),
                 ("datasets", "Datasets and Storage", DatasetsFrame(container, self))]
 

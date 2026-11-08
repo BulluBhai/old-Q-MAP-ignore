@@ -92,16 +92,16 @@ def test_a_version_1_database_is_upgraded_in_place_and_keeps_its_data(tmp_path):
     path = tmp_path / "old.sqlite"
     _v1_database(path)
     db = open_database(path)
-    assert db.current_version() == LATEST_VERSION == 7
-    assert [r["version"] for r in db.query("SELECT version FROM schema_version ORDER BY version")] == [1, 2, 3, 4, 5, 6, 7]
+    assert db.current_version() == LATEST_VERSION == 8
+    assert [r["version"] for r in db.query("SELECT version FROM schema_version ORDER BY version")] == [1, 2, 3, 4, 5, 6, 7, 8]
     assert db.one("SELECT content_text FROM source_profiles")["content_text"] == "text"
     cols = {r["name"] for r in db.query("PRAGMA table_info(ingest_attempts)")}
     assert {"validation_settings_json", "config_fingerprint"} <= cols
     assert "config_fingerprint" in {r["name"] for r in db.query("PRAGMA table_info(datasets)")}
     with pytest.raises(sqlite3.IntegrityError):
         db.connection().execute("UPDATE source_profiles SET content_text='changed'")
-    assert open_database(path).current_version() == 7  # re-opening changes nothing
-    assert len(db.query("SELECT * FROM schema_version")) == 7
+    assert open_database(path).current_version() == 8  # re-opening changes nothing
+    assert len(db.query("SELECT * FROM schema_version")) == 8
 
 
 def test_foreign_keys_are_enforced_on_every_connection(tmp_path):
@@ -185,7 +185,7 @@ def test_a_version_2_registry_with_results_upgrades_and_keeps_every_record(tmp_p
 
 
 def test_applied_migrations_are_frozen():
-    """An applied migration must never be edited (add a new one instead). These hashes pin migrations 1-7."""
+    """An applied migration must never be edited (add a new one instead). These hashes pin migrations 1-8."""
     import hashlib
 
     pinned = {
@@ -196,6 +196,7 @@ def test_applied_migrations_are_frozen():
         5: "43938f6918a9ebe3e5c36ebb7d3970b553eba5334cbd4904cfff0d668f969932",  # storage classes (pinned on submission)
         6: "854ad8f8e8f702f43aa2054eea6e7afaa07e048db1c09bc6fd5f7cf05a940381",  # audited storage changes (PR #4 review)
         7: "391e2232e790915f23e228004cf01dc08127bed03ce0803ec1405c6cf74b15f6",  # Temporary/ folder (OD-8)
+        8: "96fd2b03f145680d1cd9fb1b63b1b5083e3637e7a89460714af961b09fce4817",  # folder sources (Blueprint v1.3)
     }
     actual = {v: hashlib.sha256(sql.encode("utf-8")).hexdigest() for v, _, sql in MIGRATIONS}
     assert [v for v, _, _ in MIGRATIONS] == list(range(1, len(MIGRATIONS) + 1))  # numbered without gaps
