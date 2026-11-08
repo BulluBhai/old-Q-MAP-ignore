@@ -1,6 +1,7 @@
 # Q-MAP User Documentation Standard
 
-**Status:** permanent project requirement set by the Project Owner, 07-Nov-26.
+**Status:** permanent project requirement set by the Project Owner, 07-Nov-26. Strengthened 08-Nov-26 after a
+line-by-line comparison with the Project Owner's original requirement (rules A, B, C, G, J and O, and the checklist).
 **Applies to:** every document written for the Project Owner to follow. That includes installation and setup guides,
 Windows operating instructions, Database Manager and Analytical Workbench guides, MIQP and QLOPB user guides, research
 module manuals, data import and validation instructions, troubleshooting and recovery procedures, acceptance testing
@@ -30,15 +31,20 @@ without someone explaining the instructions?
 - which window or screen (for example **Sources** or **Datasets and Storage**);
 - which section, using its numbered heading exactly as shown (for example "3. Options - parameters");
 - the exact button or control, in **bold**, spelled exactly as on screen (for example **Reject (reversible)**);
-- the full folder or file path where relevant (for example `D:\Q-MAP_V01\Q-MAP_OUTPUT\Data_Management\`).
+- the full folder or file path where relevant (for example `D:\Q-MAP_V01\Q-MAP_OUTPUT\Data_Management\`);
+- how to recognise that it is the right window or section (its title or numbered heading as shown), so the reader
+  never has to guess whether they are looking at the correct screen.
 
 **B. One action per step.** Use short numbered steps, one action each. Do not combine unrelated actions in one
-paragraph. Do not leave out what happens between two steps.
+paragraph. Do not leave out what happens between two steps. Where the exact action or folder arrangement matters,
+leave no room for a second reading, and say why the step is needed when its purpose is not obvious (for example "three
+separate folders, so that Windows never replaces a file with the same name").
 
 **C. Say what the user should see.** After every important action, state:
 - what appears on the screen, quoting the exact words, label or status;
 - how to recognise success;
 - whether the action is already complete, or whether another button, a confirmation dialog or a wait follows;
+- whether to stop and check the result before going on;
 - what to do if the expected result does not appear.
 
 **D. Use the words on the screen.** Use the labels Q-MAP and Windows actually show. If the document uses another word
@@ -56,7 +62,7 @@ check (for example "the `Dataset_Summary_....csv` file in the run folder").
 - the exact file name and the folder to save it in;
 - what each item proves (for example "the PDF holds the full report and build line; the screenshot makes the build
   line easy to see");
-- ready-to-copy wording for the tracker or record, where useful.
+- ready-to-copy wording for the tracker or record, whenever there is a tracker or record to fill in.
 
 Ask for a screenshot only where it materially helps: to prove a result (a status, a value, a message, a build
 line) or to help the user recognise the right screen. Do not ask for a screenshot after every action. Where a saved
@@ -81,7 +87,8 @@ diagram, a table or an annotated screenshot. Do not add pictures for decoration.
 active, how to find a folder, what a technical term means, whether a button has already finished its work, or which
 output file holds the result. **Every label, path, message and expected value must be checked against the actual
 application (code or a real run) before the document is delivered.** If a detail cannot be checked, do not invent
-it: mark it as unverified in the document and in the delivery report.
+it: mark it as unverified in the document and in the delivery report. An author who cannot inspect the application
+(for example ChatGPT) asks Claude to inspect it, and until then marks the detail as unverified.
 
 **K. No code, no logs.** Never require the reader to read Python code, run commands in a command window, or interpret
 technical logs or error traces. If a log is evidence, the document says which file to keep, not how to read it.
@@ -96,6 +103,10 @@ guide and its tracker or record sheet.
 - whether the user should **wait**, **continue**, **stop** or **ask for help**, and in which situation each applies
   (for example "If every test is PASS: send the files and wait for the review. If any test is FAIL or NOT SURE: do not
   repeat it; send the files and wait.").
+
+**O. Name this standard.** Every user-facing document says near its top that it is written to this standard, with
+the file name `docs/standards/Q-MAP_User_Documentation_Standard.md`, so that the reader and the reviewer know which
+rules it must meet.
 
 ## 3. Examples from UAT round 2c (07-Nov-26)
 
@@ -121,8 +132,11 @@ That gives 33 files, and Windows never asks to replace anything, because each co
 ## 4. Checklist before a document is delivered
 
 - [ ] Written for the reader in section 1: plain English, terms explained where first used.
-- [ ] Every action has exact navigation (rule A) and one action per step (rule B).
-- [ ] Every important action says what the user should see and what to do if it differs (rules C, H).
+- [ ] Every action has exact navigation, including how to recognise the right screen (rule A), and one action per
+      step, with no second reading possible and the reason given where it is not obvious (rule B).
+- [ ] Every important action says what the user should see, whether it is already complete, whether to stop and
+      check, and what to do if it differs (rules C, H).
+- [ ] The document names this standard near its top (rule O).
 - [ ] Every label, path, message and expected value checked against the application; anything unchecked is marked
       as unverified (rule J).
 - [ ] Similar functions are distinguished, and result locations are given (rules E, F).
