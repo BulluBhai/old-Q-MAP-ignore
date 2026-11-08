@@ -1,17 +1,52 @@
 # Q-MAP
 Quantitative Market Analytics Platform [Q-MAP]
 
-The governing document is [docs/Q-MAP_Master_Blueprint_v1.0.md](docs/Q-MAP_Master_Blueprint_v1.0.md).
+The governing document is [Q-MAP_Master_Blueprint_v1.35.md](Q-MAP_Master_Blueprint_v1.35.md).
 Material decisions are recorded in [docs/decision_log.md](docs/decision_log.md).
 
-## Status: Stage 2 (Foundation)
+## Status: Stage 2 (Foundation) and the first graphical version
 
 Implemented: configuration and path management, structured logging, unique Run IDs and run manifests,
 the SQLite registry, raw-data registration with a receipt for every file received, readers for CSV, text,
 Excel (.xlsx, optional .xls) and Parquet, explicit source profiles, strict date/time parsing, the canonical
 OHLC(V) structure, validation with rejection reports, crash recovery and reprocessing controls.
 
-Not implemented (later roadmap stages): research modules, backtesting, portfolio and risk, any front end.
+Also included: a first graphical window (`Q-MAP.py`) with the Data Management workflow. The window is a separate layer
+(`Application/qmap_gui`) that only calls the Foundation; the Foundation never depends on it.
+
+Not implemented (later roadmap stages): research modules, backtesting, portfolio and risk.
+
+## Opening the Q-MAP window (first graphical version)
+
+1. Do the one-time setup below (the window also needs `tkinter`, which comes with Python from python.org).
+2. Open **`Q-MAP.py`** (in this folder) in **Thonny** or **IDLE** and press **F5**.
+   - In Thonny, make sure the interpreter is the Python of your Q-MAP environment: Tools > Options > Interpreter,
+     then choose the `python.exe` inside your `<ENV_FOLDER>\Scripts` folder.
+   - If something is missing (an old Python, or a package), Q-MAP explains it in a message and, for missing
+     packages, offers to install them for you.
+3. On first start choose your two folders (**Q-MAP_DATA** and **Q-MAP_OUTPUT**) on the Home screen. Q-MAP checks them
+   with the same rules as the Foundation and remembers them in your own user settings (on Windows:
+   `%APPDATA%\Q-MAP\gui_settings.json`), never inside the program folder. Your own source profiles are kept
+   in a `profiles` folder next to that file.
+4. **Data Management** (the one working area) follows the numbered sections on the screen:
+   - **1. Input**: add files, preview any of them (nothing is saved by previewing).
+   - **2. Output**: your two folders, and buttons to open the last run folder and the problem report.
+   - **3. Options**: pick a source profile (its settings are shown in plain English; you can copy an example,
+     edit and check it, or browse for a profile file). Type exchange, symbol or timeframe only if the profile
+     says it cannot read them from the file.
+   - **Check files** tests everything and saves nothing. **Load files into Q-MAP** loads them with the Foundation.
+   - Progress, results (click a row for a plain-English explanation of any problem) and a live log are shown below.
+5. The Home screen lists every planned module. Only the ones that really work say **READY**; the rest say
+   **COMING SOON**.
+
+![Home screen](docs/gui/home.png)
+![Data Management after a load](docs/gui/data_management_results.png)
+
+If you close the window while a load is running, Q-MAP finishes the file it is working on and then stops; the next
+start tidies up anything unfinished.
+
+Not in this version: a data-coverage view, restoring a damaged raw file from the screen (use the `restore-raw`
+command below), and every module marked Coming Soon.
 
 ## Three separate locations
 
@@ -69,6 +104,9 @@ python -m venv "<ENV_FOLDER>"
 ```bash
 "<ENV_FOLDER>\Scripts\python.exe" -m pytest "<CODE_FOLDER>"
 ```
+
+The tests that open real windows need a screen, so they run on a normal Windows/macOS desktop. On a Linux machine
+without a screen they are skipped, or can be run with `xvfb-run`. Without `tkinter` they are skipped too.
 
 You never need to "activate" the environment. Use its own `python.exe` as shown. To open IDLE with it:
 
@@ -188,7 +226,9 @@ restore, run `recover`, then ingest the original again.
 - Automated tests run on Linux and, through `.github/workflows/tests.yml`, on Windows (Python 3.11). Network drives,
   OneDrive-synchronised folders and antivirus interference are not covered by any automated test.
 - Very long folder names can exceed Windows' 260-character path limit; keep the data and output roots short.
-- Only a command line exists; there is no graphical front end (the front end is an open Blueprint decision).
+- The graphical window covers Data Management only. It has been exercised on Linux (real windows on a virtual
+  screen), **not yet on Windows**: Windows-only behaviour (opening folders, remembered-settings location, high-DPI
+  text) is covered by simulation. The command line remains for `recover`, `verify` and `restore-raw`.
 - Selecting the "current" dataset across several raw files for one instrument is not defined yet.
 - Re-receiving registered content re-reads the stored copy to verify it, so very large files take correspondingly longer.
 - A result is reused only when the raw content, processing version, ingest request **and validation settings** match.
