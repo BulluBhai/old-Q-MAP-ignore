@@ -104,7 +104,8 @@ section 6 changes them back at the end.
 
 ### 3.3 What you need
 
-- Your laptop with IDLE (Python 3.12), as in round 2c. **Do not install or update anything.**
+- Your laptop with IDLE for **Python 3.11**. Q-MAP needs Python 3.11 or newer, so Python 3.12 would also work.
+  **Do not install or update anything**, not Python and not any package.
 - About 80 minutes. You may stop after any check; close Q-MAP with the **X** at the top right of each window.
 - Notepad, and Excel to look at CSV files.
 
@@ -174,7 +175,11 @@ deeper and repeat step 6. If GitHub asks you to sign in, sign in as usual.
 
 ### 4.2 Start Q-MAP and choose the NEW folders (before anything else)
 
-1. **Do:** Start menu → type `IDLE` → click **IDLE (Python 3.12 ...)**.
+1. **Do:** Start menu → type `IDLE` → click **IDLE (Python 3.11 ...)**. *(Windows wording; it may differ slightly,
+   for example `IDLE (Python 3.11 64-bit)`.)* If the Start menu shows more than one IDLE, use the Python 3.11 one and
+   write in the tracker which ones were shown.
+   **You should see** the IDLE window. Its first line starts with `Python 3.11.`. Write that whole first line in the
+   tracker, section 1 (**Python version**).
 2. **Do:** in IDLE click **File** → **Open...** → open `D:\Q-MAP_V01\PR10_Test\Q-MAP_APP\database_manager.py`.
 3. **Do:** press **F5**.
 4. **You should see** the window **Q-MAP Database Manager - prepare and manage market data**, on its **Home** screen.
@@ -187,8 +192,15 @@ deeper and repeat step 6. If GitHub asks you to sign in, sign in as usual.
    line `Both folders are ready and remembered.`
 8. **Save:** PIC `W00_Folders.png` of the **Your folders** section.
 
-**If different:** if a box still shows `D:\Q-MAP_V01\Q-MAP_DATA` or `D:\Q-MAP_V01\Q-MAP_OUTPUT`, repeat step 5 or 6.
-If a red message appears, take a picture and **STOP** (end the session; go to section 6).
+**If different:**
+- If a window titled **Q-MAP Database Manager cannot start yet** appears instead of Q-MAP:
+  1. If it asks **Install the missing packages now?**, click **No**. Do not install anything.
+  2. Take a picture `W00_Start_Problem.png` of the message (before clicking, if you can).
+  3. **STOP** (end the session; go to section 7). It means this Python does not yet have a package Q-MAP needs.
+     Installing it is a decision for you after the review; nothing has been changed.
+- If the message says Q-MAP needs a newer Python: take the same picture and **STOP** the same way.
+- If a box still shows `D:\Q-MAP_V01\Q-MAP_DATA` or `D:\Q-MAP_V01\Q-MAP_OUTPUT`, repeat step 5 or 6.
+- If a red message appears on the Home screen, take a picture and **STOP** (end the session; go to section 6).
 
 ### 4.3 Copy the test files
 

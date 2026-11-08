@@ -21,7 +21,7 @@ How to fill it in:
 |---|---|
 | Date (dd-mmm-yy) | |
 | Windows version (Start → Settings → System → About) | |
-| Python version (the IDLE window's first line) | |
+| Python version (the IDLE window's first line; it should start with `Python 3.11.`) | |
 | Commit tested (guide section 4.1, step 8) | |
 | Folders used (guide section 4.2) | `D:\Q-MAP_V01\PR10_Test\Q-MAP_DATA` and `...\Q-MAP_OUTPUT` (change if different) |
 
@@ -29,7 +29,7 @@ How to fill it in:
 
 | # | Check | Evidence (exact file names) | Result | Notes |
 |---|---|---|---|---|
-| W00 | New folders chosen; files copied (guide 4.2, 4.3) | PIC `W00_Folders.png`; PIC `W00_Market_Before.png` | | |
+| W00 | Q-MAP starts with Python 3.11; new folders chosen; files copied (guide 4.2, 4.3) | PIC `W00_Folders.png`; PIC `W00_Market_Before.png` (and `W00_Start_Problem.png` only if Q-MAP could not start) | | `could not start: ...` if a start-up message appeared |
 | W1 | First scan of `W_Market`: no question; results as in the guide | PIC `W01_Scan_Result.png` (and `W01_Question.png` only if a question appeared) | | e.g. `FILE ... shows ... instead of ...` |
 | W2 | OLAELEC details | TXT `W02_OLAELEC.txt` | | |
 | W3 | Exceptions box | TXT `W03_Exceptions.txt` | | |
