@@ -239,3 +239,73 @@ def test_a_real_windows_junction_is_never_followed(settings, db, folder, tmp_pat
     res = scan(settings, db, src)
     assert res.complete and [f[0] for f in res.files] == ["NSE_IN.csv"]
     assert res.links_skipped[0][0] == "junction/"
+
+
+# ---- 3. the scan's scope: sub-folders that are not included never affect completeness (re-review of b3b3379) --------
+
+def _break_sub(monkeypatch, folder):
+    """Make the child folder 'sub' both unresolvable and unlistable, as a damaged or access-denied folder would be."""
+    from pathlib import Path
+    real_resolve, real_scandir = Path.resolve, os.scandir
+    sub = os.path.normcase(os.path.abspath(folder / "sub"))
+
+    def resolve(self, strict=False):
+        if os.path.normcase(os.path.abspath(self)) == sub:
+            raise OSError(5, "I/O error")
+        return real_resolve(self, strict)
+
+    def scandir(path="."):
+        if os.path.normcase(os.path.abspath(os.fspath(path))) == sub:
+            raise PermissionError(13, "Permission denied", os.fspath(path))
+        return real_scandir(path)
+
+    monkeypatch.setattr(Path, "resolve", resolve)
+    monkeypatch.setattr(os, "scandir", scandir)
+
+
+@pytest.mark.parametrize("include_subfolders, complete", [(False, True), (True, False)])
+def test_an_unreadable_child_folder_counts_only_when_sub_folders_are_included(settings, db, folder, monkeypatch,
+                                                                            include_subfolders, complete):
+    daily(folder / "NSE_TOP.csv")
+    daily(folder / "sub" / "NSE_LOW.csv", seed=2)
+    src = D.add_folder_source(settings, db, folder, market_timezone="Asia/Kolkata", default_exchange="NSE",
+                              include_subfolders=include_subfolders)
+    _break_sub(monkeypatch, folder)
+    res = scan(settings, db, src)
+    assert res.complete is complete
+    assert outcome(res, "NSE_TOP.csv")[3] == "imported"  # the folder's own files are processed either way
+    row = scan_row(db, res.scan_id)
+    if complete:  # sub-folders off: 'sub' is outside the scan, not a problem
+        assert res.unreadable_folders == [] and row["status"] == "completed"
+        assert not res.summary().startswith("INCOMPLETE")
+        assert [f[0] for f in res.files] == ["NSE_TOP.csv"]
+    else:  # sub-folders on: the same folder makes the scan incomplete
+        assert [d for d, _ in res.unreadable_folders] == ["sub"] and row["status"] == "failed"
+        assert res.summary().startswith("INCOMPLETE SCAN")
+
+
+@pytest.mark.parametrize("include_subfolders, complete", [(False, True), (True, False)])
+@pytest.mark.skipif(sys.platform == "win32" or not hasattr(os, "geteuid") or os.geteuid() == 0,
+                    reason="needs POSIX permissions and a non-root user (the Linux CI runner)")
+def test_a_real_permission_denied_child_folder_counts_only_when_included(settings, db, folder, include_subfolders,
+                                                                        complete):
+    daily(folder / "NSE_TOP.csv")
+    daily(folder / "sub" / "NSE_LOW.csv", seed=2)
+    src = D.add_folder_source(settings, db, folder, market_timezone="Asia/Kolkata", default_exchange="NSE",
+                              include_subfolders=include_subfolders)
+    os.chmod(folder / "sub", 0)
+    try:
+        res = scan(settings, db, src)
+    finally:
+        os.chmod(folder / "sub", 0o755)
+    assert res.complete is complete
+    assert outcome(res, "NSE_TOP.csv")[3] == "imported"
+
+
+def test_links_inside_a_folder_that_is_not_scanned_are_not_listed(settings, db, folder, monkeypatch):
+    daily(folder / "NSE_TOP.csv")
+    src = D.add_folder_source(settings, db, folder, default_exchange="NSE", include_subfolders=False)
+    links, unreadable = [], []
+    _break_sub(monkeypatch, folder)
+    files, _ = D.list_candidate_files(settings, src, unreadable=unreadable, links=links)
+    assert [p.name for p in files] == ["NSE_TOP.csv"] and unreadable == [] and links == []

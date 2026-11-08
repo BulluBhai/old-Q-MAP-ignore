@@ -376,7 +376,9 @@ def list_candidate_files(settings: Settings, src: FolderSource, *, unreadable: l
             dirnames[:] = []
             continue
         keep = []
-        for d in sorted(dirnames):
+        # Sub-folders are outside the scan when the user did not include them: they are not inspected or classified
+        # at all, so a problem inside one can never make the scan incomplete (re-review of b3b3379, 08-Nov-26).
+        for d in sorted(dirnames) if src.include_subfolders else ():
             if _hidden(d):
                 continue
             kind, why = _entry_kind(here / d, here_real, root_real)
@@ -384,12 +386,11 @@ def list_candidate_files(settings: Settings, src: FolderSource, *, unreadable: l
                 unreadable.append((_rel(here / d, root), why))
                 continue
             if kind == LINK:
-                if src.include_subfolders:
-                    links.append((_rel(here / d, root) + "/", why))
+                links.append((_rel(here / d, root) + "/", why))
                 continue
             if not any(_is_inside((here / d).resolve(), m) for m in managed):
                 keep.append(d)
-        dirnames[:] = keep if src.include_subfolders else []
+        dirnames[:] = keep
         for name in sorted(filenames):
             p = here / name
             if _hidden(name):

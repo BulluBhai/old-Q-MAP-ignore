@@ -43,7 +43,8 @@ What a scan does, and does not do:
 - Files whose contents have not changed since the last scan are skipped. Q-MAP compares the file's checksum on every
   scan, so an edited file is always read again, even if its size and date did not change. Scanning twice never
   creates duplicates; the same content under two names is loaded once.
-- If a folder inside the source cannot be read (for example, access is denied), the scan does not stop: the files it
+- If a folder inside the source cannot be read (for example, access is denied) and **Include sub-folders** is ticked,
+  the scan does not stop: the files it
   can read are processed, and the message under Progress / Status turns red and starts with **Scan INCOMPLETE:**,
   naming the folder. Files last seen in that folder show as *Failed* ("Not checked: the folder ... could not be
   read"), never as *No longer in the folder*, and their data are unchanged. Fix the folder's access and scan again.
