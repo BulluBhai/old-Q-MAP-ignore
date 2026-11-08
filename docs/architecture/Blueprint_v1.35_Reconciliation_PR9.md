@@ -132,7 +132,7 @@ The requirement text behind R1-R30 is unchanged in v1.35, so the mapping stays v
 | G2 | Transformations, inferred properties, results, warnings, overrides recorded | 1 | Interpretation evidence and decisions per observation; answers append-only; quality checks | — |
 | G3 | Provenance sufficient to reproduce and explain | 1 | Generated profile text stored and content-addressed; Run IDs; inputs fingerprint | F-04 caveat (R6) |
 
-## 5. Known defects in PR #9's own state, fixed by PR #10 (stated by PR #10, not re-verified here)
+## 5. Known defects in PR #9's own state: each verified separately on PR #9 `f5f3630` (present) and PR #10 `78323b4` (fixed); the combined updated PR #9 + PR #10 stack is not yet tested
 
 Found in the owner's Windows/IDLE session on PR #9 (02-Nov-26) and recorded on PR #10's branch in
 `docs/acceptance_testing/Q-MAP_PR9_Acceptance_Findings_02_Nov_26_210000.md`. **These defects remain in PR #9.**
