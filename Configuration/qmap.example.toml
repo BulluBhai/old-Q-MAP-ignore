@@ -1,0 +1,35 @@
+# Q-MAP example configuration.
+# Copy this file, name the copy qmap.local.toml (it is ignored by Git), and fill in YOUR folders.
+# Never put real paths, market data or secrets in this committed example.
+
+[paths]
+# Two folders that already exist, OUTSIDE the Q-MAP code folder and not inside each other.
+# Windows: use forward slashes "D:/Q-MAP_DATA" or single quotes 'D:\Q-MAP_DATA'. A relative path is taken
+# relative to THIS file's folder.
+data_root   = "<set locally>"     # Q-MAP_DATA: raw data, cleaned data, metadata database
+output_root = "<set locally>"     # Q-MAP_OUTPUT: run folders, reports, logs
+
+[validation]
+plausible_min_date       = "01-Jan-1990"  # earlier dates are reported as errors (catches a wrong century or Unix unit)
+plausible_max_days_ahead = 1              # later than today + this many days is an error
+max_daily_move_pct       = 25.0           # larger close-to-close moves are reported as warnings
+max_gap_days             = 7              # longer gaps between trading dates are reported as warnings
+min_rows                 = 1
+
+[files]
+max_file_size_mb = 1024
+# profiles_dir = "<optional extra folder of your own source profiles>"
+
+[recovery]
+stale_minutes = 60   # work of a run whose program has ended is cleaned up once it is older than this
+                     # (work of a run that is still running is never touched, however long it takes)
+
+[logging]
+level = "INFO"
+
+# What a dataset must contain for an intended use. price_only and price_volume exist by default.
+[requirement_sets.price_only]
+require_volume = false
+
+[requirement_sets.price_volume]
+require_volume = true

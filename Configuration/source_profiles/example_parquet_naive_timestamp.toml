@@ -1,0 +1,32 @@
+# EXAMPLE source profile (layout only, no data). Parquet, timestamps WITHOUT a time zone.
+profile_id      = "example_parquet_naive_timestamp"
+profile_version = 1
+source_label    = "Parquet, naive timestamps"
+description     = "Parquet columns: Date (timestamp, no zone), Open, High, Low, Close, Volume (+ any extra columns)"
+
+[file]
+expected_format = "parquet"
+header = true
+
+[instrument]
+exchange_from = "ingest"
+symbol_from   = "ingest"
+timeframe = "1m"
+
+[columns]
+date  = { name = "Date" }
+open  = { name = "Open" }
+high  = { name = "High" }
+low   = { name = "Low" }
+close = { name = "Close" }
+
+[datetime]
+kind = "native"
+precision = "datetime"
+timezone = "Asia/Kolkata"            # CONFIRM: the file's timestamps carry no zone, so you must declare it
+exchange_timezone = "Asia/Kolkata"
+
+[volume]
+rule = "use_column"
+column = "Volume"
+requirement_set = "price_only"

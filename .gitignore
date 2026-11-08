@@ -218,3 +218,10 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# --- Q-MAP: local configuration, data and outputs never belong in Git ---
+qmap.local.toml
+Q-MAP_DATA/
+Q-MAP_OUTPUT/
+*.sqlite
+*.sqlite-journal
