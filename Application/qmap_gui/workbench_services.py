@@ -72,7 +72,7 @@ def ready_datasets(settings: Settings, *, include_superseded: bool = False, time
     """Datasets whose file exists (deleted ones are never offered)."""
     db = open_database(settings.db_path)
     try:
-        return list_datasets(db, include_superseded=include_superseded, include_deleted=False,
+        return list_datasets(db, include_superseded=include_superseded, include_deleted=False, include_rejected=False,
                              timeframes=(timeframe,) if timeframe else None)
     finally:
         db.close()

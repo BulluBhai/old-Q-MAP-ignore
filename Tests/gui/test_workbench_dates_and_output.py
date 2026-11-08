@@ -181,3 +181,86 @@ def test_an_operating_system_refusal_is_explained(an, gui, monkeypatch):
     monkeypatch.setattr(common.os, "startfile", refuse, raising=False)
     an.open_run_button.invoke()
     assert "Could not open" in an.app.dialogs.messages[-1][2] and "Access is denied" in an.app.dialogs.messages[-1][2]
+
+
+# ---- PR #9 acceptance: year navigation in the calendar (<< and >>) ----------------------------------------------------
+def test_year_buttons_move_a_whole_year_and_keep_the_month(an):
+    box = an.date_entries["date_from"]
+    an.param_vars["date_from"].set("15-Mar-26")
+    box.open_calendar()
+    popup = box.popup
+    assert popup.prev_year_button.cget("text") == "<<" and popup.next_year_button.cget("text") == ">>"
+    assert popup.prev_button.cget("text") == "<" and popup.next_button.cget("text") == ">"  # month buttons kept
+    for _ in range(28):  # 2026 -> 1998 without clicking through 336 months
+        popup.prev_year_button.invoke()
+    assert popup.month_label.cget("text") == "March 1998" and (popup.year, popup.month) == (1998, 3)
+    popup.next_button.invoke()  # month navigation still works after year navigation
+    assert popup.month_label.cget("text") == "April 1998"
+    popup.next_year_button.invoke()
+    assert popup.month_label.cget("text") == "April 1999"
+    popup.prev_button.invoke()
+    popup.prev_button.invoke()
+    popup.prev_button.invoke()
+    popup.prev_button.invoke()  # across a year boundary by months
+    assert popup.month_label.cget("text") == "December 1998"
+    assert 15 not in {d for d, b in popup.day_buttons.items() if b.cget("relief") == "sunken"}  # 15-Mar-26 not here
+
+
+def test_dates_picked_in_1998_and_2026_reach_the_analysis_parameters(an):
+    start, end = an.date_entries["date_from"], an.date_entries["date_to"]
+    start.open_calendar()
+    for _ in range(28):
+        start.popup.prev_year_button.invoke()
+    while (start.popup.year, start.popup.month) != (1998, 1):  # from whatever month it opened on
+        start.popup.shift(-12 if start.popup.year > 1998 else (1 if start.popup.year < 1998 else -1))
+    year, month = start.popup.year, start.popup.month
+    start.popup.day_buttons[2].invoke()
+    picked_start = date(year, month, 2)
+    assert start.value() == (picked_start, None)
+    end.open_calendar()
+    while end.popup.year != 2026:
+        end.popup.next_year_button.invoke() if end.popup.year < 2026 else end.popup.prev_year_button.invoke()
+    while end.popup.month != 1:
+        end.popup.prev_button.invoke()
+    end.popup.day_buttons[20].invoke()
+    assert end.value() == (date(2026, 1, 20), None)
+    an.check()
+    assert an.last_readiness is not None and an.last_readiness.params == {"date_from": picked_start,
+                                                                           "date_to": date(2026, 1, 20)}
+
+
+def test_range_validation_after_year_navigation(an):
+    start, end = an.date_entries["date_from"], an.date_entries["date_to"]
+    end.open_calendar()
+    while (end.popup.year, end.popup.month) != (1998, 1):
+        end.popup.shift(-12 if end.popup.year > 1998 else -1)
+    end.popup.day_buttons[5].invoke()  # end 05-Jan-1998
+    an.param_vars["date_from"].set("10-Jan-26")  # start after end: refused
+    an.start_run()
+    assert not an.running and an.last_result is None and "dates are not valid" in an.final_label.cget("text")
+    assert "after the end date" in an.readiness_box.get()
+    start.open_calendar()
+    while (start.popup.year, start.popup.month) != (1998, 1):
+        start.popup.shift(-12 if start.popup.year > 1998 else -1)
+    start.popup.day_buttons[2].invoke()  # 02-Jan-1998 .. 05-Jan-1998: a valid range (no bars there, not a date error)
+    an.check()
+    assert not an.readiness_box.get().startswith("INVALID DATE INPUT")
+
+
+# ---- PR #9 acceptance: Open Output Folder next to the completed-run message ---------------------------------------
+def test_the_results_area_button_opens_the_recorded_folder_of_the_completed_run(an, gui, monkeypatch):
+    calls = _opened(monkeypatch)
+    assert an.result_open_button.cget("text") == "Open Output Folder"
+    assert str(an.result_open_button.cget("state")) == "disabled"  # no completed run yet
+    an.start_run()
+    gui.wait(lambda: not an.running and an.last_result is not None, timeout=60)
+    run_dir = an.last_result.run_dir
+    from qmap_gui import workbench_services as ws
+
+    assert ws.last_completed_run(an.app.core_settings) == (an.last_result.run_id, run_dir)  # the RECORDED folder
+    assert str(an.result_open_button.cget("state")) == "normal"
+    an.result_open_button.invoke()
+    assert calls == [run_dir]
+    shutil.rmtree(run_dir)
+    an.result_open_button.invoke()
+    assert calls == [run_dir] and "no longer exists" in an.app.dialogs.messages[-1][2]

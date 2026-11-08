@@ -53,3 +53,21 @@ affected. This behaviour has not been tested with a real sync client.
 | Overall result | |
 
 Please send the filled table (and a screenshot of any F result) back on the PR.
+
+## Addendum 02-Nov-26: re-test after the PR #9 findings fix (branch `claude/friendly-babbage-8xyrgo`)
+
+Only what this change affects, and only what Claude could not check on Windows. Use **copies** of your eight files in a
+new test folder and a **new** pair of `Q-MAP_DATA` / `Q-MAP_OUTPUT` folders (so the earlier 4h RIVERUSD dataset is not
+in the way). Market time zone `Asia/Kolkata`, default exchange `NSE`, "File name is the symbol" **off**.
+Status: **not yet performed by the Project Owner.** Details and expected figures: `Q-MAP_PR9_Acceptance_Findings_02_Nov_26_210000.md`.
+
+| # | Step | Expected outcome | Result | Notes |
+|---|---|---|---|---|
+| A1 | Add the folder and scan | `NSE_BANKNIFTY, 15.csv` Imported. 5PAISA, AKZOINDIA, ICICIBANK, OLAELEC, UJJIVAN, VERANDA: Needs your answer (symbol). RIVERUSD: Needs your answer (exchange or venue), **not** NSE | | |
+| A2 | Select ICICIBANK.txt | Exchange box shows `NSE`, Symbol box `ICICIBANK`, already filled in. Press Save answer only | | |
+| A3 | Do A2 for 5PAISA, VERANDA, AKZOINDIA, OLAELEC, UJJIVAN; for RIVERUSD type a venue (e.g. `CRYPTO`); scan again | Imported: ICICIBANK (1D), 5PAISA (30m), VERANDA (1m), RIVERUSD (**3h** if DQ-7 is approved; otherwise Rejected "180 minutes apart ... does not relabel"). Rejected: AKZOINDIA (repeated timestamps, low above open), OLAELEC (repeated timestamps), UJJIVAN (repeated timestamps; no longer "column 2 is not a number") | | |
+| A4 | Scan again without changes | Every file "unchanged"; no new datasets | | |
+| A5 | Workbench: Dataset Summary for ICICIBANK; use the Start date **Calendar...**, `<<` back to January 1998 and pick 02; End date: type `02-Nov-26` | Run completes; Bars 7,166; first close 7.86; last close 1,387.40 | | |
+| A6 | In the calendar, `>>` from 1998 to 2026, then `<` / `>` | Year changes by one per click, month kept; month buttons still work | | |
+| A7 | Press **Open Output Folder** under the completion message | File Explorer opens directly at that run's `DSUM_...` folder (CSV and JSON inside) | | |
+| A8 | Rename that run folder in Explorer, press the button again | A message says the folder no longer exists; no error window | | |

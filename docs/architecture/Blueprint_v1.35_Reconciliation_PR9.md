@@ -154,7 +154,8 @@ PR #10's code, rules version 6).
 
 Limits of this verification: it shows the fixes exist at PR #10's current head, which is still based on PR #9's
 **old** head `b7a76c2`. The combination of PR #10 with this updated PR #9 has not been built or tested (that is part of
-PR #10's preparation). The exchange key `CRYPTO` at PR #10's head is the legacy key that DQ-11 (approved, not
+PR #10's preparation). *Update 08-Nov-26: after PR #9 was merged, the combination was built and tested on PR #10's
+branch; see section 11.* The exchange key `CRYPTO` at PR #10's head is the legacy key that DQ-11 (approved, not
 implemented) separates into asset category and venue. Nothing was run on Windows.
 
 These were **not back-ported** to PR #9: the same lines are rewritten by PR #10, so a back-port would duplicate
@@ -294,4 +295,36 @@ to read as current, and are not deleted.
 | `docs/user_guides/Database_Manager_User_Guide.md`, Sources section | **Current** for this branch | "Added 02-Nov-26 for Blueprint v1.3 §8.5" is a dated note; §8.5 is unchanged in v1.35 |
 | `docs/acceptance_testing/Q-MAP_Sources_Acceptance_Checklist_02_Nov_26_183000.md` | Historical (02-Nov-26) | The checklist the owner used for PR #9 on 02-Nov-26; its findings are F-01 to F-04. It is not an acceptance record |
 | Code comments citing "Blueprint v1.3 §8.5.x" | Historical references | Same section numbers and text in v1.35; not edited, to avoid conflicts with PR #10 |
+
+## 11. Integration of the final PR #9 into PR #10 (08-Nov-26)
+
+PR #9 was merged on 08-Nov-26 into PR #4's branch `claude/adoring-curie-5h2mx4` (merge commit `b67c9d4`, content
+identical to PR #9's final head `0994b4c`). On PR #10's branch `claude/friendly-babbage-8xyrgo`:
+
+| Commit | Content |
+|---|---|
+| `cf21a27` | Normal merge of `b67c9d4` into PR #10's head `78323b4` (parents `78323b4`, `b67c9d4`). Four conflicts, each resolved as the union of both sides: `discovery.py` (PR #10's Stop, overlap, identification and registry results kept with PR #9's incomplete-scan results; missing files are never reported when the scan was stopped or the folder was unreadable), `source_services.py`, the outstanding-work register header and the Database Manager guide |
+| `bd70c3d` | Two integration fixes found in the combined review: a scan both **stopped** (PR #10) and **incomplete** (PR #9) now says both on the Sources screen; the command-line `scan` (PR #10) returns 1 and says "Scan INCOMPLETE" when incomplete. Tests in `test_pr9_pr10_integration.py` (3) and `test_window_sources_stopped_incomplete.py` (1) |
+| This commit | Documentation: README note, this section |
+
+**Checked on the combined code** (tested here, Linux, 08-Nov-26; synthetic data only):
+
+| Area | Evidence |
+|---|---|
+| F-01b, F-02a, F-02c, F-03, F-04 | PR #10's `test_pr9_acceptance_findings.py` passes in the full suite; the independent check of section 5 run on the combined tree gives the same results as at `78323b4` (all five fixed; the generated profile ID for the headerless case is unchanged, `auto_b926b0cd7d39`) |
+| SHA-256 change detection | `test_changed_contents_with_the_same_size_and_time_are_detected` and the unchanged-file test pass with PR #10's interpretation rules (v6) |
+| Unreadable folders, sub-folder scope, links | `test_scan_integrity.py`, `test_source_folder_containment.py`, real-window `test_window_sources_incomplete.py` pass; real `chmod 000` and real Windows junction tests run on CI (results in the PR) |
+| Stop with incomplete | `test_a_stopped_scan_that_is_also_incomplete_reports_both`: both flags, status `failed`, nothing reported missing |
+| Data preservation, provenance, Run IDs | Migrations 1-10 pinned (`test_applied_migrations_are_frozen`), schema-7 upgrade and rollback tests (version-agnostic), raw-integrity and source-unchanged tests, PR #10's provenance tests |
+| End-to-end scan to analysis | PR #9's `test_scan_to_analysis_end_to_end.py` and PR #10's `test_p4_workflow.py` pass |
+
+**Effects on existing data:** none from the merge itself. No new migration (PR #10's migrations 9 and 10 are
+unchanged). The checksum-on-every-scan change does not cause reprocessing: unchanged files are still skipped, now
+after their checksum is compared. PR #10's own stated effect remains: after updating to its rules version 6, every
+dataset is processed once more and the earlier ones are marked superseded; nothing is deleted.
+
+**Not covered:** owner Windows/IDLE acceptance of the combined build; the incomplete-scan and stopped + incomplete
+messages are **automated-test coverage only** (acceptance guide v2, W19: producing an unreadable folder would need
+Windows permission changes, which are not part of owner testing), so the owner has not seen them on Windows; OneDrive
+online-only files; paths over 260 characters.
 

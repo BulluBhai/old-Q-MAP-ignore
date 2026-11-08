@@ -16,7 +16,16 @@ files. When data are missing, it tells you what to prepare in Database Manager.
 ## Run an analysis
 
 **1. Input.** Choose the analysis; its description and result type are shown. Select one or more prepared datasets.
-Deleted datasets are never offered; superseded ones only if you tick "Show superseded".
+Deleted datasets and datasets you **rejected** (Database Manager, reversible) are never offered; superseded ones only
+if you tick "Show superseded".
+
+What the readiness box tells you about data prepared automatically (03-Nov-26):
+- **Conflicting observations** (NOTE): some time stamps have more than one different value. The analysis still runs;
+  calculations that go bar by bar (such as returns) treat each stored row as a bar. Dataset Summary counts them in
+  its "Conflicting timestamps" column.
+- **MIXED intervals**: the dataset does not have one bar interval. Dataset Summary runs with a NOTE (its per-bar figures
+  mix intervals); an analysis that needs one interval refuses it with the reason.
+- Any timeframe can appear (for example 75 minutes or 2 hours); it is the interval measured in the data.
 
 **2. Output.** Each run gets its own folder, named by its **Run ID** (for example `DSUM_20261101_154719`), in
 `Q-MAP_OUTPUT/Research_Reports`. An earlier run is never overwritten.
@@ -25,6 +34,8 @@ Deleted datasets are never offered; superseded ones only if you tick "Show super
   restart it is read from the Data Registry. A refused request or a failed run never replaces it.
 - The path is shown in a read-only box, so you can select it and copy it (Ctrl+C).
 - **Open Output Folder** opens that folder in File Explorer. It only opens it; nothing is moved, renamed or deleted.
+  - The same button also appears under the completion message in **Progress / Status**, so you can open the
+    results straight after a run.
   - Before any run has completed, the button is greyed out.
   - If the folder has since been moved or deleted, or Windows refuses to open it, a message explains what happened
     instead.
@@ -36,7 +47,8 @@ Deleted datasets are never offered; superseded ones only if you tick "Show super
 Each date box accepts typing **and** has a **Calendar...** button.
 
 - **Calendar:** click a day to fill in the box.
-  - `<` and `>` change month; **Today** picks today; **Clear** empties the box.
+  - `<` and `>` change month; `<<` and `>>` change year (same month), so 1998 is a few clicks away; **Today** picks
+    today; **Clear** empties the box.
   - Esc or **Close** closes the calendar without changing anything.
   - The calendar writes dates as `25-Feb-26`.
 - **Typing:** day, then month, then year. All of these mean 25 February 2026:

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
 
 from . import __version__
 from .core.config import load_settings
@@ -15,6 +16,7 @@ from .core.errors import QmapError
 from .core.logging_setup import configure_console
 from .core.runs import run_context
 from .data_engine.ingest import ingest_file
+from .data_engine.overlap import check_new_datasets, write_overlap_report
 from .data_engine.preview import preview_file
 from .data_engine.profiles import check_profile_against_settings, find_profile
 from .storage.db import open_database
@@ -50,6 +52,17 @@ def _build_parser() -> argparse.ArgumentParser:
     rest.add_argument("--from", dest="source", required=True, help="the original file (must match the registered checksum)")
     rest.add_argument("--reason", required=True, help="written reason, recorded in the audit trail")
 
+    scn = sub.add_parser("scan", help="scan a folder automatically, as the Sources screen does (adds it if new)")
+    scn.add_argument("--folder", required=True, help="the folder with your market-data files")
+    scn.add_argument("--market-timezone", help="for a NEW folder (default for timestamps without a zone: Asia/Kolkata)")
+    scn.add_argument("--default-exchange", help="for a NEW folder (default: NSE)")
+
+    for name, text in (("reject", "reject datasets (reversible: nothing is deleted; they are kept out of analyses)"),
+                       ("restore", "restore datasets you rejected")):
+        cmd = sub.add_parser(name, help=text)
+        cmd.add_argument("--dataset-id", type=int, action="append", required=True, help="repeat for several")
+        cmd.add_argument("--reason", help="recorded with the decision")
+
     sub.add_parser("recover", help="finish or clean up interrupted work and report problems")
     sub.add_parser("verify", help="recover (without deleting cleaned files), then re-check every registered "
                                   "file against its checksum")
@@ -77,6 +90,35 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"RESTORED    raw dataset {args.dataset_id}\n            {receipt.detail}")
                 print(f"Run {run.run_id}  outputs: {run.dir}")
             return 0
+        if args.command in ("reject", "restore"):
+            from .data_engine import user_decisions as UD
+
+            fn = UD.reject_datasets if args.command == "reject" else UD.restore_datasets
+            res = fn(db, args.dataset_id, reason=args.reason, origin="command line")
+            print(f"{args.command}: recorded for {res.changed}" + (f"; unchanged: {res.unchanged}" if res.unchanged else ""))
+            return 0 if res.changed else 1
+        if args.command == "scan":
+            from .data_engine import discovery as D
+
+            folder = Path(args.folder).expanduser().resolve()
+            src = next((x for x in D.list_sources(db) if Path(x.location) == folder), None)
+            if src is None:
+                src = D.add_folder_source(settings, db, folder, market_timezone=args.market_timezone,
+                                          default_exchange=args.default_exchange)
+            with run_context(settings, db, D.MODULE_CODE, area=D.AREA, module_name=D.MODULE_NAME,
+                             params={"command": "scan", "source_id": src.source_id}) as run:
+                res = D.scan_source(run, src.source_id)
+                for rel, change, action, outcome, detail in res.files:
+                    print(f"{D.OUTCOME_LABELS.get(outcome, outcome).upper():22s} {rel}\n            {detail[:300]}")
+                print(f"Summary: {res.summary()}")
+                for label, path in (("Scan report", res.report_path), ("Overlap report", res.overlap_report_path),
+                                    ("Identification exceptions", res.identification_report_path)):
+                    if path:
+                        print(f"{label}: {path}")
+                print(f"Run {run.run_id}  outputs: {run.dir}")
+                if not res.complete:  # an incomplete scan is never reported as success (PR #9 review, 08-Nov-26)
+                    print(f"Scan INCOMPLETE: {res.incomplete_text()}")
+            return 0 if res.complete else 1
         if args.command in ("recover", "verify"):
             report = (recover_incomplete if args.command == "recover" else verify_registry)(settings, db)
             summary = report.summary()
@@ -95,6 +137,7 @@ def main(argv: list[str] | None = None) -> int:
         with run_context(settings, db, "FOUND", area="Ingestion", module_name="Foundation",
                          params={"command": "ingest", "profile": profile.profile_id,
                                  "files": [str(f) for f in args.files]}) as run:
+            overlaps = []
             for f in args.files:
                 res = ingest_file(run, f, profile, source_label=args.source_label, note=args.note,
                                   force_reason=args.force_reason, exchange=args.exchange, symbol=args.symbol,
@@ -102,8 +145,16 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"{res.outcome.upper():11s} {f}\n            {res.message}")
                 if res.issues_report:
                     print(f"            issues report: {res.issues_report}")
+                if res.outcome == "accepted":  # report-only overlap check (DQ-9), as in a folder scan
+                    found = check_new_datasets(run, res.dataset_ids)
+                    overlaps.extend(found)
+                    for o in found:
+                        print(f"            overlap: {o.note()}")
                 if not res.ok:
                     exit_code = 1
+            report = write_overlap_report(run, overlaps)
+            if report:
+                print(f"Overlap report: {report}")
             print(f"Run {run.run_id}  outputs: {run.dir}")
         return exit_code
     except QmapError as exc:

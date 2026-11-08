@@ -7,6 +7,7 @@ import pytest
 
 from fixtures.builders import HEADER, daily_rows, write_delimited
 from fixtures.profiles import do_ingest, make_profile
+from qmap import CLEANING_CODE_VERSION
 from qmap.core.errors import IngestError
 from qmap.core.runs import finish_run, start_run
 from qmap.storage.parquet_io import read_canonical_metadata
@@ -107,7 +108,7 @@ def test_new_profile_version_creates_a_new_dataset_and_supersedes_the_old_one(ru
     assert (v1.outcome, v2.outcome) == ("accepted", "accepted")
     old, new = cleaned(db)
     assert old["status"] == "superseded" and old["superseded_by_dataset_id"] == new["dataset_id"]
-    assert new["status"] == "active" and new["processing_version"] == "test_profile@2+c1"
+    assert new["status"] == "active" and new["processing_version"] == f"test_profile@2+{CLEANING_CODE_VERSION}"
     assert old["sha256"] != new["sha256"] or old["relative_path"] != new["relative_path"]
     assert len(db.query("SELECT * FROM datasets WHERE layer='cleaned' AND status='active'")) == 1
     assert not verify_registry(settings, db).needs_attention  # both files still present and intact
@@ -117,23 +118,23 @@ def test_changed_processing_code_version_is_a_new_processing_version(run, db, go
     import qmap.data_engine.ingest as ing
 
     do_ingest(run, good)
-    monkeypatch.setattr(ing, "CLEANING_CODE_VERSION", "c2")
+    monkeypatch.setattr(ing, "CLEANING_CODE_VERSION", "c99")
     res = do_ingest(run, good)
     assert res.outcome == "accepted"
     old, new = cleaned(db)
-    assert new["processing_version"] == "test_profile@1+c2" and old["status"] == "superseded"
+    assert new["processing_version"] == "test_profile@1+c99" and old["status"] == "superseded"
 
 
 def test_profile_and_code_version_used_are_preserved_per_attempt(run, db, settings, good):
     do_ingest(run, good)
     a = attempts(db)[0]
-    assert (a["profile_id"], a["profile_version"], a["processing_version"]) == ("test_profile", 1, "test_profile@1+c1")
+    assert (a["profile_id"], a["profile_version"], a["processing_version"]) == ("test_profile", 1, f"test_profile@1+{CLEANING_CODE_VERSION}")
     snap = db.one("SELECT * FROM source_profiles WHERE profile_id='test_profile' AND profile_version=1")
     assert snap["content_text"] == make_profile().content_text and snap["content_sha256"] == make_profile().content_sha256
     path = settings.data_path(cleaned(db)[0]["relative_path"])
     meta = read_canonical_metadata(path)
-    assert meta["cleaning_code_version"] == "c1" and meta["profile_version"] == 1
-    assert meta["processing_version"] == "test_profile@1+c1" and meta["run_id"] == run.run_id
+    assert meta["cleaning_code_version"] == CLEANING_CODE_VERSION and meta["profile_version"] == 1
+    assert meta["processing_version"] == f"test_profile@1+{CLEANING_CODE_VERSION}" and meta["run_id"] == run.run_id
     assert meta["source_raw_sha256"] == db.one("SELECT sha256 FROM datasets WHERE layer='raw'")[0]
 
 

@@ -23,20 +23,47 @@ import pyarrow.parquet as pq
 from .core.config import Settings
 from .core.dates import format_for_entry
 from .data_engine import canonical as C
+from .core.timeframes import MIXED, timeframe_minutes
 from .storage.db import Database
 from .storage.files import sha256_file
 
 TIMEFRAME_LABELS = {"1m": "1 minute", "5m": "5 minutes", "15m": "15 minutes", "30m": "30 minutes", "1h": "Hourly",
-                    "4h": "4 hours", "1D": "Daily", "1W": "Weekly", "1M": "Monthly", "1Q": "Quarterly", "1Y": "Yearly"}
+                    "3h": "3 hours", "4h": "4 hours", "1D": "Daily", "1W": "Weekly", "1M": "Monthly", "1Q": "Quarterly", "1Y": "Yearly"}
 TIMEFRAME_ORDER = tuple(TIMEFRAME_LABELS)
-INTRADAY_TIMEFRAMES = ("1m", "5m", "15m", "30m", "1h", "4h")
+INTRADAY_TIMEFRAMES = ("1m", "5m", "15m", "30m", "1h", "3h", "4h")
 LAYER_LABELS = {"raw": "Original file", "cleaned": "Standardised", "timeframe": "Derived timeframe"}
 VALIDATION_LABELS = {"passed": "Passed", "passed_with_warnings": "Passed with warnings"}
+CONFLICT_CHECKS = ("conflicting_observations", "conflicts_with_existing_dataset", "period_has_conflicting_observations")
 READ_COLUMNS = ("session_date", "timestamp_utc", "open", "high", "low", "close", "volume", "quality_flags")
 
 
 def timeframe_label(tf: str | None) -> str:
-    return TIMEFRAME_LABELS.get(tf or "", tf or "")
+    """"5m" -> "5 minutes", "75m" -> "75 minutes", "2h" -> "2 hours", "MIXED" -> "Mixed intervals"."""
+    if tf in TIMEFRAME_LABELS:
+        return TIMEFRAME_LABELS[tf]
+    if tf == MIXED:
+        return "Mixed intervals"
+    m = timeframe_minutes(tf)
+    if m:
+        return f"{m // 60} hours" if m % 60 == 0 else f"{m} minutes"
+    if tf and tf.endswith("d") and tf[:-1].isdigit():
+        return f"{tf[:-1]} days"
+    return tf or ""
+
+
+def timeframe_sort_key(tf: str | None):
+    """Minutes first (ascending), then 1D, 1W, 1M, 1Q, 1Y, other day periods, MIXED last."""
+    m = timeframe_minutes(tf)
+    if m:
+        return (0, m)
+    order = {"1D": 1, "1W": 2, "1M": 3, "1Q": 4, "1Y": 5}
+    if tf in order:
+        return (1, order[tf])
+    return (2 if tf != MIXED else 3, tf or "")
+
+
+def is_intraday_timeframe(tf: str | None) -> bool:
+    return timeframe_minutes(tf) is not None
 
 
 @dataclass
@@ -64,6 +91,12 @@ class DatasetInfo:
     validation_status: str = "passed"
     warnings: list[str] = field(default_factory=list)
     source_files: list[str] = field(default_factory=list)  # original file name(s) this data came from
+    user_decision: str | None = None  # latest reversible user decision: rejected | restored | None
+    instrument_name: str | None = None  # canonical display name from the alias registry ("NIFTY 50"), if any
+
+    @property
+    def rejected_by_user(self) -> bool:
+        return self.user_decision == "rejected"
 
     @property
     def instrument(self) -> str:
@@ -81,6 +114,8 @@ class DatasetInfo:
     def state_label(self) -> str:
         if self.file_deleted_at:
             return "File deleted"
+        if self.rejected_by_user:
+            return "Rejected by you"
         return "Active" if self.status == "active" else "Superseded"
 
     @property
@@ -119,7 +154,9 @@ def _info(db: Database, row, details: bool = True) -> DatasetInfo:
         file_deleted_at=row["file_deleted_at"], processing_version=row["processing_version"],
         canonical_schema_version=row["canonical_schema_version"], volume_status=row["volume_status"],
         requirement_set=row["requirement_set"], config_fingerprint=row["config_fingerprint"], sha256=row["sha256"],
-        created_at=row["created_at"], parent_dataset_id=row["parent_dataset_id"])
+        created_at=row["created_at"], parent_dataset_id=row["parent_dataset_id"],
+        user_decision=row["user_decision"] if "user_decision" in row.keys() else None,
+        instrument_name=row["instrument_name"] if "instrument_name" in row.keys() else None)
     if details and row["layer"] != "raw":
         info.warnings = _warnings_for(db, row)
         info.validation_status = "passed_with_warnings" if info.warnings else "passed"
@@ -127,11 +164,14 @@ def _info(db: Database, row, details: bool = True) -> DatasetInfo:
     return info
 
 
-_SELECT = ("SELECT d.*, i.exchange, i.symbol FROM datasets d LEFT JOIN instruments i USING (instrument_id) ")
+_SELECT = ("SELECT d.*, i.exchange, i.symbol, i.name AS instrument_name, (SELECT u.decision FROM dataset_user_decisions u WHERE u.dataset_id = "
+           "d.dataset_id ORDER BY u.decision_id DESC LIMIT 1) AS user_decision "
+           "FROM datasets d LEFT JOIN instruments i USING (instrument_id) ")
 
 
 def list_datasets(db: Database, *, include_superseded: bool = True, include_deleted: bool = True,
-                  timeframes: tuple[str, ...] | None = None, details: bool = True) -> list[DatasetInfo]:
+                  timeframes: tuple[str, ...] | None = None, details: bool = True,
+                  include_rejected: bool = True) -> list[DatasetInfo]:
     """Every managed (standardised or derived) dataset, ordered by instrument, timeframe and dataset number."""
     rows = db.query(_SELECT + "WHERE d.layer <> 'raw' ORDER BY i.exchange, i.symbol, d.timeframe, d.dataset_id")
     out = []
@@ -140,11 +180,12 @@ def list_datasets(db: Database, *, include_superseded: bool = True, include_dele
             continue
         if not include_deleted and r["file_deleted_at"]:
             continue
+        if not include_rejected and r["user_decision"] == "rejected":
+            continue
         if timeframes is not None and r["timeframe"] not in timeframes:
             continue
         out.append(_info(db, r, details))
-    order = {tf: n for n, tf in enumerate(TIMEFRAME_ORDER)}
-    out.sort(key=lambda d: (d.exchange, d.symbol, order.get(d.timeframe, 99), d.dataset_id))
+    out.sort(key=lambda d: (d.exchange, d.symbol, timeframe_sort_key(d.timeframe), d.dataset_id))
     return out
 
 
@@ -178,7 +219,7 @@ def overview(db: Database) -> DataOverview:
         permanent=one("SELECT COUNT(*) FROM datasets WHERE layer <> 'raw' AND storage_class = 'permanent' AND file_deleted_at IS NULL"),
         temporary=one("SELECT COUNT(*) FROM datasets WHERE layer <> 'raw' AND storage_class = 'temporary' AND file_deleted_at IS NULL"),
         raw_files=one("SELECT COUNT(*) FROM datasets WHERE layer = 'raw'"),
-        by_timeframe={tf: by_tf[tf] for tf in sorted(by_tf, key=lambda t: TIMEFRAME_ORDER.index(t) if t in TIMEFRAME_ORDER else 99)})
+        by_timeframe={tf: by_tf[tf] for tf in sorted(by_tf, key=timeframe_sort_key)})
 
 
 def provenance(db: Database, dataset_id: int) -> list[str]:
@@ -217,13 +258,14 @@ PASS, WARN, FAIL = "pass", "warn", "fail"
 class DataRequirement:
     """What one analysis needs from each dataset it uses."""
 
-    timeframes: tuple[str, ...]
+    timeframes: tuple[str, ...] | None = None  # None = any single (uniform) timeframe, e.g. 75m or 2h (DQ-7)
     min_rows: int = 1
     require_volume: bool = False
     date_from: date | None = None  # the analysis window, if any
     date_to: date | None = None
     allow_superseded: bool = False
     required_columns: tuple[str, ...] = ("session_date", "open", "high", "low", "close")
+    allow_mixed: bool = False  # True only for analyses that do not assume one uniform bar interval (shown as WARN)
 
 
 @dataclass
@@ -285,6 +327,10 @@ def check_readiness(settings: Settings, db: Database, dataset_id: int, req: Data
         rep.add("file_present", FAIL, f"Its file was deleted on {fmt_date(info.file_deleted_at)}. Prepare the data "
                                       "again in Database Manager.")
         return rep
+    if info.rejected_by_user:
+        rep.add("user_decision", FAIL, "You rejected this dataset. It is kept unchanged; restore it in Database "
+                                       "Manager (Sources or Datasets and Storage) to use it again.")
+        return rep
     if info.status != "active":
         rep.add("current", WARN if req.allow_superseded else FAIL,
                 "This dataset has been SUPERSEDED by a newer processing of the same data; use the active dataset.")
@@ -312,7 +358,16 @@ def check_readiness(settings: Settings, db: Database, dataset_id: int, req: Data
     missing = [c for c in req.required_columns if c not in schema.names]
     rep.add("columns", FAIL if missing else PASS,
             f"Missing column(s): {', '.join(missing)}." if missing else "All required columns are present.")
-    if info.timeframe in req.timeframes:
+    if info.timeframe == MIXED:
+        # DQ-7 (03-Nov-26): a mixed-interval dataset is kept and visible, but never silently treated as uniform
+        if req.allow_mixed:
+            rep.add("timeframe", WARN, "MIXED intervals: the sampled parts of this dataset have different bar "
+                                       "intervals. This analysis treats every stored row as a bar, so per-bar results "
+                                       "(such as bar-to-bar returns) mix different intervals.")
+        else:
+            rep.add("timeframe", FAIL, "MIXED intervals: this dataset does not have one uniform bar interval, and this "
+                                       "analysis assumes one. It cannot use it safely.")
+    elif req.timeframes is None or info.timeframe in req.timeframes:
         rep.add("timeframe", PASS, f"Timeframe {info.timeframe_label} is supported by this analysis.")
     else:
         wanted = ", ".join(timeframe_label(t) for t in req.timeframes)
@@ -323,6 +378,12 @@ def check_readiness(settings: Settings, db: Database, dataset_id: int, req: Data
         rep.add("volume", PASS, "Volume is available.")
     rep.add("validation", WARN if info.warnings else PASS,
             ("Validated with warnings: " + "; ".join(info.warnings[:4])) if info.warnings else "Validation passed.")
+    if any(w.startswith(CONFLICT_CHECKS) for w in info.warnings):
+        # DQ-10 (03-Nov-26): unresolved conflicts never block an analysis; the limitation is shown where data are used
+        rep.add("conflicts", WARN, "Unresolved conflicting observations: some timestamps have more than one different "
+                                   "value (in this dataset, or compared with another dataset). Q-MAP has not chosen "
+                                   "between them. Calculations that go bar by bar (such as returns) treat each stored "
+                                   "row as a bar.")
     if info.storage_class == "temporary":
         rep.add("storage", WARN, "Temporary dataset: results will reference it, but you may delete it later.")
 

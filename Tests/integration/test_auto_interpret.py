@@ -111,7 +111,11 @@ def test_parquet_with_naive_timestamps_uses_the_confirmed_market_zone(settings, 
     p = write_parquet(src / "NSE_BANKNIFTY_1m.parquet", {"Date": naive_ist, "Open": [r[0] for r in rows],
                                                           "High": [r[1] for r in rows], "Low": [r[2] for r in rows],
                                                           "Close": [r[3] for r in rows], "Volume": [r[4] for r in rows]})
-    assert A.interpret_file(p, settings).questions[0].key == "market_timezone"  # never assumed
+    # section 8 (03-Nov-26): no zone given -> Asia/Kolkata (the default), with a warning, never silently
+    dflt = A.interpret_file(p, settings)
+    assert dflt.status == A.READY and dflt.decisions["timezone_assumed"] and any("Asia/Kolkata" in w for w in dflt.warnings)
+    utc_it = A.interpret_file(p, settings, answers={"market_timezone": "UTC"})  # a correction is used
+    assert utc_it.decisions["market_timezone"] == "UTC" and not utc_it.decisions.get("timezone_assumed")
     it = A.interpret_file(p, settings, market_timezone="Asia/Kolkata")
     assert it.status == A.READY and it.overrides["timeframe"] == "1m"
     res = _load(run, p, it)
@@ -162,23 +166,25 @@ def test_day_month_two_digit_year_with_time_is_resolved_by_file_order(settings, 
     assert t.column("timestamp_utc").to_pylist()[0] == datetime(2015, 1, 9, 3, 45, tzinfo=timezone.utc)
 
 
-def test_dates_that_fit_day_first_and_month_first_ask_the_user(settings, run, src):
+def test_dates_that_fit_day_first_and_month_first_use_day_first_with_a_warning(settings, run, src):
+    """Section 8 (03-Nov-26): day-first is the default for Indian-market data; warned and correctable."""
     days = [date(2026, 1, 1) + timedelta(days=31 * i) for i in range(10)]
     p = write_delimited(src / "NSE_ABC.csv", HEADER, [[d.strftime("%d/%m/%Y")] + r for d, r in zip(days, ohlcv(10))])
     it = A.interpret_file(p, settings)
-    assert it.status == A.NEEDS_ANSWER and it.profile is None
-    q = next(q for q in it.questions if q.key == "date_format")
-    assert set(q.options) == {"format:%d/%m/%Y", "format:%m/%d/%Y"}
-    it2 = A.interpret_file(p, settings, answers={"date_format": "format:%d/%m/%Y", "timeframe": "1M"})
-    assert it2.status == A.READY and any("chosen by the user" in e for e in it2.evidence)
-    assert it2.signature == it.signature  # the answer is tied to this structure
+    assert it.status == A.READY and it.decisions["date_layout"] == "format:%d/%m/%Y"
+    assert it.decisions["date_layout_assumed"] and any("day-first was used" in w for w in it.warnings)
+    it2 = A.interpret_file(p, settings, answers={"date_format": "format:%m/%d/%Y"})  # the user's correction
+    assert it2.status == A.READY and it2.decisions["date_layout"] == "format:%m/%d/%Y"
+    assert any("chosen by the user" in e for e in it2.evidence) and not it2.decisions.get("date_layout_assumed")
+    assert it2.signature == it.signature  # the correction is tied to this structure
 
 
 def test_an_answer_that_does_not_fit_the_data_is_not_used(settings, src):
     days = [date(2026, 1, 1) + timedelta(days=31 * i) for i in range(10)]
     p = write_delimited(src / "NSE_ABC.csv", HEADER, [[d.strftime("%d/%m/%Y")] + r for d, r in zip(days, ohlcv(10))])
     it = A.interpret_file(p, settings, answers={"date_format": "iso"})
-    assert it.status == A.NEEDS_ANSWER
+    assert it.decisions["date_layout"] == "format:%d/%m/%Y"  # the unusable answer is ignored; the default applies
+    assert not any("chosen by the user" in e for e in it.evidence)
 
 
 def test_unix_seconds_and_milliseconds(settings, src):
@@ -199,39 +205,49 @@ def test_unreadable_dates_are_rejected_with_the_supported_layouts(settings, src)
 # ---- A-8, A-9: identity and timeframe -------------------------------------------------------------------------------
 
 def test_identity_is_asked_when_neither_the_file_nor_its_name_gives_it(settings, src):
+    """With file-name identification switched OFF for the folder, an unidentified file is asked about. With it ON (the
+    default since DQ-8), the cleaned name is a provisional identity with a warning."""
     p = write_delimited(src / "csv headers std.csv", HEADER, [[d.isoformat()] + r for d, r in zip(weekdays(10), ohlcv(10))])
-    it = A.interpret_file(p, settings)
+    it = A.interpret_file(p, settings, symbol_from_filename=False)
     assert [q.key for q in it.questions] == ["identity"]
-    assert A.interpret_file(p, settings, answers={"exchange": "nse", "symbol": "nifty"}).overrides["symbol"] == "NIFTY"
+    assert A.interpret_file(p, settings, symbol_from_filename=False,
+                            answers={"exchange": "nse", "symbol": "nifty"}).overrides["symbol"] == "NIFTY"
+    it = A.interpret_file(p, settings)
+    assert it.status == A.READY and it.overrides["symbol"] == "CSV_HEADERS_STD"
+    assert any(w.startswith("Provisional instrument CSV_HEADERS_STD") for w in it.warnings)
 
 
 def test_unknown_exchange_prefix_in_a_name_is_not_identity(settings, src):
     p = write_delimited(src / "CSV_HEADERS.csv", HEADER, [[d.isoformat()] + r for d, r in zip(weekdays(10), ohlcv(10))])
-    assert A.interpret_file(p, settings).questions[0].key == "identity"
+    assert A.interpret_file(p, settings, symbol_from_filename=False).questions[0].key == "identity"
+    it = A.interpret_file(p, settings)  # "CSV" is never taken as an exchange; the whole name is provisional
+    assert it.overrides["exchange"] == "NSE" and it.overrides["symbol"] == "CSV_HEADERS" and it.warnings
 
 
 def test_plain_symbol_file_names_only_when_enabled_for_the_source(settings, src):
     p = write_delimited(src / "RELIANCE.csv", HEADER, [[d.isoformat()] + r for d, r in zip(weekdays(10), ohlcv(10))])
-    assert A.interpret_file(p, settings, default_exchange="NSE").status == A.NEEDS_ANSWER
-    it = A.interpret_file(p, settings, default_exchange="NSE", symbol_from_filename=True)
+    assert A.interpret_file(p, settings, default_exchange="NSE", symbol_from_filename=False).status == A.NEEDS_ANSWER
+    it = A.interpret_file(p, settings, default_exchange="NSE")  # ON by default since DQ-8
     assert it.status == A.READY and it.overrides["symbol"] == "RELIANCE"
 
 
-def test_symbol_column_is_content_and_a_contradicting_name_is_rejected(settings, src):
+def test_symbol_column_is_content_and_a_contradicting_name_is_reported(settings, src):
     rows = [[d.isoformat(), "INFY"] + r for d, r in zip(weekdays(10), ohlcv(10))]
     ok = write_delimited(src / "data.csv", ["date", "symbol", "open", "high", "low", "close", "volume"], rows)
     it = A.interpret_file(ok, settings, default_exchange="NSE")
     assert it.status == A.READY and it.overrides == {"exchange": "NSE", "timeframe": "1D"}
     bad = write_delimited(src / "NSE_TCS.csv", ["date", "symbol", "open", "high", "low", "close", "volume"], rows)
-    assert A.interpret_file(bad, settings).status == A.REJECTED
+    it = A.interpret_file(bad, settings)  # DQ-8: reported with both values, the column is used (never overridden)
+    assert it.status == A.READY and "symbol" not in it.overrides
+    assert any("says symbol TCS" in w and "INFY" in w for w in it.warnings)
 
 
-def test_a_file_name_timeframe_that_contradicts_the_data_is_asked(settings, src):
+def test_a_file_name_timeframe_that_contradicts_the_data_is_reported_not_used(settings, src):
     p = write_delimited(src / "NSE_ABC, 1D.csv", HEADER,
                         [[t.isoformat()] + r for t, r in zip(intraday_utc(30, step_minutes=5), ohlcv(30))])
-    it = A.interpret_file(p, settings, market_timezone="Asia/Kolkata")
-    q = next(q for q in it.questions if q.key == "timeframe")
-    assert set(q.options) == {"5m", "1D"}
+    it = A.interpret_file(p, settings, market_timezone="Asia/Kolkata")  # DQ-7: the data decide, the name is reported
+    assert it.status == A.READY and it.overrides["timeframe"] == "5m"
+    assert any("file name says 1D" in w for w in it.warnings)
 
 
 @pytest.mark.parametrize("step, expected", [(1, "1m"), (15, "15m"), (60, "1h")])

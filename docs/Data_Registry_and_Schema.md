@@ -15,7 +15,7 @@ One Parquet file per instrument and timeframe.
 | `open`, `high`, `low`, `close` | float64 | Mandatory |
 | `volume` | float64 | Optional. Empty when absent, never zero-filled. |
 | `src_row` | int64 | 1-based position in the original source. Empty for derived bars. |
-| `quality_flags` | int64 | Bit mask: 1 volume_missing, 2 date_order_unverified, 4 large_move, 8 moved_by_sort, **16 period_may_be_incomplete** (derived data only) |
+| `quality_flags` | int64 | Bit mask: 1 volume_missing, 2 date_order_unverified, 4 large_move, 8 moved_by_sort, **16 period_may_be_incomplete** (derived data only), **32 conflicting_observation** (03-Nov-26, DQ-10: another row has the same timestamp with different values; derived periods built from such dates inherit it) |
 | `x_<name>` | as read | Preserved source columns (for example `x_net_volume`), kept exactly as read. **Not quantitative inputs**; `catalog.read_dataset` never returns them. |
 
 Derived-timeframe files add four columns: `period_start`, `period_end`, `first_session_date` and `bars_in_period`.
@@ -23,6 +23,16 @@ Every file carries its provenance in its Parquet metadata (`qmap` key).
 
 `Volume` and `Net Volume` are never merged. A second volume-like column is preserved separately unless a profile
 explicitly maps it.
+
+**Repeated timestamps (03-Nov-26, DQ-10, cleaning code `c2`).** Rows identical in every source column are exact
+duplicates: the first is kept in the standardised copy, the others are recorded (check `exact_duplicates_removed`,
+issues report, transformation step) and never stored. Rows that share a timestamp with any difference are conflicting
+observations: ALL are kept, in source order within the timestamp, flagged 32, and reported (`conflicting_observations`,
+a warning, never an error). One timestamp can therefore have several rows; Q-MAP never chooses between them.
+
+**Timeframe values (03-Nov-26, DQ-7).** Open-ended: `<n>m` (any whole minutes below a day, e.g. `3m`, `75m`), `<n>h`
+(whole hours, e.g. `2h`, `3h`), `1D`, `1W`, `1M` (`1Q`, `1Y` derived), `<n>d` for other day periods, and `MIXED` for a
+file whose sampled blocks show different intervals. The registered value is the interval measured in the data.
 
 ## Where data live
 
@@ -39,7 +49,7 @@ explicitly maps it.
 There is one file per dataset and no database per instrument. File names end with the Run ID that created them, so two
 runs can never overwrite each other.
 
-## Registry tables (schema version 8)
+## Registry tables (schema version 10)
 
 | Table | Holds | Protection |
 |---|---|---|
@@ -56,7 +66,8 @@ runs can never overwrite each other.
 | **`data_sources`** (schema 8) | Folder sources: location, name, market time zone, default exchange, "file name is the symbol", sub-folders, skip patterns, active/removed | Never deleted; location and identity immutable; settings may change (each scan keeps a snapshot) |
 | **`source_scans`** (schema 8) | One row per scan: source, Run ID, settings snapshot, status, counts. Status `failed` also marks an **incomplete** scan (a folder could not be read): `detail` starts with "Incomplete:" and `summary_json` has `"complete": false` and the unreadable folders | Never deleted; finished once |
 | **`source_file_observations`** (schema 8) | What each scan saw for each file: size, modification time, SHA-256, change (new/changed/unchanged/missing/unreadable), action, outcome, links to the ingest event, attempt and datasets, the full interpretation (evidence and generated profile ID), open questions, retry date | Append-only. A file's current state is its latest observation (no second, updatable copy) |
-| **`source_answers`** (schema 8) | The user's answers to interpretation questions, with the file's structure signature | Append-only; an answer is used only while the file keeps that structure |
+| **`source_answers`** (schema 8) | The user's answers to interpretation questions and corrections (exchange, symbol, date layout, time zone), with the file's structure signature | Append-only; an answer is used only while the file keeps that structure. Since 03-Nov-26 a correction can also be recorded for an imported file; the next scan registers the corrected data as a new dataset |
+| **`dataset_user_decisions`** (schema 10) | Reversible user decisions on standardised/derived datasets: `rejected` / `restored`, reason, origin (sources, datasets, command line), Run ID, time. A dataset's current decision is its latest one | Append-only; never for raw originals. A rejected dataset is unchanged but not offered to analyses (readiness FAILs with the reason) |
 
 ### Identifiers and versions
 
@@ -64,10 +75,12 @@ runs can never overwrite each other.
 |---|---|
 | Dataset | Integer `dataset_id` |
 | Run | Run ID `<MODULE>_<YYYYMMDD>_<HHMMSS>` (UTC); modules `FOUND` (loading), `DBM` (Database Manager actions), `SCAN` (folder scans), `DSUM` (Dataset Summary) |
-| Processing version, standardised data | `<profile_id>@<profile_version>+<cleaning code version>`. For automatically read files the profile is generated: `auto_<12 hex>@1+c1`, where the hex is the hash of the generated profile text (stored in `source_profiles`), so the same layout always gives the same processing version |
+| Processing version, standardised data | `<profile_id>@<profile_version>+<cleaning code version>`. For automatically read files the profile is generated: `auto_<12 hex>@1+c2`, where the hex is the hash of the generated profile text (stored in `source_profiles`), so the same layout always gives the same processing version |
 | Processing version, derived data | `derive:ohlcv_period_aggregation@1` |
-| Settings fingerprint | `vs1:<16 hex>` |
-| Schema | `schema_version` table; currently 8 (migration 7: Temporary area moved to `Temporary/`, OD-8; migration 8: folder sources and scans, Blueprint v1.3) |
+| Settings fingerprint | `vs2:<16 hex>` (since 03-Nov-26 it includes the `[timeframe_sampling]` settings; `vs1` before) |
+| Cleaning code version | `c2` since 03-Nov-26 (exact duplicates removed, conflicting observations kept); `c1` before |
+| Schema | `schema_version` table; currently 10 (migration 7: Temporary area moved to `Temporary/`, OD-8; migration 8: folder sources and scans, Blueprint v1.3; migration 9: file-name identification ON for every folder, DQ-8; migration 10: `dataset_user_decisions`) |
+| Alias registry | `Q-MAP_DATA/Reference_Files/Instrument_Aliases.csv`: first column canonical name, then aliases. Edited by the user; Q-MAP only appends through "Add to alias registry" (backup and record in the run folder) |
 
 ## Three separate statuses
 

@@ -20,7 +20,7 @@ from .widgets import ERROR_COLOR, MUTED_COLOR, OK_COLOR, WARN_COLOR, LogText, Re
 COLUMNS = (("id", "Dataset", 60), ("instrument", "Instrument", 150), ("tf", "Timeframe", 90), ("kind", "Type", 100),
            ("bars", "Bars", 60), ("from", "From", 80), ("to", "To", 80), ("validation", "Validation", 140),
            ("storage", "Storage", 85), ("state", "State", 90))
-TIMEFRAME_FILTER = ("", "1m", "5m", "15m", "30m", "1h", "4h", "1D", "1W", "1M", "1Q", "1Y")
+TIMEFRAME_FILTER = ("", "1m", "5m", "15m", "30m", "1h", "3h", "4h", "1D", "1W", "1M", "1Q", "1Y")
 
 
 class DatasetsFrame(tk.Frame):
@@ -103,6 +103,11 @@ class DatasetsFrame(tk.Frame):
                                        command=lambda: self.storage_action("delete"))
         for b in (self.temp_button, self.perm_button, self.delete_button):
             b.pack(side="left", padx=2)
+        # reversible user decision (schema 10): kept out of analyses, nothing deleted or moved
+        self.reject_button = tk.Button(row, text="Reject (reversible)", command=lambda: self.decision_action("reject"))
+        self.restore_button = tk.Button(row, text="Restore", command=lambda: self.decision_action("restore"))
+        self.reject_button.pack(side="left", padx=(14, 2))
+        self.restore_button.pack(side="left", padx=2)
         row = tk.Frame(box)
         row.pack(fill="x", pady=3)
         tk.Label(row, text="Derive from daily data:").pack(side="left")
@@ -207,7 +212,8 @@ class DatasetsFrame(tk.Frame):
         n, total = len(self.selected_ids()), len(self.rows)
         self.count_label.configure(text=f"[{n} selected of {total}]")
         can = n > 0 and not self.running and self.app.core_settings is not None
-        for b in (self.temp_button, self.perm_button, self.delete_button, self.derive_button):
+        for b in (self.temp_button, self.perm_button, self.delete_button, self.derive_button, self.reject_button,
+                  self.restore_button):
             b.configure(state="normal" if can else "disabled")
         if self.running:
             self.hint.configure(text="Working...", fg=MUTED_COLOR)
@@ -219,6 +225,18 @@ class DatasetsFrame(tk.Frame):
             self.hint.configure(text="Ready. Choose an action.", fg=OK_COLOR)
 
     # ---- actions ---------------------------------------------------------------------------------------------------
+    def decision_action(self, action: str) -> None:
+        ids, settings = self.selected_ids(), self.app.core_settings
+        if not ids or settings is None or self.running:
+            return
+        res = rs.record_decision(settings, ids, action, self.reason_var.get())
+        verb = "Rejected" if action == "reject" else "Restored"
+        self.log.append(f"{verb}: {res.changed}" + (f"; unchanged: {res.unchanged}" if res.unchanged else ""))
+        self.final_label.configure(text=f"{verb} {len(res.changed)} dataset(s)." + (
+            " They are kept unchanged and no longer offered to analyses; Restore undoes it." if action == "reject"
+            else " They are offered to analyses again."), fg=WARN_COLOR if action == "reject" else OK_COLOR)
+        self.refresh()
+
     def storage_action(self, action: str) -> None:
         ids, settings = self.selected_ids(), self.app.core_settings
         if not ids or settings is None or self.running:

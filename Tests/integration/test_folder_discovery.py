@@ -47,8 +47,8 @@ def checksums(folder):
             if p.is_file()}
 
 
-def test_schema_8_is_the_latest():
-    assert LATEST_VERSION == 8
+def test_schema_10_is_the_latest():
+    assert LATEST_VERSION == 10  # 9: file-name identification ON (DQ-8); 10: reversible user decisions
 
 
 # ---- sources ---------------------------------------------------------------------------------------------------
@@ -64,9 +64,8 @@ def test_q_map_own_folders_and_bad_settings_are_refused(settings, db, tmp_path):
     ok.mkdir()
     with pytest.raises(D.SourceError):
         D.add_folder_source(settings, db, ok, market_timezone="Mars/Olympus")
-    with pytest.raises(D.SourceError):
-        D.add_folder_source(settings, db, ok, symbol_from_filename=True)  # needs a default exchange
-    D.add_folder_source(settings, db, ok)
+    # DQ-8 (03-Nov-26): file-name identification no longer needs a folder exchange (NSE is the default)
+    assert D.add_folder_source(settings, db, ok).symbol_from_filename  # ON by default, no exchange needed
     with pytest.raises(D.SourceError):
         D.add_folder_source(settings, db, ok)  # already a source
 
@@ -196,7 +195,8 @@ def test_a_file_that_disappears_is_reported_and_its_data_kept(settings, db, sour
 
 @pytest.mark.parametrize("mutate, check", [
     (lambda rows: rows.__setitem__(3, rows[3][:1] + ["abc"] + rows[3][2:]), "numeric_types"),
-    (lambda rows: rows.__setitem__(4, [rows[3][0]] + rows[4][1:]), "duplicate"),
+    (lambda rows: rows.__setitem__(4, [rows[4][0], rows[4][1], rows[4][2], rows[4][1] * 2, rows[4][4], rows[4][5]]),
+     "low_le_open_close"),  # was a repeated date: since DQ-10 that is a conflict (kept, warned), not a rejection
     (lambda rows: rows.__setitem__(2, [rows[2][0], rows[2][1], rows[2][2] * 0.5, rows[2][3], rows[2][4], rows[2][5]]),
      "high_ge_open_close"),
 ])
@@ -236,7 +236,7 @@ def test_readiness_still_applies_per_analysis(settings, db, source, folder):
 # ---- questions and answers -------------------------------------------------------------------------------------------
 
 def test_a_question_is_recorded_answered_and_the_answer_reused_only_for_the_same_structure(settings, db, folder):
-    src = D.add_folder_source(settings, db, folder)
+    src = D.add_folder_source(settings, db, folder, symbol_from_filename=False)  # questions only arise with it off
     p = daily(folder / "prices.csv")
     r = scan(settings, db, src)
     assert outcome_of(r, "prices.csv")[3] == "needs_answer" and list_datasets(db) == []
@@ -261,7 +261,7 @@ def test_a_question_is_recorded_answered_and_the_answer_reused_only_for_the_same
 
 
 def test_changing_the_source_settings_reprocesses_waiting_files(settings, db, folder):
-    src = D.add_folder_source(settings, db, folder, default_exchange="NSE")
+    src = D.add_folder_source(settings, db, folder, default_exchange="NSE", symbol_from_filename=False)
     daily(folder / "RELIANCE.csv")
     assert outcome_of(scan(settings, db, src), "RELIANCE.csv")[3] == "needs_answer"
     D.update_folder_source(db, src.source_id, symbol_from_filename=True)

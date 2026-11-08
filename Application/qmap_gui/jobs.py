@@ -16,6 +16,7 @@ from qmap.core.config import Settings
 from qmap.core.errors import QmapError
 from qmap.core.runs import run_context
 from qmap.data_engine.ingest import IngestResult, ingest_file
+from qmap.data_engine.overlap import check_new_datasets, write_overlap_report
 from qmap.data_engine.profiles import SourceProfile
 from qmap.storage.db import open_database
 
@@ -48,6 +49,8 @@ class RunSummary:
     outcomes: list[FileOutcome] = field(default_factory=list)
     cancelled: bool = False
     error: str | None = None
+    overlaps: list = field(default_factory=list)  # OverlapFinding (report only, DQ-9)
+    overlap_report: Path | None = None
 
     def counts(self) -> dict:
         c: dict[str, int] = {}
@@ -126,6 +129,11 @@ class IngestJob:
                                           exchange=self.request["exchange"], symbol=self.request["symbol"],
                                           timeframe=self.request["timeframe"])
                         outcome = outcome_from_result(res, path, db)
+                        if res.outcome == "accepted":  # report-only overlap check (DQ-9), as in a folder scan
+                            found = check_new_datasets(run, res.dataset_ids)
+                            summary.overlaps.extend(found)
+                            if found:
+                                outcome.message += " Overlap with existing data: " + "; ".join(f.note() for f in found) + "."
                     except QmapError as exc:
                         outcome = FileOutcome(path, "failed", OUTCOMES["failed"], plain(exc))
                     except Exception as exc:  # keep going with the other files, and say what happened
@@ -134,6 +142,9 @@ class IngestJob:
                                               f"Unexpected problem ({type(exc).__name__}): {exc}")
                     summary.outcomes.append(outcome)
                     self.emit({"type": "file_done", "index": i, "total": len(self.files), "outcome": outcome})
+                summary.overlap_report = write_overlap_report(run, summary.overlaps)
+                if summary.overlap_report:
+                    self.emit({"type": "log", "text": f"Overlap report: {summary.overlap_report}"})
         except QmapError as exc:
             summary.error = plain(exc)
         except Exception as exc:

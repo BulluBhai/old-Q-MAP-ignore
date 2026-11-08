@@ -22,7 +22,7 @@ from .widgets import (ERROR_COLOR, MUTED_COLOR, OK_COLOR, WARN_COLOR, DateEntry,
 COLUMNS = (("id", "Dataset", 60), ("instrument", "Instrument", 150), ("tf", "Timeframe", 90), ("bars", "Bars", 60),
            ("from", "From", 80), ("to", "To", 80), ("validation", "Validation", 150), ("storage", "Storage", 85),
            ("state", "State", 90))
-TIMEFRAME_FILTER = ("", "1m", "5m", "15m", "30m", "1h", "4h", "1D", "1W", "1M", "1Q", "1Y")
+TIMEFRAME_FILTER = ("", "1m", "5m", "15m", "30m", "1h", "3h", "4h", "1D", "1W", "1M", "1Q", "1Y")
 
 
 class AnalysisFrame(tk.Frame):
@@ -136,6 +136,10 @@ class AnalysisFrame(tk.Frame):
         self.progress.grid(row=3, column=0, columnspan=4, sticky="ew", pady=(6, 0))
         self.final_label = tk.Label(box, text="", anchor="w", justify="left", wraplength=940, font=bold)
         self.final_label.grid(row=4, column=0, columnspan=4, sticky="w")
+        # the same action as section 2's button, next to the completion message: opens the completed run's own folder
+        self.result_open_button = tk.Button(box, text="Open Output Folder", state="disabled",
+                                            command=self.open_run_folder)
+        self.result_open_button.grid(row=5, column=0, columnspan=4, sticky="w", pady=(4, 0))
         box.columnconfigure(1, weight=1)
         box.columnconfigure(3, weight=1)
 
@@ -348,7 +352,8 @@ class AnalysisFrame(tk.Frame):
     def _show_last_run(self, run_id: str | None, folder: Path | None) -> None:
         self.last_run_id, self.last_run_dir = run_id, folder
         self.run_folder_var.set(str(folder) if folder else "(no completed run yet)")
-        self.open_run_button.configure(state="normal" if folder else "disabled")
+        for b in (self.open_run_button, self.result_open_button):
+            b.configure(state="normal" if folder else "disabled")
 
     def open_run_folder(self) -> None:
         """Open the latest completed run's own folder. Only opens it; nothing is changed."""

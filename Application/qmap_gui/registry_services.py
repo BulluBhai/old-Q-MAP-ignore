@@ -67,7 +67,8 @@ def details(settings: Settings, dataset_id: int) -> list[tuple[str, str | None]]
         d = get_dataset(db, dataset_id)
         if d is None:
             return [(f"Dataset {dataset_id} is not registered.\n", "error")]
-        parts = [(f"{d.instrument}  {d.timeframe_label}  (dataset {d.dataset_id})\n", "bold"),
+        shown = f"{d.instrument} ({d.instrument_name})" if d.instrument_name else d.instrument
+        parts = [(f"{shown}  {d.timeframe_label}  (dataset {d.dataset_id})\n", "bold"),
                  (f"Bars: {d.row_count}   From {fmt_date(d.date_from)} to {fmt_date(d.date_to)}   "
                   f"Volume: {d.volume_status}\n", None),
                  (f"Storage: {d.storage_label}   State: {d.state_label}\n", "warning" if d.storage_class == TEMPORARY else None),
@@ -201,3 +202,11 @@ def derive_items(assessments) -> list[tuple[str, Callable]]:
 __all__ = ["DERIVABLE", "LABELS", "PERMANENT", "TEMPORARY", "OperationJob", "OperationSummary", "assess_derive",
            "assess_storage", "confirmation_text", "datasets", "derive_items", "details", "overview_text",
            "row_values", "storage_items", "timeframe_label"]
+
+
+def record_decision(settings: Settings, ids: list[int], action: str, reason: str = ""):
+    """Reject (reversible) or restore datasets; recorded in dataset_user_decisions. Nothing is deleted or moved."""
+    from qmap.data_engine import user_decisions as UD
+
+    fn = UD.reject_datasets if action == "reject" else UD.restore_datasets
+    return _with_db(settings, lambda db: fn(db, ids, reason=reason, origin="datasets"))

@@ -52,7 +52,8 @@ TIMEFRAME_LABELS = {"1D": "Daily", "1W": "Weekly", "1M": "Monthly", "1Q": "Quart
 
 FLAG_PERIOD_MAY_BE_INCOMPLETE = 16  # first/last period of the data may not contain every session (no calendar)
 DERIVED_FLAG_DESCRIPTIONS = {**C.FLAG_DESCRIPTIONS, FLAG_PERIOD_MAY_BE_INCOMPLETE: "period_may_be_incomplete"}
-PROPAGATED_FLAGS = C.FLAG_DATE_ORDER_UNVERIFIED  # a period inherits this if any of its sessions has it
+# a period inherits these if any of its sessions has them (DQ-10: a period built from conflicting observations says so)
+PROPAGATED_FLAGS = C.FLAG_DATE_ORDER_UNVERIFIED | C.FLAG_CONFLICTING_OBSERVATION
 DERIVED_COLUMNS = C.CORE_COLUMNS + ("period_start", "period_end", "first_session_date", "bars_in_period")
 RULES_TEXT = ("open=first, high=max, low=min, close=last, volume=sum (empty if any session's volume is empty); "
               "calendar periods (ISO week Mon-Sun, month, quarter, year); bar dated by its last included session")
@@ -85,6 +86,7 @@ class Aggregated:
     row_count: int
     edge_flags: int  # number of periods flagged period_may_be_incomplete
     volume_missing_periods: int
+    conflict_periods: int = 0  # periods that include conflicting observations of one date (DQ-10)
 
 
 def aggregate_daily(table: pa.Table, timeframe: str) -> Aggregated:
@@ -96,7 +98,13 @@ def aggregate_daily(table: pa.Table, timeframe: str) -> Aggregated:
     dates = table.column("session_date").to_pylist()
     if any(d is None for d in dates):
         raise DerivationError("Some daily bars have no trading date.")
-    if any(b <= a for a, b in zip(dates, dates[1:])):
+    flags_all = np.asarray(table.column("quality_flags").to_numpy(zero_copy_only=False), dtype=np.int64)
+    conflict_row = (flags_all & C.FLAG_CONFLICTING_OBSERVATION) != 0
+    # A repeated date is accepted only as conflicting observations of that date (DQ-10, 03-Nov-26: conflicts must
+    # not block derivations). The existing rules then apply unchanged to all rows of the period, in stored order
+    # (open = first row, close = last row, high/low over all, volume summed); the period is flagged and warned.
+    if any(b < a or (b == a and not (conflict_row[i] and conflict_row[i + 1]))
+           for i, (a, b) in enumerate(zip(dates, dates[1:]))):
         raise DerivationError("The daily dataset has more than one bar on some dates, or is not in date order. "
                               "Derived timeframes need exactly one bar per trading date.")
     o, h, lo, c = (np.asarray(table.column(k).to_numpy(zero_copy_only=False), dtype=float)
@@ -113,10 +121,12 @@ def aggregate_daily(table: pa.Table, timeframe: str) -> Aggregated:
     starts = [0] + [i for i in range(1, len(keys)) if keys[i] != keys[i - 1]]
     ends = starts[1:] + [len(keys)]
     out = {k: [] for k in DERIVED_COLUMNS}
-    edge = vol_missing = 0
+    edge = vol_missing = conflict_periods = 0
     for n, (a, b) in enumerate(zip(starts, ends)):
         p_start, p_end = keys[a]
         flags = int(np.bitwise_or.reduce(flags_in[a:b] & PROPAGATED_FLAGS))
+        if flags & C.FLAG_CONFLICTING_OBSERVATION:
+            conflict_periods += 1
         if (n == 0 and dates[a] > p_start) or (n == len(starts) - 1 and dates[b - 1] < p_end):
             flags |= FLAG_PERIOD_MAY_BE_INCOMPLETE
             edge += 1
@@ -140,7 +150,7 @@ def aggregate_daily(table: pa.Table, timeframe: str) -> Aggregated:
         out["period_end"].append(p_end)
         out["first_session_date"].append(dates[a])
         out["bars_in_period"].append(b - a)
-    return Aggregated(out, len(starts), edge, vol_missing)
+    return Aggregated(out, len(starts), edge, vol_missing, conflict_periods)
 
 
 def build_derived_table(agg: Aggregated, metadata: dict) -> pa.Table:
@@ -218,6 +228,10 @@ def assess_derivation(settings: Settings, db: Database, source_dataset_id: int, 
     if row["status"] != "active":
         a.warnings.append(f"The daily dataset is SUPERSEDED (by dataset {row['superseded_by_dataset_id']}); the newer "
                           "one is normally the right source.")
+    if db.one("SELECT 1 FROM quality_checks WHERE attempt_id = ? AND check_name = 'conflicting_observations' AND "
+              "passed = 0", (row["created_by_attempt_id"],)) is not None:
+        a.warnings.append("The daily dataset has unresolved conflicting observations (same date, different values). "
+                          "Derivation continues; the periods concerned are flagged and depend on those conflicts.")
     bad = db.one("SELECT detail FROM quality_checks WHERE attempt_id = ? AND check_name = 'one_bar_per_period' "
                  "AND passed = 0", (row["created_by_attempt_id"],))
     if bad is not None:
@@ -313,6 +327,12 @@ def derive_timeframe(run: Run, source_dataset_id: int, timeframe: str) -> Deriva
                       ("period_may_be_incomplete", "warning", int(agg.edge_flags == 0), agg.edge_flags,
                        "The first and/or last period may not contain every trading session (no trading calendar)."
                        if agg.edge_flags else "")]
+            if agg.conflict_periods:
+                checks.append(("period_has_conflicting_observations", "warning", 0, agg.conflict_periods,
+                               f"{agg.conflict_periods} period(s) include dates with conflicting observations in the "
+                               "daily dataset. The usual rules were applied to all of them unchanged (open = first "
+                               "row, close = last row in stored order, volume summed over every row), so these "
+                               "periods depend on unresolved conflicts. Q-MAP has not chosen between them."))
             if agg.volume_missing_periods:
                 checks.append(("period_volume_missing", "warning", 0, agg.volume_missing_periods,
                                "Some periods have an empty volume because a session's volume is empty."))
