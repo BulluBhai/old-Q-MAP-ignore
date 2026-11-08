@@ -11,6 +11,11 @@ program, data, registry or research output was changed.**
 - The OW-35 review is recorded (D6-29).
 - No other PR was merged, and `main` was not changed directly.
 
+**Update 08-Nov-26:**
+- PR #1 was merged into `main` (`b5dda5a`) after ChatGPT's independent review and the Project Owner's explicit approval. Its head `e34b673` includes the non-finite configuration-value correction.
+- OD-10 decided: existing folder names retained. Pre-migration backup deferred (OW-46). Both recorded in D6-30.
+- Because of that correction, the build ID of the merged release will differ from the UAT-accepted `a202d43d78ed`.
+
 ## 1. Acceptance status
 
 | Item | Status | Record |
@@ -28,7 +33,7 @@ chain branches, so PRs based on `main` have no CI.
 
 | PR | Content | Base | Head | Latest CI on head | State |
 |---|---|---|---|---|---|
-| #1 | Stage 2 foundation | `main` | `424955d` | #12 success | Ready (reviewed in earlier rounds) |
+| #1 | Stage 2 foundation | `main` | `e34b673` | #144/#145 success (Ubuntu 458 passed; Windows 457 passed, 1 skipped) | **Merged** into `main` 08-Nov-26, merge commit `b5dda5a` (normal merge commit; Project Owner approval; D6-30) |
 | #2 | First GUI, Data Management | #1 | `ff28305` | #21 success | Ready |
 | #3 | Sample-file testing and audit fixes | #2 | `852247f` | #27 success | Ready |
 | #4 | Database Manager / Analytical Workbench (schema 7) | #3 | `417552f` | #48 success | Ready |
@@ -83,7 +88,7 @@ None of these was decided by the UAT acceptance. Their statuses are unchanged fr
 
 1. ~~#17~~: **done** (merged 07-Nov-26, `cc454de`). The documentation-standard references in #16 now resolve on `main`.
 2. ~~#5~~: **closed without merging** (D6-28).
-3. **#1 → #2 → #3 → #4 → #9 → #10 → #12 → #15 → #16**, in this order, after ChatGPT's review and the Project Owner's
+3. ~~#1~~ (merged 08-Nov-26, `b5dda5a`) → **#2 → #3 → #4 → #9 → #10 → #12 → #15 → #16**, in this order, each after ChatGPT's review and the Project Owner's
    explicit approval.
    - Use **"Create a merge commit"** for every stacked PR, not "Squash" or "Rebase". Squashing a lower PR rewrites
      its commits, and the next PR would then show conflicts.
