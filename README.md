@@ -1,11 +1,9 @@
 # Q-MAP
 Quantitative Market Analytics Platform [Q-MAP]
 
-The governing document is **Q-MAP Master Blueprint v1.3**
-([Q-MAP_Master_Blueprint_v1.3.md](Q-MAP_Master_Blueprint_v1.3.md), with an `.html` copy), approved and adopted by the
-Project Owner on 2 November 2026 and superseding v1.2, v1.1 and v1.0 where they differ. How the code meets it is in the
+The governing document is **Q-MAP Master Blueprint v1.35** ([Q-MAP_Master_Blueprint_v1.35.md](Q-MAP_Master_Blueprint_v1.35.md), with an `.html` copy), approved and adopted by the Project Owner on 3 November 2026.
+How this branch's automatic discovery and interpretation work meets the Blueprint is in the
 [Blueprint v1.3 implementation audit](docs/architecture/Blueprint_v1.3_Implementation_Audit.md).
-[docs/Q-MAP_Master_Blueprint_v1.0.md](docs/Q-MAP_Master_Blueprint_v1.0.md) is kept for history.
 Material decisions are recorded in [docs/decision_log.md](docs/decision_log.md).
 
 ## Two applications, one platform
