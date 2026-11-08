@@ -300,20 +300,37 @@ def _hidden(name: str) -> bool:
     return name.startswith(".") or name.startswith("~$") or name.lower() in ("thumbs.db", "desktop.ini")
 
 
+def _redirected(entry: Path, parent_real: Path, root_real: Path) -> bool:
+    """True if `entry` is a link of any kind (symbolic link, Windows junction or other reparse point), i.e. its real
+    location is not simply `parent_real / name`, or if it lies outside the source folder. os.walk(followlinks=False)
+    does not recognise Windows junctions as links, so this is checked separately (review of 08-Nov-26)."""
+    try:
+        if entry.is_symlink():
+            return True
+        real = entry.resolve()
+    except (OSError, RuntimeError):
+        return True  # cannot be resolved safely: never followed or read
+    return real != parent_real / entry.name or not _is_inside(real, root_real)
+
+
 def list_candidate_files(settings: Settings, src: FolderSource) -> tuple[list[Path], int]:
-    """(files to look at, number excluded by the source's patterns). Never follows links out of the folder."""
+    """(files to look at, number excluded by the source's patterns). Never follows links out of the folder:
+    symbolic links, Windows junctions and anything whose real location is not inside the folder are skipped."""
     root = Path(src.location)
+    root_real = root.resolve()
     managed = [Path(settings.data_root).resolve(), Path(settings.output_root).resolve(), Path(settings.code_root).resolve()]
     found, excluded = [], 0
     for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
         here = Path(dirpath)
+        here_real = here.resolve()
         dirnames[:] = sorted(d for d in dirnames if not _hidden(d)
+                             and not _redirected(here / d, here_real, root_real)
                              and not any(_is_inside((here / d).resolve(), m) for m in managed))
         if not src.include_subfolders:
             dirnames[:] = []
         for name in sorted(filenames):
             p = here / name
-            if _hidden(name) or p.is_symlink():
+            if _hidden(name) or _redirected(p, here_real, root_real):
                 continue
             rel = p.relative_to(root).as_posix()
             if any(fnmatch.fnmatch(rel, pat) or fnmatch.fnmatch(name, pat) for pat in src.exclude_patterns):
