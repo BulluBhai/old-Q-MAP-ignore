@@ -560,9 +560,12 @@ class SourcesFrame(tk.Frame):
             self.report_var.set(str(summary.report_path))
         self.counts_var.set(summary.summary or "-")
         if getattr(summary, "stopped", False):
+            incomplete = getattr(summary, "incomplete", None)  # a stopped scan can also be incomplete: say both
             self.final_label.configure(
                 text=f"Stopped by you after {sum(summary.counts.values())} file(s); {len(summary.not_processed)} file(s) "
-                     "not processed (listed in the scan report). Work already done is kept.", fg=WARN_COLOR)
+                     "not processed (listed in the scan report). Work already done is kept." +
+                     (f" Scan INCOMPLETE: {incomplete}" if incomplete else ""),
+                fg=ERROR_COLOR if incomplete else WARN_COLOR)
         elif summary.error:
             self.final_label.configure(text=f"Stopped: {summary.error}", fg=ERROR_COLOR)
         elif getattr(summary, "incomplete", None):
