@@ -43,9 +43,10 @@ Documentation:
 QLOPB MA research (their code is not in this repository),
 other research modules, backtesting, portfolio and risk. They are shown as COMING SOON.
 
-**Known defects on this branch (PR #9):** five automatic-interpretation defects found in the Project Owner's test
-session of 02-Nov-26 (F-01b, F-02a, F-02c, F-03, F-04) are fixed in PR #10, which is stacked on this branch. Do not
-use this branch on its own for real market data. Details: [v1.35 reconciliation](docs/architecture/Blueprint_v1.35_Reconciliation_PR9.md), section 5.
+**PR #9's known defects:** the five automatic-interpretation defects found in the Project Owner's test session of
+02-Nov-26 (F-01b, F-02a, F-02c, F-03, F-04) are fixed on this branch (PR #10), which now also contains PR #9's final
+state (merged 08-Nov-26). Details: [v1.35 reconciliation](docs/architecture/Blueprint_v1.35_Reconciliation_PR9.md),
+sections 5 and 11 (integration of PR #9 into PR #10).
 
 ![Database Manager: Datasets and Storage](docs/acceptance_testing/evidence_01_Nov_26/screenshots/04_datasets_and_storage_01_Nov_26.png)
 ![Analytical Workbench after a run](docs/acceptance_testing/evidence_01_Nov_26/screenshots/06_workbench_completed_01_Nov_26.png)
