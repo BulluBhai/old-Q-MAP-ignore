@@ -1,0 +1,33 @@
+# STANDARD Q-MAP source profile: recommended for routine use. Its reading rules were verified row by row against
+# the Project Owner's sample files (docs/sample_file_testing). Check the time-zone and two-digit-year settings
+# against your own data before relying on it.
+# Naming standard: docs/standards/Q-MAP_Naming_and_Reference_Conventions.md, section C.
+profile_id      = "csv_nohdr_unixs"
+profile_version = 1
+status          = "standard"
+display_name    = "Headerless CSV: time (Unix seconds), open, high, low, close, Volume, Net Volume"
+source_label    = "CSV, headerless, Unix timestamps in seconds"
+description     = "Comma-separated file WITHOUT a header row; columns by position: 0 time (Unix seconds), 1 open, 2 high, 3 low, 4 close, 5 Volume, 6 Net Volume (kept separately, never used as volume); trading dates use the exchange time zone Asia/Kolkata (confirm for your data). You type the exchange, symbol and timeframe when loading."
+legacy_ids      = ["example_csv_noheaders_unix_seconds", "csv_noheaders_unix_seconds"]   # earlier names of this layout (still recognised)
+
+[file]
+expected_format = "delimited_text"
+header = false
+[instrument]
+exchange_from = "ingest"
+symbol_from   = "ingest"
+timeframe     = "ingest"
+[columns]
+date  = { position = 0 }
+open  = { position = 1 }
+high  = { position = 2 }
+low   = { position = 3 }
+close = { position = 4 }
+[datetime]
+kind = "unix_s"
+exchange_timezone = "Asia/Kolkata"   # CONFIRM: used to derive each bar's trading date
+[volume]
+rule = "use_column"
+column = { position = 5 }
+preserved_not_volume = [{ position = 6 }]
+requirement_set = "price_only"

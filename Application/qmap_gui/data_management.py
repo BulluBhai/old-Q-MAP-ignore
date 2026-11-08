@@ -15,27 +15,13 @@ from tkinter import font as tkfont
 from tkinter import ttk
 
 from . import services
+from .common import fmt_clock, fmt_duration  # noqa: F401 - also used by other screens
 from .jobs import FileOutcome, IngestJob, RunSummary
 from .locations import LocationsPanel
 from .messages import OUTCOMES
 from .widgets import ERROR_COLOR, MUTED_COLOR, OK_COLOR, WARN_COLOR, LogText, ReadOnlyText, combobox_index, section
 
 TIMEFRAMES = ("", "1m", "5m", "15m", "30m", "1h", "4h", "1D", "1W", "1M")
-
-
-def fmt_duration(seconds: float) -> str:
-    s = int(round(seconds))
-    if s < 60:
-        return f"{s} s"
-    m, s = divmod(s, 60)
-    if m < 60:
-        return f"{m} min {s:02d} s"
-    h, m = divmod(m, 60)
-    return f"{h} h {m:02d} min"
-
-
-def fmt_clock(moment: datetime) -> str:
-    return moment.strftime("%d-%b-%y %H:%M:%S")  # dd-mmm-yy
 
 
 class DataManagementFrame(tk.Frame):
@@ -102,14 +88,14 @@ class DataManagementFrame(tk.Frame):
         row = tk.Frame(box)
         row.pack(fill="x", pady=(6, 0))
         tk.Label(row, text="Last run folder:", width=18, anchor="w").pack(side="left")
-        self.run_folder_var = tk.StringVar(value="(none yet)")
+        self.run_folder_var = tk.StringVar(self, value="(none yet)")
         tk.Label(row, textvariable=self.run_folder_var, anchor="w", fg=MUTED_COLOR).pack(side="left", fill="x", expand=True)
         self.open_run_button = tk.Button(row, text="Open run folder", state="disabled", command=self.open_run_folder)
         self.open_run_button.pack(side="right")
         row = tk.Frame(box)
         row.pack(fill="x")
         tk.Label(row, text="Problem report:", width=18, anchor="w").pack(side="left")
-        self.report_var = tk.StringVar(value="(select a result below)")
+        self.report_var = tk.StringVar(self, value="(select a result below)")
         tk.Label(row, textvariable=self.report_var, anchor="w", fg=MUTED_COLOR).pack(side="left", fill="x", expand=True)
         self.open_report_button = tk.Button(row, text="Open report", state="disabled", command=self.open_report)
         self.open_report_button.pack(side="right")
@@ -141,11 +127,11 @@ class DataManagementFrame(tk.Frame):
 
         grid = tk.Frame(box)
         grid.pack(fill="x", pady=3)
-        self.exchange_var, self.symbol_var, self.timeframe_var = tk.StringVar(), tk.StringVar(), tk.StringVar()
+        self.exchange_var, self.symbol_var, self.timeframe_var = tk.StringVar(self), tk.StringVar(self), tk.StringVar(self)
         for var in (self.exchange_var, self.symbol_var, self.timeframe_var):  # re-check as the user types
             var.trace_add("write", lambda *_args: self._on_request_typed())
-        self.label_var = tk.StringVar(value=self.app.gui_settings.source_label)
-        self.note_var, self.force_var = tk.StringVar(), tk.StringVar()
+        self.label_var = tk.StringVar(self, value=self.app.gui_settings.source_label)
+        self.note_var, self.force_var = tk.StringVar(self), tk.StringVar(self)
         tk.Label(grid, text="Exchange:", anchor="w", width=18).grid(row=0, column=0, sticky="w")
         self.exchange_entry = tk.Entry(grid, textvariable=self.exchange_var, width=14)
         self.exchange_entry.grid(row=0, column=1, sticky="w")
@@ -179,10 +165,10 @@ class DataManagementFrame(tk.Frame):
 
         # ---- Progress / Status ----
         box = section(self, "Progress / Status")
-        self.stage_var, self.file_var = tk.StringVar(value="Idle"), tk.StringVar(value="-")
-        self.files_var, self.started_var = tk.StringVar(value="0 / 0"), tk.StringVar(value="-")
-        self.elapsed_var, self.eta_var = tk.StringVar(value="-"), tk.StringVar(value="-")
-        self.rows_var, self.counts_var = tk.StringVar(value="0"), tk.StringVar(value="-")
+        self.stage_var, self.file_var = tk.StringVar(self, value="Idle"), tk.StringVar(self, value="-")
+        self.files_var, self.started_var = tk.StringVar(self, value="0 / 0"), tk.StringVar(self, value="-")
+        self.elapsed_var, self.eta_var = tk.StringVar(self, value="-"), tk.StringVar(self, value="-")
+        self.rows_var, self.counts_var = tk.StringVar(self, value="0"), tk.StringVar(self, value="-")
         items = (("Stage:", self.stage_var), ("Current file:", self.file_var), ("Files done:", self.files_var),
                  ("Started:", self.started_var), ("Elapsed:", self.elapsed_var), ("Time left (estimate):", self.eta_var),
                  ("Rows processed:", self.rows_var), ("Results so far:", self.counts_var))
@@ -293,7 +279,7 @@ class DataManagementFrame(tk.Frame):
             self.profile_details.set(f"This profile cannot be used yet:\n{info.problem}\n\nUse 'Edit / check profile...' to fix it.", "error")
         else:
             lines = [f"{k}: {v}" for k, v in services.describe_profile(info.profile)]
-            self.profile_details.set(f"{info.profile.description or info.profile.source_label}\n" + "\n".join(lines))
+            self.profile_details.set(f"{info.profile.title}\n{info.profile.description}\n" + "\n".join(lines))
             self.app.remember(last_profile=str(info.path))
         needs = services.profile_needs(info.profile) if info and info.profile else services.ProfileNeeds(False, False, False)
         self.exchange_entry.configure(state="normal" if needs.exchange else "disabled")
@@ -330,7 +316,9 @@ class DataManagementFrame(tk.Frame):
             self.app.dialogs.info("Q-MAP", "Choose a source profile first.")
             return None
         text = info.path.read_text(encoding="utf-8")
-        note = (f"Editing a COPY of the example '{info.path.name}'." if info.where == "example"
+        if info.where == "example":
+            text = services.as_user_copy_text(text)
+        note = (f"Editing a COPY of the Q-MAP library profile '{info.path.name}'." if info.where == "example"
                 else f"Editing {info.path}.")
         return text, note
 

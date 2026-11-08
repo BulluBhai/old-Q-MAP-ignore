@@ -22,12 +22,13 @@ from qmap.data_engine.format_detect import detect_format
 from qmap.data_engine.preview import preview_file
 from qmap.data_engine.instruments import normalise_exchange, normalise_symbol
 from qmap.data_engine.process import filename_identity_problem, process_table
-from qmap.data_engine.profiles import (SourceProfile, check_profile_against_settings, load_profile,
+from qmap.data_engine.profiles import (STATUS_LABELS, SourceProfile, check_profile_against_settings, load_profile,
                                        parse_profile)
 from qmap.data_engine.readers import read_source
 from qmap.data_engine.results import ERROR, CheckResult
 from qmap.storage.db import open_database
 
+from .common import open_in_file_manager  # noqa: F401 - part of this module's interface
 from .messages import Finding, findings_from_checks
 
 
@@ -139,32 +140,59 @@ def build_core_settings(data_root: str, output_root: str, code_root: str | Path,
 @dataclass
 class ProfileInfo:
     path: Path
-    where: str  # "example" | "mine" | "file"
+    where: str  # "example" = shipped with Q-MAP (read-only library) | "mine" | "file"
     profile: SourceProfile | None
     problem: str | None
 
     @property
-    def label(self) -> str:
+    def status_label(self) -> str:
         if self.profile is None:
-            return f"{self.path.stem}  [{self.where}]  (has a problem)"
+            return "has a problem"
+        if self.where == "example":
+            return STATUS_LABELS.get(self.profile.status, self.profile.status)
+        return "My profile" if self.where == "mine" else "Profile file"
+
+    @property
+    def label(self) -> str:
+        """Drop-down text: the clear display name first, then what kind of profile it is, then its ID."""
+        if self.profile is None:
+            return f"{self.path.stem}  [has a problem]"
         p = self.profile
-        return f"{p.profile_id}  v{p.profile_version}  [{self.where}]  {p.source_label}"
+        return f"{p.title}   [{self.status_label}]   ({p.profile_id} v{p.profile_version})"
+
+
+_STATUS_ORDER = {"standard": 0, "example": 1, "template": 2, "legacy": 3, "custom": 4}
 
 
 def list_profiles(settings: Settings) -> list[ProfileInfo]:
+    """Q-MAP's own library (Standard, then Examples, then Templates), then your own profiles."""
     found: list[ProfileInfo] = []
     for i, folder in enumerate(settings.profile_dirs):
         if not Path(folder).is_dir():
             continue
+        group: list[ProfileInfo] = []
         for path in sorted(Path(folder).glob("*.toml")):
             where = "example" if i == 0 else "mine"
             try:
                 profile = load_profile(path)
                 check_profile_against_settings(profile, settings)
-                found.append(ProfileInfo(path, where, profile, None))
+                group.append(ProfileInfo(path, where, profile, None))
             except (ProfileError, QmapError) as exc:
-                found.append(ProfileInfo(path, where, None, plain(exc)))
+                group.append(ProfileInfo(path, where, None, plain(exc)))
+        if i == 0:
+            group.sort(key=lambda info: (_STATUS_ORDER.get(info.profile.status, 9) if info.profile else 9, info.path.name))
+        found += group
     return found
+
+
+def library_and_legacy_ids(settings: Settings) -> set[str]:
+    """Names reserved by Q-MAP's own library: current profile IDs and their earlier (legacy) names."""
+    ids: set[str] = set()
+    for info in list_profiles(settings):
+        if info.where == "example" and info.profile:
+            ids.add(info.profile.profile_id)
+            ids.update(info.profile.legacy_ids)
+    return ids
 
 
 def load_profile_file(path: str | Path, settings: Settings) -> ProfileInfo:
@@ -189,11 +217,22 @@ def profile_needs(profile: SourceProfile) -> ProfileNeeds:
     return ProfileNeeds(ins.exchange_from == "ingest", ins.symbol_from == "ingest", ins.timeframe == "ingest")
 
 
+STATUS_MEANING = {"standard": "Standard - recommended for routine use",
+                  "example": "Example - for learning and testing, not for routine use",
+                  "template": "Template - copy it and adapt it before use",
+                  "legacy": "Legacy - kept for compatibility only",
+                  "custom": "Your own profile"}
+
+
 def describe_profile(profile: SourceProfile) -> list[tuple[str, str]]:
     f, d, v, ins = profile.file, profile.datetime, profile.volume, profile.instrument
     where = {"fixed": "fixed in the profile", "column": "read from a column in the file",
              "filename_pattern": "read from the file name", "ingest": "you type it below"}
-    rows = [
+    rows = [("Kind of profile", STATUS_MEANING.get(profile.status, profile.status)),
+            ("Profile ID", f"{profile.profile_id} (version {profile.profile_version})")]
+    if profile.legacy_ids:
+        rows.append(("Earlier names (still recognised)", ", ".join(profile.legacy_ids)))
+    rows += [
         ("File type", {"delimited_text": "CSV / text", "xlsx": "Excel (.xlsx)", "xls": "Excel (.xls)",
                        "parquet": "Parquet", None: "any supported type"}[f.expected_format]),
         ("First row is a header", "Yes" if f.header else "No (columns are taken by position)"),
@@ -335,6 +374,15 @@ def save_user_profile(text: str, directory: str | Path) -> Path:
     return target
 
 
+def as_user_copy_text(text: str) -> str:
+    """A library profile's text turned into YOUR copy: status "custom" (never labelled Standard or Example), no claim
+    to the library's earlier names, display name marked as a copy. The reading rules are not touched."""
+    text = re.sub(r'(?m)^status\s*=\s*"[^"]*"', 'status          = "custom"', text, count=1)
+    text = re.sub(r'(?m)^legacy_ids\s*=.*\n', "", text, count=1)
+    return re.sub(r'(?m)^display_name\s*=\s*"(?:Example - )?([^"]*)"',
+                  lambda m: f'display_name    = "My copy: {m.group(1)}"', text, count=1)
+
+
 def copy_example_as(example: Path, new_id: str, directory: str | Path) -> Path:
     if not re.fullmatch(r"[A-Za-z0-9_.-]+", new_id or ""):
         raise GuiError("A profile name may only use letters, digits, '_', '.' and '-' (no spaces).")
@@ -343,6 +391,7 @@ def copy_example_as(example: Path, new_id: str, directory: str | Path) -> Path:
     text = re.sub(r'(?m)^profile_version\s*=\s*\d+', "profile_version = 1", text, count=1)
     if n != 1:
         raise GuiError("That example does not look like a profile (no profile_id line).")
+    text = as_user_copy_text(text)
     target = Path(directory) / f"{new_id}.toml"
     if target.exists():
         raise GuiError(f"You already have a profile called '{new_id}'. Choose another name.")
@@ -402,17 +451,4 @@ def check_file(path: str | Path, profile: SourceProfile, settings: Settings, ove
 # ---------------------------------------------------------------------------------------------------
 # Opening folders and reports
 # ---------------------------------------------------------------------------------------------------
-def open_in_file_manager(path: str | Path) -> tuple[bool, str]:
-    p = Path(path)
-    if not p.exists():
-        return False, f"{p} does not exist."
-    try:
-        if sys.platform.startswith("win"):
-            os.startfile(str(p))  # type: ignore[attr-defined]
-        elif sys.platform == "darwin":
-            subprocess.Popen(["open", str(p)])
-        else:
-            subprocess.Popen(["xdg-open", str(p)])
-    except OSError as exc:
-        return False, f"Could not open {p}: {exc}"
-    return True, "Opened."
+# open_in_file_manager lives in .common (shared with the Analytical Workbench); imported above.

@@ -18,6 +18,11 @@ second, independent safeguard for the moment a run is being created and for file
 |                                                                | registration is re-checked first     |
 | Run left `running`                                             | Mark failed (interrupted)            |
 | Registered file missing / unreadable / wrong checksum          | REPORT (verify re-hashes everything) |
+| Storage action (move / delete) left `started`                  | Finish or undo it (storage_class.py) |
+| Derived-timeframe file / temp file not registered              | Delete (reproducible from its source)|
+| Unregistered file in Temporary/ (or the legacy Temporary_Data/)| REPORT (never deleted)               |
+
+A dataset whose file the user deleted (Temporary data, `file_deleted_at`) is not reported as missing.
 """
 
 from __future__ import annotations
@@ -34,6 +39,8 @@ from ..data_engine.format_detect import DetectedFormat
 from .db import Database
 from .files import make_read_only, safe_remove, sha256_file
 from .registry import EventAlreadyFinished, _commit_registration, _finish_event
+from .paths import cleaned_relative_path, derived_relative_path
+from .storage_class import is_open_destination, open_destinations, recover_storage_actions
 
 log = get_logger("recovery")
 
@@ -49,12 +56,18 @@ class RecoveryReport:
     checksum_mismatches: list[str] = field(default_factory=list)
     unreadable_files: list[str] = field(default_factory=list)
     interrupted_runs: list[str] = field(default_factory=list)
+    storage_actions_closed: list[int] = field(default_factory=list)
+    unregistered_temporary_files: list[str] = field(default_factory=list)
+    # datasets still Temporary in the pre-OD-8 folder: valid and readable; an information notice, not a problem
+    legacy_temporary_datasets: list[str] = field(default_factory=list)
+    storage_inconsistencies: list[str] = field(default_factory=list)
     problems: list[str] = field(default_factory=list)  # anything recovery could not do; nothing is hidden
 
     @property
     def needs_attention(self) -> bool:
         return bool(self.orphan_raw_files or self.missing_files or self.checksum_mismatches
-                    or self.unreadable_files or self.problems)
+                    or self.unreadable_files or self.unregistered_temporary_files or self.storage_inconsistencies
+                    or self.problems)
 
     @property
     def has_actions(self) -> bool:
@@ -188,9 +201,15 @@ def recover_incomplete(settings: Settings, db: Database, *, stale_minutes: int |
             if deletable and safe_remove(tmp):
                 report.deleted_temp_files.append(tmp.name)
 
-    # --- stray temporary cleaned files ---------------------------------------
-    if settings.cleaned_incoming_dir.exists():
-        for tmp in list(settings.cleaned_incoming_dir.iterdir()):
+    # --- storage actions (Permanent/Temporary moves and deletions) left unfinished -------------
+    recover_storage_actions(settings, db, live.is_live, report)
+
+    # --- stray temporary managed files (names start with the Run ID of the run that owns them) ----------
+    for incoming in (settings.cleaned_incoming_dir, settings.timeframe_incoming_dir, settings.temporary_dir / "_incoming",
+                     settings.legacy_temporary_dir / "_incoming"):
+        if not incoming.exists():
+            continue
+        for tmp in list(incoming.iterdir()):
             if not tmp.is_file() or not _cleaned_safe_to_delete(tmp, live, cutoff_epoch):
                 continue
             if safe_remove(tmp):
@@ -206,28 +225,101 @@ def recover_incomplete(settings: Settings, db: Database, *, stale_minutes: int |
             report.orphan_raw_files.append(rel)
             log.warning("Orphan raw file (no database record): %s. Not deleted; re-ingest the original to adopt it.", rel)
 
-    # --- orphan cleaned files (reproducible, so removed when provably abandoned) --------
-    for path in _files_under(settings.cleaned_dir):
+    # --- orphan cleaned / derived-timeframe files (reproducible, so removed when provably abandoned) --------
+    moving_to = open_destinations(db)
+    for path in [*_files_under(settings.cleaned_dir), *_files_under(settings.timeframe_dir)]:
         rel = settings.to_relative(path)
-        if rel in registered or not delete_cleaned_orphans:
+        if rel in registered or rel in moving_to or not delete_cleaned_orphans:
             continue
         if not _cleaned_safe_to_delete(path, live, cutoff_epoch):
             continue
-        # re-check at the moment of deletion: never delete a file that has just been registered
-        if db.one("SELECT 1 FROM datasets WHERE relative_path = ?", (rel,)) is not None:
+        # re-check at the moment of deletion: never delete a file that has just been registered or is being moved here
+        if db.one("SELECT 1 FROM datasets WHERE relative_path = ?", (rel,)) is not None or is_open_destination(db, rel):
             continue
         if safe_remove(path):
             report.deleted_cleaned_orphans.append(rel)
-            log.warning("Removed orphan cleaned file (unregistered, its run is not live; reproducible from raw): %s", rel)
+            log.warning("Removed orphan managed file (unregistered, its run is not live; reproducible from its source): %s",
+                        rel)
         elif path.exists():
-            report.problems.append(f"could not remove orphan cleaned file {rel}")
+            report.problems.append(f"could not remove orphan managed file {rel}")
 
-    # --- registered files that are missing ---------------------------------
-    for row in db.query("SELECT relative_path FROM datasets"):
+    # --- unregistered files in the Temporary area (report only: never deleted automatically) -------------
+    for path in [*_files_under(settings.temporary_dir), *_files_under(settings.legacy_temporary_dir)]:
+        rel = settings.to_relative(path)
+        if rel not in registered and rel not in moving_to:
+            report.unregistered_temporary_files.append(rel)
+            log.warning("Unregistered file in the Temporary area (not deleted): %s", rel)
+    report.legacy_temporary_datasets = [
+        f"dataset {r['dataset_id']}: {r['relative_path']}" for r in db.query(
+            "SELECT dataset_id, relative_path FROM datasets WHERE storage_class = 'temporary' AND file_deleted_at IS NULL "
+            "AND substr(relative_path, 1, 15) = 'Temporary_Data/' ORDER BY dataset_id")]
+    if report.legacy_temporary_datasets:
+        log.info("%d Temporary dataset(s) are still in the old Temporary_Data folder (valid; relocate with Make "
+                 "Permanent, then Move to Temporary, if wanted)", len(report.legacy_temporary_datasets))
+
+    report.storage_inconsistencies = find_storage_inconsistencies(db)
+    for item in report.storage_inconsistencies:
+        log.error("Storage record inconsistent (reported, not changed): %s", item)
+
+    # --- registered files that are missing (a file the user deleted on purpose is not missing) ----------
+    for row in db.query("SELECT relative_path FROM datasets WHERE file_deleted_at IS NULL"):
         if not settings.data_path(row["relative_path"]).is_file():
             report.missing_files.append(row["relative_path"])
             log.error("Registered file is missing: %s", row["relative_path"])
     return report
+
+
+def find_storage_inconsistencies(db: Database) -> list[str]:
+    """Datasets whose storage class, path or deletion state is not explained by the storage-action audit trail.
+
+    Since schema migration 6 the database refuses such changes; this finds rows changed directly BEFORE that
+    migration was applied. Report only: nothing is repaired automatically.
+
+    Limits (documented in Data_Registry_and_Schema.md): the original path is rebuilt with the naming rule in
+    storage/paths.py, so a dataset written by code that named files differently would be reported (a false alarm,
+    never a repair). The check proves the CURRENT path is unexplained; it cannot tell which intermediate paths or
+    classes a tampered row passed through, or when.
+    """
+    out = []
+    for r in db.query("SELECT dataset_id, storage_class, relative_path FROM datasets "
+                      "WHERE (storage_class = 'temporary') <> (substr(relative_path, 1, 10) = 'Temporary/' "
+                      "OR substr(relative_path, 1, 15) = 'Temporary_Data/')"):
+        out.append(f"dataset {r['dataset_id']}: storage class {r['storage_class']} does not match its path "
+                   f"{r['relative_path']}")
+    for r in db.query("SELECT d.dataset_id FROM datasets d WHERE d.file_deleted_at IS NOT NULL AND NOT EXISTS ("
+                      "SELECT 1 FROM storage_actions a WHERE a.dataset_id = d.dataset_id AND a.action = 'delete_file' "
+                      "AND a.status = 'completed' AND a.from_path = d.relative_path)"):
+        out.append(f"dataset {r['dataset_id']}: marked deleted without a recorded delete action")
+    # Follow each managed dataset from its ORIGINAL path (rebuilt from immutable registry records, see storage/paths.py)
+    # through its completed moves; the result must be its current path. This also catches a class and path changed
+    # together without any recorded move, which ends Permanent at a different path (PR #4 review, finding 2).
+    for d in db.query(
+            "SELECT d.dataset_id, d.layer, d.timeframe, d.relative_path, d.processing_version, d.storage_class, "
+            "i.exchange, i.symbol, p.sha256 AS parent_sha, a.run_id AS attempt_run, "
+            "x.source_sha256, x.run_id AS derivation_run "
+            "FROM datasets d JOIN instruments i USING (instrument_id) "
+            "LEFT JOIN datasets p ON p.dataset_id = d.parent_dataset_id "
+            "LEFT JOIN ingest_attempts a ON a.attempt_id = d.created_by_attempt_id "
+            "LEFT JOIN dataset_derivations x ON x.dataset_id = d.dataset_id WHERE d.layer IN ('cleaned', 'timeframe')"):
+        if d["layer"] == "cleaned" and d["parent_sha"] and d["attempt_run"]:
+            expected = cleaned_relative_path(d["exchange"], d["symbol"], d["timeframe"], d["parent_sha"],
+                                             d["processing_version"], d["attempt_run"])
+        elif d["layer"] == "timeframe" and d["source_sha256"] and d["derivation_run"]:
+            expected = derived_relative_path(d["exchange"], d["symbol"], d["timeframe"], d["source_sha256"],
+                                             d["processing_version"], d["derivation_run"])
+        else:
+            out.append(f"dataset {d['dataset_id']}: its original path cannot be rebuilt (lineage records missing)")
+            continue
+        for m in db.query("SELECT action_id, from_path, to_path FROM storage_actions WHERE dataset_id = ? AND "
+                          "action = 'move' AND status = 'completed' ORDER BY action_id", (d["dataset_id"],)):
+            if m["from_path"] != expected:
+                out.append(f"dataset {d['dataset_id']}: recorded move {m['action_id']} starts at {m['from_path']}, "
+                           f"but the dataset was at {expected}")
+            expected = m["to_path"]
+        if d["relative_path"] != expected:
+            out.append(f"dataset {d['dataset_id']}: path {d['relative_path']} is not explained by its original path and "
+                       f"recorded moves (expected {expected}; storage class {d['storage_class']})")
+    return out
 
 
 def _cleaned_safe_to_delete(path: Path, live: _Liveness, cutoff_epoch: float) -> bool:
@@ -245,7 +337,7 @@ def verify_registry(settings: Settings, db: Database) -> RecoveryReport:
     Reports problems; never repairs a registered file.
     """
     report = recover_incomplete(settings, db, delete_cleaned_orphans=False)
-    for row in db.query("SELECT relative_path, sha256 FROM datasets"):
+    for row in db.query("SELECT relative_path, sha256 FROM datasets WHERE file_deleted_at IS NULL"):
         path = settings.data_path(row["relative_path"])
         if not path.is_file():
             continue  # already listed as missing

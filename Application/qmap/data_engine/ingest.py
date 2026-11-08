@@ -23,6 +23,7 @@ from ..storage.db import utc_now_iso
 from ..storage.faults import maybe_fail
 from ..storage.files import place_without_overwrite, safe_remove, sha256_file, unique_tmp_name
 from ..storage.parquet_io import write_canonical_parquet
+from ..storage.paths import cleaned_relative_path
 from ..storage.registry import Receipt, receive_file
 from . import canonical as C
 from .instruments import get_or_create_instrument
@@ -290,10 +291,8 @@ def _process_registered(run: Run, receipt: Receipt, src: Path, profile: SourcePr
     written: list[tuple] = []
     try:
         if accepted:
-            pv_hash = hashlib.sha256(pv.encode()).hexdigest()[:8]
             for g in result.groups:
-                rel = (f"Cleaned_Data/{g.exchange}/{g.symbol}/{g.timeframe}/"
-                       f"{raw['sha256'][:12]}_{pv_hash}_{run.run_id}.parquet")
+                rel = cleaned_relative_path(g.exchange, g.symbol, g.timeframe, raw["sha256"], pv, run.run_id)
                 final = settings.data_path(rel)
                 tmp = settings.cleaned_incoming_dir / f"{run.run_id}.{unique_tmp_name()}"  # owner visible to recovery
                 meta = {"run_id": run.run_id, "processing_version": pv, "profile_id": profile.profile_id,
@@ -405,8 +404,8 @@ def _record_reuse(run: Run, receipt: Receipt, original, pv: str, vsettings: dict
             validation_settings_json=original["validation_settings_json"],
             config_fingerprint=_attempt_fingerprint(original), created_at=utc_now_iso())
         rows = conn.execute(
-            "SELECT dataset_id, status, superseded_by_dataset_id FROM datasets WHERE created_by_attempt_id = ? "
-            "ORDER BY dataset_id", (original["attempt_id"],)).fetchall()
+            "SELECT dataset_id, status, superseded_by_dataset_id, file_deleted_at FROM datasets "
+            "WHERE created_by_attempt_id = ? AND layer = 'cleaned' ORDER BY dataset_id", (original["attempt_id"],)).fetchall()
     ids = [r["dataset_id"] for r in rows]
     msg = (f"Already processed under {pv} with the same validation settings ({_attempt_fingerprint(original)}); "
            f"existing dataset(s) {ids} reused.")
@@ -414,10 +413,15 @@ def _record_reuse(run: Run, receipt: Receipt, original, pv: str, vsettings: dict
     if superseded:
         msg += (f" Note: dataset(s) {', '.join(superseded)} have since been SUPERSEDED by a later processing version; "
                 "they are this version's result but not the active dataset(s).")
+    deleted = [f"{r['dataset_id']} (on {r['file_deleted_at'][:10]})" for r in rows if r["file_deleted_at"]]
+    if deleted:
+        msg += (f" WARNING: the stored file of dataset(s) {', '.join(deleted)} was deleted by the user (Temporary "
+                "data); the registry record remains but the data are no longer available. Loading the same file "
+                "unchanged does not re-create it; give the profile a new profile_version to process it again.")
     diff = _settings_difference(original["validation_settings_json"], vsettings)
     if diff:
         msg += f" Note: report-only settings differ ({diff}); the dataset and its flags are unaffected."
-    (log.warning if superseded or diff else log.info)(
+    (log.warning if superseded or diff or deleted else log.info)(
         "Reused: raw dataset %s already processed under %s (attempt %s); no new dataset. %s",
         original["raw_dataset_id"], pv, original["attempt_id"], msg)
     return IngestResult("reused", msg, receipt.event_id, original["raw_dataset_id"], attempt_id, ids, [], None,

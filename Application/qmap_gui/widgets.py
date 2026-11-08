@@ -160,3 +160,127 @@ def section(parent, title: str) -> tk.LabelFrame:
     frame = tk.LabelFrame(parent, text=title, padx=8, pady=6, font=tkfont.Font(weight="bold", size=10))
     frame.pack(fill="x", padx=8, pady=4)
     return frame
+
+
+class CalendarPopup(tk.Toplevel):
+    """A small month calendar (plain tkinter, no extra package). Picking a day calls on_pick(date) and closes."""
+
+    WEEKDAYS = ("Mo", "Tu", "We", "Th", "Fr", "Sa", "Su")
+
+    def __init__(self, master, initial, on_pick, on_clear, title: str = "Choose a date"):
+        import calendar as _cal
+        from datetime import date as _date
+
+        super().__init__(master)
+        self._cal, self._date = _cal, _date
+        self.on_pick, self.on_clear = on_pick, on_clear
+        self.selected = initial
+        start = initial or _date.today()
+        self.year, self.month = start.year, start.month
+        self.title(title)
+        self.resizable(False, False)
+        try:
+            self.transient(master.winfo_toplevel())
+        except tk.TclError:
+            pass
+        head = tk.Frame(self)
+        head.pack(fill="x", padx=6, pady=(6, 2))
+        self.prev_button = tk.Button(head, text="<", width=3, command=lambda: self.shift(-1))
+        self.prev_button.pack(side="left")
+        self.month_label = tk.Label(head, text="", width=18, font=tkfont.Font(weight="bold"))
+        self.month_label.pack(side="left", expand=True)
+        self.next_button = tk.Button(head, text=">", width=3, command=lambda: self.shift(1))
+        self.next_button.pack(side="right")
+        self.grid_frame = tk.Frame(self)
+        self.grid_frame.pack(padx=6, pady=2)
+        foot = tk.Frame(self)
+        foot.pack(fill="x", padx=6, pady=(2, 6))
+        tk.Button(foot, text="Today", command=lambda: self.pick(_date.today())).pack(side="left")
+        tk.Button(foot, text="Clear", command=self.clear).pack(side="left", padx=4)
+        tk.Button(foot, text="Close", command=self.destroy).pack(side="right")
+        self.bind("<Escape>", lambda _e: self.destroy())
+        self.day_buttons: dict[int, tk.Button] = {}
+        self.show_month(self.year, self.month)
+        try:
+            x = master.winfo_rootx()
+            y = master.winfo_rooty() + master.winfo_height()
+            self.geometry(f"+{x}+{y}")
+        except tk.TclError:
+            pass
+        self.focus_set()
+
+    def show_month(self, year: int, month: int) -> None:
+        self.year, self.month = year, month
+        for w in self.grid_frame.winfo_children():
+            w.destroy()
+        self.day_buttons.clear()
+        self.month_label.configure(text=f"{self._cal.month_name[month]} {year}")
+        for c, name in enumerate(self.WEEKDAYS):
+            tk.Label(self.grid_frame, text=name, width=4, fg=MUTED_COLOR).grid(row=0, column=c)
+        for r, week in enumerate(self._cal.Calendar(firstweekday=0).monthdayscalendar(year, month), start=1):
+            for c, day in enumerate(week):
+                if not day:
+                    continue
+                chosen = self.selected is not None and (self.selected.year, self.selected.month, self.selected.day) == (
+                    year, month, day)
+                b = tk.Button(self.grid_frame, text=str(day), width=3, relief="sunken" if chosen else "raised",
+                              command=lambda d=day: self.pick(self._date(self.year, self.month, d)))
+                b.grid(row=r, column=c, padx=1, pady=1)
+                self.day_buttons[day] = b
+
+    def shift(self, months: int) -> None:
+        y, m = divmod(self.month - 1 + months, 12)
+        self.show_month(self.year + y, m + 1)
+
+    def pick(self, value) -> None:
+        self.on_pick(value)
+        self.destroy()
+
+    def clear(self) -> None:
+        self.on_clear()
+        self.destroy()
+
+
+class DateEntry(tk.Frame):
+    """A date box that accepts typing AND a calendar, with a live confirmation of what was understood.
+
+    `parse(text)` returns (date or None, problem text or None); `to_text(date)` writes a date into the box;
+    `confirm(date)` gives the unambiguous confirmation shown next to it. The box itself stays an ordinary Entry, so
+    typed text can be edited, selected, copied or cleared at any time.
+    """
+
+    def __init__(self, master, variable: tk.StringVar, parse, to_text, confirm, empty_note: str = "", width: int = 12):
+        super().__init__(master)
+        self.var, self.parse, self.to_text, self.confirm, self.empty_note = variable, parse, to_text, confirm, empty_note
+        self.entry = tk.Entry(self, textvariable=variable, width=width)
+        self.entry.pack(side="left")
+        self.button = tk.Button(self, text="Calendar...", command=self.open_calendar)
+        self.button.pack(side="left", padx=(3, 0))
+        self.feedback = tk.Label(self, text="", anchor="w", justify="left", fg=MUTED_COLOR, wraplength=560)
+        self.feedback.pack(side="left", padx=6)
+        self.popup: CalendarPopup | None = None
+        variable.trace_add("write", lambda *_a: self.update_feedback())
+        self.update_feedback()
+
+    def value(self):
+        return self.parse(self.var.get())
+
+    def update_feedback(self) -> None:
+        try:
+            d, problem = self.value()
+        except tk.TclError:  # the window is closing
+            return
+        if problem:
+            self.feedback.configure(text=problem, fg=ERROR_COLOR)
+        elif d is None:
+            self.feedback.configure(text=self.empty_note, fg=MUTED_COLOR)
+        else:
+            self.feedback.configure(text="= " + self.confirm(d), fg=OK_COLOR)
+
+    def open_calendar(self) -> None:
+        if self.popup is not None and self.popup.winfo_exists():
+            self.popup.lift()
+            return
+        d, _problem = self.value()
+        self.popup = CalendarPopup(self.entry, d, on_pick=lambda v: self.var.set(self.to_text(v)),
+                                   on_clear=lambda: self.var.set(""))

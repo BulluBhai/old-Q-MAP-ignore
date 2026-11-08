@@ -125,11 +125,11 @@ class Gui:
 
         self.world, self.dialogs, self.apps = world, FakeDialogs(), []
 
-    def start(self, settings_dir=None):
-        from qmap_gui.app import QMapApp
+    def start(self, settings_dir=None, app_key="database_manager"):
+        from qmap_gui.app import APPS
 
         app = create_with_tk_startup_retry(
-            lambda: QMapApp(REPO, settings_dir=settings_dir or self.world.settings, dialogs=self.dialogs))
+            lambda: APPS[app_key](REPO, settings_dir=settings_dir or self.world.settings, dialogs=self.dialogs))
         app.geometry("1100x900+0+0")
         self.apps.append(app)
         self.pump(0.05, app)

@@ -50,7 +50,7 @@ def test_daily_dd_mm_yy_csv_with_net_volume(src, run, settings, db):
     rows = daily_rows(12)
     rows = [[datetime.fromisoformat(r[0]).strftime("%d-%m-%y")] + r[1:] for r in rows]
     p = write_delimited(src / "NSE_NIFTY_1D1.csv", NET_HEADER, with_net(rows))
-    res = ingest(run, p, "example_csv_dd_mm_yy")
+    res = ingest(run, p, "csv_hdr_ddmmyy_idfromname")
     assert res.outcome == "accepted", res.message
     assert [c for c in res.checks if c.name == "date_order_unverified"][0].passed  # a day > 12 proves day-first
     g = read_group(settings, db, res.dataset_ids[0])
@@ -65,7 +65,7 @@ def test_daily_unix_seconds_csv_at_session_open(src, run, settings, db):
             for d, r in zip(days, ohlcv(8))]
     rows = [r[:1] + r[1:] + [r[5] // 3] for r in rows]
     p = write_delimited(src / "NSE_NIFTY_1D2.csv", NET_HEADER, rows)
-    res = ingest(run, p, "example_csv_unix_seconds", timeframe="1D")
+    res = ingest(run, p, "csv_hdr_unixs_idfromname", timeframe="1D")
     assert res.outcome == "accepted", res.message
     g = read_group(settings, db, res.dataset_ids[0])
     assert g["session_date"][0] == days[0] and g["timestamp_utc"][0].hour == 3 and g["timestamp_utc"][0].minute == 45
@@ -76,7 +76,7 @@ def test_one_minute_unix_seconds_where_net_volume_is_plus_or_minus_volume(src, r
     rows = [[int(t.timestamp())] + o for t, o in zip(times, ohlcv(len(times), 4))]
     rows = with_net(rows, signed_exact=True)
     p = write_delimited(src / "NSE_NIFTY_11.csv", NET_HEADER, rows)
-    res = ingest(run, p, "example_csv_unix_seconds", timeframe="1m")
+    res = ingest(run, p, "csv_hdr_unixs_idfromname", timeframe="1m")
     assert res.outcome == "accepted", res.message
     g = read_group(settings, db, res.dataset_ids[0])
     assert all(v > 0 for v in g["volume"])  # volume is never replaced by the signed Net Volume
@@ -91,7 +91,7 @@ def test_five_minute_iso_with_offset_and_partial_first_and_last_days(src, run, s
     ist = ist[1:-30]  # first day starts at 09:20 and the last day is cut short
     rows = [[t.isoformat()] + o for t, o in zip(ist, ohlcv(len(ist), 6))]
     p = write_delimited(src / "NSE_NIFTY_5.csv", NET_HEADER, with_net(rows))
-    res = ingest(run, p, "example_csv_iso_offset", timeframe="5m")
+    res = ingest(run, p, "csv_hdr_isodt_idfromname", timeframe="5m")
     assert res.outcome == "accepted", res.message
     assert [c for c in res.checks if c.name == "timeframe_spacing"][0].passed
     assert not [c for c in res.checks if c.name == "partial_session"][0].passed
@@ -102,16 +102,16 @@ def test_five_minute_iso_with_offset_and_partial_first_and_last_days(src, run, s
 def test_headered_text_file_with_iso_dates_needs_the_instrument_supplied(src, run, settings, db):
     rows = [[r[0]] + r[1:] for r in daily_rows(6)]
     p = write_delimited(src / "661f-dateopenhighlowcloseVolume.txt", ["date", "open", "high", "low", "close", "Volume"], rows)
-    res = ingest(run, p, "example_text_headered_iso_date")
+    res = ingest(run, p, "txt_hdr_isodate")
     assert res.outcome == "rejected" and "instrument_declared" in failed_names(res)  # never guessed from the odd file name
-    res2 = ingest(run, p, "example_text_headered_iso_date", exchange="nse", symbol="nifty")
+    res2 = ingest(run, p, "txt_hdr_isodate", exchange="nse", symbol="nifty")
     assert res2.outcome == "accepted", res2.message
 
 
 def test_headerless_seven_column_file_with_duplicate_constant_volume_and_no_final_newline(src, run, settings, db):
     rows = [[r[0]] + r[1:5] + [38948210, 38948210] for r in daily_rows(9, start=datetime(2026, 1, 5).date())]
     p = write_delimited(src / "1995-11-03994.21000.91992.69100.txt", None, rows, final_newline=False)
-    res = ingest(run, p, "example_text_headerless_seven_columns", exchange="NSE", symbol="TEST")
+    res = ingest(run, p, "txt_nohdr_isodate_dupvol", exchange="NSE", symbol="TEST")
     assert res.outcome == "accepted", res.message
     chk = {c.name: c for c in res.checks}
     assert chk["constant_volume"].severity == "warning" and not chk["constant_volume"].passed
@@ -153,7 +153,7 @@ def write_sample_like_parquet(path, *, defects):
 
 def test_parquet_naive_timestamps_clean_variant_is_accepted_with_the_stray_column_preserved(src, run, settings, db):
     p = write_sample_like_parquet(src / "ONESOURCE_like.parquet", defects=False)
-    res = ingest(run, p, "example_parquet_naive_timestamp", exchange="NSE", symbol="ONESRC")
+    res = ingest(run, p, "parquet_hdr_naivedt", exchange="NSE", symbol="ONESRC")
     assert res.outcome == "accepted", res.message
     g = read_group(settings, db, res.dataset_ids[0])
     assert "x_index" in g and g["x_index"][0] is None and g["x_index"][400] == 25.0
@@ -166,7 +166,7 @@ def test_parquet_naive_timestamps_clean_variant_is_accepted_with_the_stray_colum
 
 def test_parquet_with_duplicates_unsorted_rows_and_bad_ohlc_is_rejected_with_a_full_report(src, run, settings, db):
     p = write_sample_like_parquet(src / "ONESOURCE_bad.parquet", defects=True)
-    res = ingest(run, p, "example_parquet_naive_timestamp", exchange="NSE", symbol="ONESRC")
+    res = ingest(run, p, "parquet_hdr_naivedt", exchange="NSE", symbol="ONESRC")
     assert res.outcome == "rejected"
     assert {"no_duplicate_timestamps", "low_le_open_close"} <= failed_names(res)
     with open(res.issues_report, newline="") as fh:
@@ -186,7 +186,7 @@ def test_parquet_naive_timestamps_without_the_zone_declared_cannot_be_read(src, 
     import dataclasses
 
     p = write_sample_like_parquet(src / "ONESOURCE_like2.parquet", defects=False)
-    base = prof("example_parquet_naive_timestamp")
+    base = prof("parquet_hdr_naivedt")
     no_zone = dataclasses.replace(base, profile_id="no_zone", datetime=dataclasses.replace(base.datetime, timezone=None))
     res = ingest_file(run, p, no_zone, exchange="NSE", symbol="X")
     assert res.outcome == "rejected" and "E_TZ_REQUIRED" in res.message

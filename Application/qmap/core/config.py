@@ -30,13 +30,19 @@ DATA_SUBFOLDERS = (
     "Raw_Data/_incoming",
     "Raw_Data/_quarantine",
     "Cleaned_Data/_incoming",
-    "Timeframe_Data",
+    "Timeframe_Data/_incoming",
+    "Temporary",
     "Reference_Files",
     "Feature_Store",
     "Research_Repository",
     "Metadata",
 )
 OUTPUT_SUBFOLDERS = ("Logs",)
+# Blueprint v1.2 section 9.1: Q-MAP_DATA/Temporary/ (Project Owner decision OD-8, 01-Nov-26). Datasets moved to
+# Temporary by earlier PR #4 code live under the LEGACY folder; they stay valid where they are and are never moved
+# automatically (relocate with Make Permanent, then Move to Temporary). Schema migration 7.
+TEMPORARY_FOLDER = "Temporary"
+LEGACY_TEMPORARY_FOLDER = "Temporary_Data"
 
 
 def _default_code_root() -> Path:
@@ -102,6 +108,25 @@ class Settings:
     @property
     def cleaned_incoming_dir(self) -> Path:
         return self.cleaned_dir / "_incoming"
+
+    @property
+    def timeframe_dir(self) -> Path:
+        """Derived timeframes (weekly, monthly, quarterly, yearly) built from registered daily datasets."""
+        return self.data_root / "Timeframe_Data"
+
+    @property
+    def timeframe_incoming_dir(self) -> Path:
+        return self.timeframe_dir / "_incoming"
+
+    @property
+    def temporary_dir(self) -> Path:
+        """Datasets classified TEMPORARY live here, under their permanent relative path (never auto-deleted)."""
+        return self.data_root / TEMPORARY_FOLDER
+
+    @property
+    def legacy_temporary_dir(self) -> Path:
+        """Temporary location used before OD-8; read, recovered and reported, never written to by new moves."""
+        return self.data_root / LEGACY_TEMPORARY_FOLDER
 
     @property
     def logs_dir(self) -> Path:

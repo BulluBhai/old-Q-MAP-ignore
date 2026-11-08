@@ -177,6 +177,237 @@ WHEN NEW.config_fingerprint IS NULL OR length(trim(NEW.config_fingerprint)) = 0
 BEGIN SELECT RAISE(ABORT,'an ingest attempt must record its configuration fingerprint'); END;
 """
 
+# Database Manager / Analytical Workbench separation (01-Nov-26): Permanent/Temporary storage classification,
+# user-controlled deletion of a TEMPORARY dataset's file (its registry record and provenance are kept for ever),
+# an audit trail of every storage action, and the provenance of derived timeframes.
+MIGRATION_5 = """
+ALTER TABLE datasets ADD COLUMN storage_class TEXT NOT NULL DEFAULT 'permanent'
+  CHECK (storage_class IN ('permanent','temporary'));
+ALTER TABLE datasets ADD COLUMN file_deleted_at TEXT;
+
+CREATE TABLE storage_actions (
+  action_id INTEGER PRIMARY KEY,
+  run_id TEXT NOT NULL REFERENCES runs(run_id),
+  dataset_id INTEGER NOT NULL REFERENCES datasets(dataset_id),
+  action TEXT NOT NULL CHECK (action IN ('move','delete_file')),
+  from_class TEXT NOT NULL CHECK (from_class IN ('permanent','temporary')),
+  to_class TEXT CHECK (to_class IS NULL OR to_class IN ('permanent','temporary')),
+  from_path TEXT NOT NULL,
+  to_path TEXT,
+  reason TEXT,
+  status TEXT NOT NULL CHECK (status IN ('started','completed','failed')),
+  started_at TEXT NOT NULL, finished_at TEXT, detail TEXT,
+  CHECK (action <> 'move' OR (to_class IS NOT NULL AND to_path IS NOT NULL AND to_class <> from_class)));
+CREATE INDEX ix_storage_actions_open ON storage_actions(status) WHERE status = 'started';
+
+CREATE TRIGGER trg_storage_actions_no_delete BEFORE DELETE ON storage_actions
+BEGIN SELECT RAISE(ABORT,'storage_actions is append-only'); END;
+CREATE TRIGGER trg_storage_actions_final BEFORE UPDATE ON storage_actions
+WHEN OLD.status <> 'started' OR NEW.action_id IS NOT OLD.action_id OR NEW.run_id IS NOT OLD.run_id
+  OR NEW.dataset_id IS NOT OLD.dataset_id OR NEW.action IS NOT OLD.action OR NEW.from_class IS NOT OLD.from_class
+  OR NEW.to_class IS NOT OLD.to_class OR NEW.from_path IS NOT OLD.from_path OR NEW.to_path IS NOT OLD.to_path
+  OR NEW.reason IS NOT OLD.reason OR NEW.started_at IS NOT OLD.started_at
+BEGIN SELECT RAISE(ABORT,'a storage action can only be finished once, and its identity cannot change'); END;
+
+CREATE TABLE dataset_derivations (
+  dataset_id INTEGER PRIMARY KEY REFERENCES datasets(dataset_id),
+  run_id TEXT NOT NULL REFERENCES runs(run_id),
+  method TEXT NOT NULL,
+  method_version INTEGER NOT NULL,
+  source_dataset_id INTEGER NOT NULL REFERENCES datasets(dataset_id),
+  source_sha256 TEXT NOT NULL,
+  parameters_json TEXT NOT NULL,
+  created_at TEXT NOT NULL);
+CREATE TRIGGER trg_derivations_no_update BEFORE UPDATE ON dataset_derivations
+BEGIN SELECT RAISE(ABORT,'dataset_derivations is append-only'); END;
+CREATE TRIGGER trg_derivations_no_delete BEFORE DELETE ON dataset_derivations
+BEGIN SELECT RAISE(ABORT,'dataset_derivations is append-only'); END;
+
+-- The registered path may now change, but ONLY together with a change of storage class (a recorded move).
+DROP TRIGGER trg_datasets_identity;
+CREATE TRIGGER trg_datasets_identity BEFORE UPDATE ON datasets
+WHEN NEW.layer IS NOT OLD.layer OR NEW.sha256 IS NOT OLD.sha256
+  OR (NEW.relative_path IS NOT OLD.relative_path AND NEW.storage_class IS OLD.storage_class)
+  OR NEW.parent_dataset_id IS NOT OLD.parent_dataset_id OR NEW.processing_version IS NOT OLD.processing_version
+  OR NEW.instrument_id IS NOT OLD.instrument_id OR NEW.timeframe IS NOT OLD.timeframe
+  OR NEW.created_by_attempt_id IS NOT OLD.created_by_attempt_id
+  OR NEW.config_fingerprint IS NOT OLD.config_fingerprint
+  OR (OLD.superseded_by_dataset_id IS NOT NULL AND NEW.superseded_by_dataset_id IS NOT OLD.superseded_by_dataset_id)
+  OR (OLD.status = 'superseded' AND NEW.status <> 'superseded')
+BEGIN SELECT RAISE(ABORT,'dataset identity columns are immutable'); END;
+
+-- Raw (original source) files are never re-classified or deleted; only a TEMPORARY dataset's file may be deleted;
+-- once deleted, the record is final.
+CREATE TRIGGER trg_datasets_storage BEFORE UPDATE ON datasets
+WHEN (NEW.storage_class IS NOT OLD.storage_class AND (OLD.layer = 'raw' OR OLD.file_deleted_at IS NOT NULL))
+  OR (OLD.file_deleted_at IS NOT NULL AND (NEW.file_deleted_at IS NOT OLD.file_deleted_at
+                                           OR NEW.relative_path IS NOT OLD.relative_path))
+  OR (OLD.file_deleted_at IS NULL AND NEW.file_deleted_at IS NOT NULL
+      AND (OLD.layer = 'raw' OR OLD.storage_class <> 'temporary' OR NEW.storage_class <> 'temporary'))
+BEGIN SELECT RAISE(ABORT,'this storage change is not allowed (raw files and deleted datasets are final; only temporary datasets can be deleted)'); END;
+CREATE TRIGGER trg_datasets_storage_insert BEFORE INSERT ON datasets
+WHEN NEW.file_deleted_at IS NOT NULL OR (NEW.layer = 'raw' AND NEW.storage_class <> 'permanent')
+BEGIN SELECT RAISE(ABORT,'a new dataset must be stored, and a raw file is always permanent'); END;
+"""
+
+# Review of PR #4 (01-Nov-26): migration 5 let storage_class, relative_path and file_deleted_at be changed directly in
+# the database without a recorded action, so the registry could disagree with the files on disk. Migration 5 is left
+# exactly as it was; these triggers close the gap:
+# * storage class and path always agree: TEMPORARY <=> the path starts with 'Temporary_Data/';
+# * a class/path change must follow the reversible mapping AND match an unfinished 'move' action exactly;
+# * file_deleted_at can only be set under an unfinished 'delete_file' action for that dataset and path;
+# * an action is always recorded as 'started' first, at most one is open per dataset, it can only be marked
+#   'completed' if the dataset really shows the change, and never 'failed' if it does.
+MIGRATION_6 = """
+CREATE UNIQUE INDEX ux_storage_actions_one_open ON storage_actions(dataset_id) WHERE status = 'started';
+
+CREATE TRIGGER trg_storage_actions_start_first BEFORE INSERT ON storage_actions
+WHEN NEW.status <> 'started' OR NEW.finished_at IS NOT NULL
+BEGIN SELECT RAISE(ABORT,'a storage action must be recorded as started before anything is changed'); END;
+
+CREATE TRIGGER trg_storage_actions_completed_matches BEFORE UPDATE ON storage_actions
+WHEN NEW.status = 'completed' AND NOT EXISTS (
+  SELECT 1 FROM datasets d WHERE d.dataset_id = OLD.dataset_id AND (
+    (OLD.action = 'move' AND d.relative_path = OLD.to_path AND d.storage_class = OLD.to_class)
+    OR (OLD.action = 'delete_file' AND d.file_deleted_at IS NOT NULL AND d.relative_path = OLD.from_path)))
+BEGIN SELECT RAISE(ABORT,'a storage action can only be completed when the dataset shows that change'); END;
+
+CREATE TRIGGER trg_storage_actions_failed_matches BEFORE UPDATE ON storage_actions
+WHEN NEW.status = 'failed' AND EXISTS (
+  SELECT 1 FROM datasets d WHERE d.dataset_id = OLD.dataset_id AND (
+    (OLD.action = 'move' AND d.relative_path = OLD.to_path AND d.storage_class = OLD.to_class)
+    OR (OLD.action = 'delete_file' AND d.file_deleted_at IS NOT NULL)))
+BEGIN SELECT RAISE(ABORT,'a storage action that took effect cannot be recorded as failed'); END;
+
+CREATE TRIGGER trg_datasets_class_path_insert BEFORE INSERT ON datasets
+WHEN (NEW.storage_class = 'temporary') <> (substr(NEW.relative_path, 1, 15) = 'Temporary_Data/')
+BEGIN SELECT RAISE(ABORT,'storage class and storage path disagree'); END;
+
+CREATE TRIGGER trg_datasets_move_audited BEFORE UPDATE ON datasets
+WHEN (NEW.storage_class IS NOT OLD.storage_class OR NEW.relative_path IS NOT OLD.relative_path) AND (
+  NEW.storage_class IS OLD.storage_class
+  OR (OLD.storage_class = 'temporary') <> (substr(OLD.relative_path, 1, 15) = 'Temporary_Data/')
+  OR NEW.relative_path IS NOT (CASE WHEN NEW.storage_class = 'temporary' THEN 'Temporary_Data/' || OLD.relative_path
+                                    ELSE substr(OLD.relative_path, 16) END)
+  OR NOT EXISTS (SELECT 1 FROM storage_actions a WHERE a.dataset_id = OLD.dataset_id AND a.action = 'move'
+                 AND a.status = 'started' AND a.from_class = OLD.storage_class AND a.to_class = NEW.storage_class
+                 AND a.from_path = OLD.relative_path AND a.to_path = NEW.relative_path))
+BEGIN SELECT RAISE(ABORT,'a storage class or path change must be a recorded move along the Temporary_Data mapping'); END;
+
+CREATE TRIGGER trg_datasets_delete_audited BEFORE UPDATE ON datasets
+WHEN OLD.file_deleted_at IS NULL AND NEW.file_deleted_at IS NOT NULL AND NOT EXISTS (
+  SELECT 1 FROM storage_actions a WHERE a.dataset_id = OLD.dataset_id AND a.action = 'delete_file'
+  AND a.status = 'started' AND a.from_path = OLD.relative_path)
+BEGIN SELECT RAISE(ABORT,'a dataset file can only be marked deleted under a recorded delete action'); END;
+"""
+
+# Project Owner decision OD-8 (01-Nov-26): the Temporary area is Q-MAP_DATA/Temporary/ (Blueprint v1.2 section 9.1).
+# Migration 6 (pinned, unchanged) wrote 'Temporary_Data/' into two rules. Migration 7 recreates exactly those two rules:
+# * NEW temporary paths must start with 'Temporary/' (a new dataset can never be inserted under the old prefix, and a
+#   move to Temporary always goes to 'Temporary/' + the permanent path);
+# * a dataset already stored under the legacy 'Temporary_Data/' prefix stays valid where it is, and a move back to
+#   Permanent strips whichever prefix it has. Nothing is moved or rewritten by this migration.
+# Every other migration-6 protection (recorded actions, one open action, completion checks) is untouched.
+MIGRATION_7 = """
+DROP TRIGGER trg_datasets_class_path_insert;
+CREATE TRIGGER trg_datasets_class_path_insert BEFORE INSERT ON datasets
+WHEN (NEW.storage_class = 'temporary') <> (substr(NEW.relative_path, 1, 10) = 'Temporary/')
+  OR substr(NEW.relative_path, 1, 15) = 'Temporary_Data/'
+BEGIN SELECT RAISE(ABORT,'storage class and storage path disagree'); END;
+
+DROP TRIGGER trg_datasets_move_audited;
+CREATE TRIGGER trg_datasets_move_audited BEFORE UPDATE ON datasets
+WHEN (NEW.storage_class IS NOT OLD.storage_class OR NEW.relative_path IS NOT OLD.relative_path) AND (
+  NEW.storage_class IS OLD.storage_class
+  OR (OLD.storage_class = 'temporary') <> (substr(OLD.relative_path, 1, 10) = 'Temporary/'
+                                           OR substr(OLD.relative_path, 1, 15) = 'Temporary_Data/')
+  OR NEW.relative_path IS NOT (CASE
+       WHEN NEW.storage_class = 'temporary' THEN 'Temporary/' || OLD.relative_path
+       WHEN substr(OLD.relative_path, 1, 10) = 'Temporary/' THEN substr(OLD.relative_path, 11)
+       ELSE substr(OLD.relative_path, 16) END)
+  OR NOT EXISTS (SELECT 1 FROM storage_actions a WHERE a.dataset_id = OLD.dataset_id AND a.action = 'move'
+                 AND a.status = 'started' AND a.from_class = OLD.storage_class AND a.to_class = NEW.storage_class
+                 AND a.from_path = OLD.relative_path AND a.to_path = NEW.relative_path))
+BEGIN SELECT RAISE(ABORT,'a storage class or path change must be a recorded move along the Temporary mapping'); END;
+"""
+
+# Blueprint v1.3 (02-Nov-26): folder sources and automatic discovery. Tables only; migrations 1-7 are unchanged.
+# * data_sources: the folders the user has configured (settings may change; every scan keeps a snapshot);
+# * source_scans: one row per scan, finished once;
+# * source_file_observations: append-only, what each scan saw for each file and what happened to it. A file's
+#   current state is its latest observation, so there is no second, updatable copy of that state;
+# * source_answers: append-only, the user's answers to interpretation questions, tied to the file's structure.
+MIGRATION_8 = """
+CREATE TABLE data_sources (
+  source_id INTEGER PRIMARY KEY,
+  kind TEXT NOT NULL CHECK (kind IN ('folder')),
+  location TEXT NOT NULL UNIQUE CHECK (length(trim(location)) > 0),
+  label TEXT NOT NULL CHECK (length(trim(label)) > 0),
+  include_subfolders INTEGER NOT NULL DEFAULT 0 CHECK (include_subfolders IN (0, 1)),
+  exclude_patterns_json TEXT NOT NULL DEFAULT '[]',
+  market_timezone TEXT,
+  default_exchange TEXT CHECK (default_exchange IS NULL OR (length(default_exchange) > 0
+                                                            AND default_exchange = upper(trim(default_exchange)))),
+  symbol_from_filename INTEGER NOT NULL DEFAULT 0 CHECK (symbol_from_filename IN (0, 1)),
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'removed')),
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+CREATE TRIGGER trg_sources_no_delete BEFORE DELETE ON data_sources
+BEGIN SELECT RAISE(ABORT,'data_sources are never deleted (mark them removed)'); END;
+CREATE TRIGGER trg_sources_identity BEFORE UPDATE ON data_sources
+WHEN NEW.source_id IS NOT OLD.source_id OR NEW.kind IS NOT OLD.kind OR NEW.location IS NOT OLD.location
+  OR NEW.created_at IS NOT OLD.created_at
+BEGIN SELECT RAISE(ABORT,'a data source keeps its identity and location'); END;
+
+CREATE TABLE source_scans (
+  scan_id INTEGER PRIMARY KEY,
+  source_id INTEGER NOT NULL REFERENCES data_sources(source_id),
+  run_id TEXT NOT NULL REFERENCES runs(run_id),
+  started_at TEXT NOT NULL, finished_at TEXT,
+  settings_json TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('running', 'completed', 'failed')),
+  summary_json TEXT, detail TEXT);
+CREATE TRIGGER trg_scans_no_delete BEFORE DELETE ON source_scans
+BEGIN SELECT RAISE(ABORT,'source_scans are never deleted'); END;
+CREATE TRIGGER trg_scans_final BEFORE UPDATE ON source_scans
+WHEN OLD.status <> 'running' OR NEW.scan_id IS NOT OLD.scan_id OR NEW.source_id IS NOT OLD.source_id
+  OR NEW.run_id IS NOT OLD.run_id OR NEW.started_at IS NOT OLD.started_at OR NEW.settings_json IS NOT OLD.settings_json
+BEGIN SELECT RAISE(ABORT,'a scan can only be finished once, and its identity cannot change'); END;
+
+CREATE TABLE source_file_observations (
+  observation_id INTEGER PRIMARY KEY,
+  scan_id INTEGER NOT NULL REFERENCES source_scans(scan_id),
+  source_id INTEGER NOT NULL REFERENCES data_sources(source_id),
+  relative_path TEXT NOT NULL CHECK (length(relative_path) > 0),
+  file_size INTEGER, file_mtime_ns INTEGER, sha256 TEXT,
+  change TEXT NOT NULL CHECK (change IN ('new', 'changed', 'unchanged', 'missing', 'unreadable')),
+  action TEXT NOT NULL CHECK (action IN ('processed', 'skipped', 'none')),
+  outcome TEXT NOT NULL CHECK (outcome IN ('imported', 'reused', 'needs_answer', 'rejected', 'blocked',
+                                           'unsupported', 'ignored', 'failed', 'missing')),
+  inputs_fingerprint TEXT,
+  event_id INTEGER REFERENCES ingest_events(event_id),
+  attempt_id INTEGER REFERENCES ingest_attempts(attempt_id),
+  dataset_ids_json TEXT, interpretation_json TEXT, questions_json TEXT, retry_on TEXT,
+  detail TEXT, observed_at TEXT NOT NULL);
+CREATE INDEX ix_observations_file ON source_file_observations(source_id, relative_path, observation_id);
+CREATE TRIGGER trg_observations_no_update BEFORE UPDATE ON source_file_observations
+BEGIN SELECT RAISE(ABORT,'source_file_observations is append-only'); END;
+CREATE TRIGGER trg_observations_no_delete BEFORE DELETE ON source_file_observations
+BEGIN SELECT RAISE(ABORT,'source_file_observations is append-only'); END;
+
+CREATE TABLE source_answers (
+  answer_id INTEGER PRIMARY KEY,
+  source_id INTEGER NOT NULL REFERENCES data_sources(source_id),
+  relative_path TEXT NOT NULL,
+  structure_signature TEXT NOT NULL,
+  answers_json TEXT NOT NULL,
+  answered_at TEXT NOT NULL);
+CREATE INDEX ix_answers_file ON source_answers(source_id, relative_path, answer_id);
+CREATE TRIGGER trg_answers_no_update BEFORE UPDATE ON source_answers
+BEGIN SELECT RAISE(ABORT,'source_answers is append-only'); END;
+CREATE TRIGGER trg_answers_no_delete BEFORE DELETE ON source_answers
+BEGIN SELECT RAISE(ABORT,'source_answers is append-only'); END;
+"""
+
 # (version, description, sql)
 MIGRATIONS = [
     (1, "Stage 2 foundation: instruments, runs, registry, ingest provenance, quality checks", MIGRATION_1),
@@ -185,6 +416,13 @@ MIGRATIONS = [
     (3, "Validation-settings fingerprint is part of the processing identity (reuse and derivation uniqueness)",
      MIGRATION_3),
     (4, "New derived datasets and attempts must record their configuration fingerprint", MIGRATION_4),
+    (5, "Permanent/Temporary storage classification, storage-action audit trail and derived-timeframe provenance",
+     MIGRATION_5),
+    (6, "Storage class, path and deletion change only under a matching recorded storage action", MIGRATION_6),
+    (7, "Temporary area is Q-MAP_DATA/Temporary/ (OD-8); datasets already under Temporary_Data/ stay valid",
+     MIGRATION_7),
+    (8, "Folder sources, scans, per-file scan observations and recorded interpretation answers (Blueprint v1.3)",
+     MIGRATION_8),
 ]
 
 LATEST_VERSION = MIGRATIONS[-1][0]

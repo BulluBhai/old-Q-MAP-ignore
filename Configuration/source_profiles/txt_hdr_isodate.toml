@@ -1,0 +1,35 @@
+# STANDARD Q-MAP source profile: recommended for routine use. Its reading rules were verified row by row against
+# the Project Owner's sample files (docs/sample_file_testing). Check the time-zone and two-digit-year settings
+# against your own data before relying on it.
+# Naming standard: docs/standards/Q-MAP_Naming_and_Reference_Conventions.md, section C.
+profile_id      = "txt_hdr_isodate"
+profile_version = 1
+status          = "standard"
+display_name    = "Headered TXT: date (YYYY-MM-DD), open, high, low, close, Volume - daily"
+source_label    = "TXT, headered, ISO dates"
+description     = "Comma-separated text file (.txt or .csv) with a header row. Column 'date' holds ISO dates YYYY-MM-DD. Prices from open, high, low, close; volume from 'Volume'. Daily bars: the timeframe is fixed at 1D. You type the exchange and symbol when loading."
+legacy_ids      = ["example_text_headered_iso_date"]   # earlier names of this layout (still recognised)
+
+[file]
+header = true
+delimiter = ","
+
+[instrument]
+exchange_from = "ingest"        # the file name carries no exchange/symbol: supply them when ingesting
+symbol_from   = "ingest"
+timeframe = "1D"
+
+[columns]
+date  = { name = "date" }
+open  = { name = "open" }
+high  = { name = "high" }
+low   = { name = "low" }
+close = { name = "close" }
+
+[datetime]
+kind = "iso"
+
+[volume]
+rule = "use_column"
+column = "Volume"
+requirement_set = "price_only"

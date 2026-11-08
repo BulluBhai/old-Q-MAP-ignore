@@ -25,7 +25,7 @@ def settings(world):
 
 @pytest.fixture
 def profile(settings):
-    return next(i.profile for i in services.list_profiles(settings) if i.profile and i.profile.profile_id == "example_csv_dd_mm_yy")
+    return next(i.profile for i in services.list_profiles(settings) if i.profile and i.profile.profile_id == "csv_hdr_ddmmyy_idfromname")
 
 
 def run_job(settings, files, profile, **kw):
@@ -162,7 +162,7 @@ def test_the_job_talks_only_through_the_emit_callback_from_a_worker_thread(setti
 
 
 def test_request_values_reach_the_foundation(settings, world):
-    p = next(i.profile for i in services.list_profiles(settings) if i.profile and i.profile.profile_id == "example_text_headered_iso_date")
+    p = next(i.profile for i in services.list_profiles(settings) if i.profile and i.profile.profile_id == "txt_hdr_isodate")
     f = write_delimited(world.src / "odd_name.txt", ["date", "open", "high", "low", "close", "Volume"],
                         [[r[0], *r[1:6]] for r in __import__("fixtures.builders", fromlist=["daily_rows"]).daily_rows(8)])
     _, summary, _ = run_job(settings, [f], p)

@@ -5,7 +5,7 @@ from __future__ import annotations
 import tkinter as tk
 from tkinter import font as tkfont
 
-from .services import list_profiles, profile_version_conflict, save_user_profile, validate_profile_text
+from .services import library_and_legacy_ids, profile_version_conflict, save_user_profile, validate_profile_text
 from .widgets import ERROR_COLOR, OK_COLOR
 
 
@@ -52,9 +52,9 @@ class ProfileEditor(tk.Toplevel):
         if profile is None:
             self._set(message, False)
             return False
-        example_ids = {p.profile.profile_id for p in list_profiles(settings) if p.where == "example" and p.profile}
-        if profile.profile_id in example_ids:
-            self._set(f"'{profile.profile_id}' is the name of an example profile. Change profile_id to your own name.", False)
+        if profile.profile_id in library_and_legacy_ids(settings):
+            self._set(f"'{profile.profile_id}' is the name (or an earlier name) of a Q-MAP library profile. Change "
+                      "profile_id to your own name.", False)
             return False
         conflict = profile_version_conflict(settings, profile)
         if conflict:
