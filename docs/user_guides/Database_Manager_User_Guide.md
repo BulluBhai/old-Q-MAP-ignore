@@ -40,8 +40,15 @@ Added 02-Nov-26 for Blueprint v1.3 §8.5. You do not choose profiles or type lay
 
 What a scan does, and does not do:
 
-- Files that have not changed since the last scan are skipped (same size, time and checksum). Scanning twice never
+- Files whose contents have not changed since the last scan are skipped. Q-MAP compares the file's checksum on every
+  scan, so an edited file is always read again, even if its size and date did not change. Scanning twice never
   creates duplicates; the same content under two names is loaded once.
+- If a folder inside the source cannot be read (for example, access is denied), the scan does not stop: the files it
+  can read are processed, and the message under Progress / Status turns red and starts with **Scan INCOMPLETE:**,
+  naming the folder. Files last seen in that folder show as *Failed* ("Not checked: the folder ... could not be
+  read"), never as *No longer in the folder*, and their data are unchanged. Fix the folder's access and scan again.
+- Shortcuts and links inside the folder (symbolic links, Windows junctions) are never followed. They are listed in
+  the scan report as "Link not followed". Copy the files into the folder if they should be scanned.
 - A changed file is loaded as a new version. If its bars overlap an existing dataset of the same instrument and
   timeframe, identical bars are noted, and **different values are shown as a warning** on the new dataset. Neither
   dataset is changed and nothing is merged: you choose which one to analyse (your decision DQ-1, 02-Nov-26: report only).

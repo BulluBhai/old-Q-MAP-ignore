@@ -85,7 +85,7 @@ The requirement text behind R1-R30 is unchanged in v1.35, so the mapping stays v
 | R6 | Record answers; reuse only for a compatible structure | 2 | `test_folder_discovery.py` (answer reused only for the same signature) | F-04: a rules-version change discards answers (safe direction: asked again) and re-registers identical datasets; fixed in PR #10 (verified at PR #10's head `78323b4`, section 5) |
 | R7 | Headerless positional reading under documented rules | 1 | DQ-2 tests (6) | Owner decision DQ-2 |
 | R8 | Canonical OHLCV; extra fields preserved and reported | 3 | `test_ingest_formats.py`, interpretation evidence | Extra fields kept as text `x_` columns, not typed (OW-20) |
-| R11 | Idempotent scans; changes, overlaps and conflicts reported | 3 | `test_folder_discovery.py`, DQ-1 tests | Overlaps are checked only for datasets registered by a folder scan (OW-25; extended to every load path in PR #10, stated by PR #10) |
+| R11 | Idempotent scans; changes, overlaps and conflicts reported | 3 | `test_folder_discovery.py`, DQ-1 tests, `test_scan_integrity.py` | Changed contents are detected by checksum on every scan, and an incomplete scan is reported (both corrected 08-Nov-26, section 6.4). Overlaps are checked only for datasets registered by a folder scan (OW-25; extended to every load path in PR #10, stated by PR #10) |
 | R12 | User sees discovered/imported/skipped/rejected and why | 1 | Scan report CSV, Sources screen tests | |
 | R13 | Originals never modified | 1 | `test_source_files_are_unchanged_by_all_of_the_above`, checksum checks in discovery tests | |
 | R15, R19, R23-R25, R29 | DuckDB, MIQP/QLOPB, result reuse, Research Library, Feature Store, coverage view | 5 | — | Outside PR #9 (QLOPB MA Affinity is in PR #12) |
@@ -93,7 +93,7 @@ The requirement text behind R1-R30 is unchanged in v1.35, so the mapping stays v
 | R26 | Provider API adapters | 4, 6 | — | Not started; DQ-3 (providers) is the owner's |
 | R27 | Synchronised cloud folders treated as folders | 2 | Code path only | Not tested with a real OneDrive/Google Drive client (OW-23) |
 | R28 | Instrument changes, symbol mapping | 4 | — | Alias registry is in PR #10 (stated by PR #10) |
-| R31 (new, 08-Nov-26) | A scan never reads outside the chosen folder | 2 | `test_source_folder_containment.py` (5 tests) | **Defect fixed on this branch** (section 6.1). Junctions simulated; not tested on Windows |
+| R31 (new, 08-Nov-26) | A scan never reads outside the chosen folder, and never presents an incomplete listing as complete | 2 | `test_source_folder_containment.py` (5), `test_scan_integrity.py` (8) | **Defects fixed on this branch** (sections 6.1, 6.4). Symbolic-link tests run on Windows CI; a real-junction test (`mklink /J`) runs only on Windows CI (results in the PR); not tested by the owner on Windows |
 
 ## 4. Blueprint v1.35 §8.5.11: requirement-level mapping for PR #9
 
@@ -171,7 +171,8 @@ files behind it were read (read only; nothing was written). `discovery.list_cand
 file whose real location is not simply inside the chosen folder, and anything that cannot be resolved. The function is
 unchanged on the later stacked branches, so the fix carries forward without conflicts. Tests:
 `Tests/integration/test_source_folder_containment.py`; the junction and unresolvable-entry tests fail on the previous
-code. **Not tested on Windows** with a real junction.
+code. Real symbolic links were tested on Windows CI from `f5f3630` on. A test with a **real** Windows junction (made with
+`mklink /J`, run only on Windows) was added on 08-Nov-26 (section 6.4); a simulated junction is not evidence of it.
 
 ### 6.2 Checked and found correct (inspected and tested here)
 
@@ -180,9 +181,10 @@ code. **Not tested on Windows** with a real junction.
 - **DQ-2 headerless** (owner): positions and the volume rule (whole numbers ≥ 0, column 6 only). Tests: `test_dq2_headerless_*` (6).
 - **DQ-2 identity** (owner): columns always used; contradicting names rejected; exchange-only question. Tests:
   `test_dq2_*` identity tests (6) and the real-window test `test_a_file_that_lacks_only_its_exchange_asks_only_for_the_exchange`.
-- **Determinism:** the profile ID is the hash of the generated text; candidate order is fixed; a re-scan of an
-  unchanged file is skipped by size, time and checksum plus an inputs fingerprint that includes answers, folder
-  settings, validation settings and the rules version.
+- **Determinism:** the profile ID is the hash of the generated text; candidate order is fixed; a re-scan skips a file
+  only when its checksum (computed on every scan since `1aea6cf`) and an inputs fingerprint that includes answers,
+  folder settings, validation settings and the rules version are unchanged. *Corrected 08-Nov-26: before `1aea6cf`
+  size and modification time alone could skip a file (section 6.4).*
 - **Re-scans, missing files, retries:** unchanged files are skipped; a missing file is recorded once and its data
   kept; `failed` is not a final outcome, so it is retried; a file rejected only for future dates is retried on the date
   that cures it. A file that changes while it is being loaded is recorded as failed and processed again next time.
@@ -203,6 +205,32 @@ code. **Not tested on Windows** with a real junction.
 - Migration 8's description string says "Blueprint v1.3". It is stored in every upgraded registry and is left as is.
 - Three pre-existing pyflakes warnings in `qmap_gui/services.py` (PR #4): re-exported names that tests patch; no
   functional effect.
+- **Windows, not tested here or by the owner:** OneDrive "online only" files (every scan now reads each file to
+  compute its checksum, so an online-only file is downloaded by every scan; the guide already asks for files to be
+  available offline); paths longer than 260 characters when Windows long-path support is off (such an entry may now be
+  listed as unreadable, which makes the scan incomplete, instead of failing later); IDLE; owner Windows acceptance.
+
+### 6.4 Scan-integrity corrections after the independent review of `9c2e420` (08-Nov-26)
+
+Both findings of the review comment of 08-Nov-26 were confirmed in the code and corrected in commit `1aea6cf`.
+
+| Finding | Cause (confirmed) | Correction | Regression tests (fail on `9c2e420`) |
+|---|---|---|---|
+| 1. A file edited to different contents of the **same size**, with its modification time restored, was treated as unchanged | `_scan_one` returned "unchanged" on size + modification time without computing the SHA-256 | The checksum is computed on every scan and alone decides "unchanged"; size and time are recorded only. The decision record D5-08 carries a dated note | `test_changed_contents_with_the_same_size_and_time_are_detected` (the edited file is processed as *changed* and loaded as a new dataset; the earlier dataset is untouched and the difference is reported, DQ-1); `test_an_unchanged_file_is_still_skipped_after_its_checksum_is_checked` |
+| 2. A folder that could not be read was silently left out: `os.walk` ignores errors unless `onerror` is given, so the scan looked complete, and files last seen in that folder would have been recorded as **missing** | `list_candidate_files` called `os.walk` without `onerror`; an entry whose location could not be resolved was also dropped silently | Traversal errors and unresolvable entries are collected. Readable files are still processed, but the scan is recorded with status `failed`, detail "Incomplete: ...", and `summary_json` `complete: false` with the folders. Files last seen inside an unreadable folder are recorded as *Failed* ("Not checked"), never *missing*; their data are unchanged and the next scan retries them. The CSV report states the scan status and lists unreadable folders and links not followed. The Sources screen shows **Scan INCOMPLETE:** in red, never "Scan finished" | `test_an_unreadable_subfolder_makes_the_scan_incomplete_and_never_missing`, `test_the_folder_becomes_readable_again_and_the_next_scan_is_complete`, `test_an_unreadable_source_folder_marks_nothing_missing`, `test_an_entry_whose_location_cannot_be_read_is_reported_not_silently_dropped`, `test_a_real_permission_denied_folder_makes_the_scan_incomplete` (real `chmod 000`; runs only as a non-root user, i.e. on the Linux CI runner), real-window `test_an_unreadable_subfolder_is_shown_as_an_incomplete_scan` |
+| Windows junctions (review request) | — | Real-junction test added | `test_a_real_windows_junction_is_never_followed` (`mklink /J`; runs only on Windows CI; skips with the reason if `mklink` fails) |
+
+Related changes checked: links and junctions are still never followed (now listed in the report instead of dropped);
+no schema change (the existing `failed` status, `detail` and `summary_json` columns are used, so migration 8 stays
+pinned); no change to owner decisions, interpretation rules, validation or ingestion; documentation updated in the
+Database Manager guide, the registry/schema document and the D5-08 note.
+
+**Performance** (tested here, Linux, Python 3.12, files in the operating-system cache; synthetic data). Re-scan of
+an unchanged folder of 300 daily files (33.0 MB), best of three: `9c2e420` 0.552 s, `1aea6cf` 0.517 s, i.e. no
+measurable difference (within run-to-run noise). SHA-256 throughput 1.1 GB/s from cache. Estimate for files not in
+the cache: limited by disk reading, about 1-10 s per GB on SSD/HDD, plus download time for cloud files that are not
+stored locally. The first scan of a folder, which loads every file, is dominated by loading (17.7-18.1 s for these 300
+files) and is unchanged. Change detection was not weakened.
 
 ## 7. Test evidence (tested here, 08-Nov-26)
 
@@ -216,12 +244,15 @@ Linux container (Ubuntu 24.04), not Windows and not IDLE, unless marked CI.
 | `7b3ef9b` | 3.11.18 (no tkinter) | Not available | as above | 863 passed, 0 failed, 86 skipped (all: no tkinter) |
 | `f5f3630` (documentation) | 3.12.3, Tk 8.6, Xvfb | Required, 199 of 199 ran | as above | 975 passed, 0 failed, 0 skipped |
 | `f5f3630` | 3.11.18 (no tkinter) | Not available | as above | 863 passed, 0 failed, 86 skipped (all: no tkinter) |
+| `1aea6cf` (scan-integrity fix and tests) | 3.12.3, Tk 8.6, Xvfb | Required, 200 of 200 ran | as above | 982 passed, 0 failed, 2 skipped (real permission test: needs a non-root user; real junction test: Windows only) |
+| `1aea6cf` | 3.11.18 (no tkinter) | Not available | as above | 869 passed, 0 failed, 89 skipped (87 no tkinter, plus the same 2) |
 | `f5f3630`, **CI** push run [42451835236](https://github.com/BulluBhai/Q-MAP/actions/runs/42451835236) and pull-request run [42451838494](https://github.com/BulluBhai/Q-MAP/actions/runs/42451838494) | 3.11 | Windows: required, 199 of 199 ran; Ubuntu: not required | `python -m pytest -p no:cacheprovider` | All 4 jobs passed. Windows (pull-request run): 974 passed, 1 skipped (hard-link fallback test, macOS/Linux only). Ubuntu: 883 passed, 92 skipped (GUI, no display) |
 
 Results for the commit that adds this table are in the PR description.
 
-The 26 new tests are in `test_migration_8_sources.py` (21) and `test_source_folder_containment.py` (5). No existing
-test was changed, weakened, removed or skipped. With Python 3.11 the GUI test modules that need tkinter are skipped as
+The 26 tests added first are in `test_migration_8_sources.py` (21) and `test_source_folder_containment.py` (5); the
+9 added in `1aea6cf` are in `test_scan_integrity.py` (8) and `Tests/gui/test_window_sources_incomplete.py` (1). No
+existing test was changed, weakened, removed or skipped. With Python 3.11 the GUI test modules that need tkinter are skipped as
 whole files, so fewer tests are collected there (949 against 975).
 
 ## 8. Decisions for the Project Owner arising from this review

@@ -54,7 +54,7 @@ runs can never overwrite each other.
 | **`dataset_derivations`** (new) | For each derived dataset: method, method version, parameters, source dataset and checksum, Run ID | Append-only |
 | `research_records`, `modules` | Reserved for the Research Library | |
 | **`data_sources`** (schema 8) | Folder sources: location, name, market time zone, default exchange, "file name is the symbol", sub-folders, skip patterns, active/removed | Never deleted; location and identity immutable; settings may change (each scan keeps a snapshot) |
-| **`source_scans`** (schema 8) | One row per scan: source, Run ID, settings snapshot, status, counts | Never deleted; finished once |
+| **`source_scans`** (schema 8) | One row per scan: source, Run ID, settings snapshot, status, counts. Status `failed` also marks an **incomplete** scan (a folder could not be read): `detail` starts with "Incomplete:" and `summary_json` has `"complete": false` and the unreadable folders | Never deleted; finished once |
 | **`source_file_observations`** (schema 8) | What each scan saw for each file: size, modification time, SHA-256, change (new/changed/unchanged/missing/unreadable), action, outcome, links to the ingest event, attempt and datasets, the full interpretation (evidence and generated profile ID), open questions, retry date | Append-only. A file's current state is its latest observation (no second, updatable copy) |
 | **`source_answers`** (schema 8) | The user's answers to interpretation questions, with the file's structure signature | Append-only; an answer is used only while the file keeps that structure |
 
