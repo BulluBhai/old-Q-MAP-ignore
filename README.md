@@ -1,7 +1,7 @@
 # Q-MAP
 Quantitative Market Analytics Platform [Q-MAP]
 
-The governing document is [docs/Q-MAP_Master_Blueprint_v1.0.md](docs/Q-MAP_Master_Blueprint_v1.0.md).
+The governing document is [Q-MAP_Master_Blueprint_v1.35.md](Q-MAP_Master_Blueprint_v1.35.md).
 Material decisions are recorded in [docs/decision_log.md](docs/decision_log.md).
 
 ## Status: Stage 2 (Foundation) and the first graphical version
