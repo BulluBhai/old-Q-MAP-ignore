@@ -404,7 +404,7 @@ Before a release or major integration:
 - Verify documentation against the actual application.
 - Identify any remaining limitations.
 
-Only evidence from the combined application can support a claim of integrated readiness.
+Only evidence from the combined application can support a claim of integrated readiness. Record the exact integrated commit or build assessed, the workflows and environments actually tested, the results observed, and any limitations or untested areas. A green check on an individual pull request is not a substitute for this evidence.
 
 ## 11. Project Completion Is Not the Same as Release Readiness
 
