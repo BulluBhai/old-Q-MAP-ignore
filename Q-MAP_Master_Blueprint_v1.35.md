@@ -2036,9 +2036,10 @@ to make an assumption that later becomes difficult to reverse.
   Historical retention                Versions 1.0, 1.1, 1.2 and 1.3 and their
                                       repository history must be retained
 
-  Canonical location                  docs/Q-MAP_Master_Blueprint_v1.35.md
-                                      and docs/Q-MAP_Master_Blueprint_v1.35.html
-                                      in the Q-MAP GitHub repository; repository
+  Canonical location                  Q-MAP_Master_Blueprint_v1.35.md
+                                      and Q-MAP_Master_Blueprint_v1.35.html
+                                      at the root of the Q-MAP GitHub
+                                      repository; repository
                                       publication/merge status must be verified
 
   Related format                      The HTML copy must carry the same
