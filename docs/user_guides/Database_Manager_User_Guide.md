@@ -75,7 +75,16 @@ section 6, and `docs/acceptance_testing/Q-MAP_DQ7-DQ10_Implementation_Report_03_
   your file is not changed). Rows with the same time stamp but different values are **all kept**, flagged and listed
   as conflicting observations; Q-MAP never chooses between them, and you can still analyse the data.
 - **Overlaps** with data already loaded (same instrument and timeframe) are reported, never merged or overwritten.
-- Files that have not changed are skipped on the next scan; the same content under two names is loaded once.
+- Files whose contents have not changed since the last scan are skipped. Q-MAP compares the file's checksum on every
+  scan, so an edited file is always read again, even if its size and date did not change. Scanning twice never
+  creates duplicates; the same content under two names is loaded once.
+- If a folder inside the source cannot be read (for example, access is denied) and **Include sub-folders** is ticked,
+  the scan does not stop: the files it can read are processed, and the message under Progress / Status turns red and
+  includes **Scan INCOMPLETE:**, naming the folder. Files last seen in that folder show as *Failed* ("Not checked: the
+  folder ... could not be read"), never as *No longer in the folder*, and their data are unchanged. Fix the folder's
+  access and scan again.
+- Shortcuts and links inside the folder (symbolic links, Windows junctions) are never followed. They are listed in
+  the scan report as "Link not followed". Copy the files into the folder if they should be scanned.
 - Nothing in your folder is ever created, changed, moved or deleted.
 
 ## Data Management: loading files with a chosen profile

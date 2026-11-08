@@ -5,7 +5,10 @@ Prepared 01-Nov-26 on branch `claude/adoring-curie-5h2mx4` (PR #4), stacked on P
 decision OD-8 implemented as schema 7; gap review in section 8). Status: **implemented and tested; awaiting Project
 Owner review and Windows/IDLE acceptance. Nothing has been merged.**
 
-**Governing reference:** Blueprint **v1.2**, approved and adopted by the Project Owner on 1 November 2026, superseding
+**Governing reference (since 03-Nov-26):** Blueprint **v1.35** (`main`, PR #11), superseding v1.3, v1.2, v1.1 and
+v1.0; PR #9's reconciliation with it is in [architecture/Blueprint_v1.35_Reconciliation_PR9.md](architecture/Blueprint_v1.35_Reconciliation_PR9.md).
+Sections 1-10 are kept as written under the version in force then: Blueprint **v1.2**, approved and adopted by the
+Project Owner on 1 November 2026, superseding
 v1.0 and v1.1. It is in PR #5 (branch `docs/blueprint-v1.2-and-handover`, not yet merged). Section 1 below records what
 was found on 01-Nov-26 before v1.2 was available; the conflict table shows how each finding stands now.
 
@@ -287,7 +290,7 @@ Consistent with v1.2:
 Blueprint v1.3 (on `main` since PR #8) supersedes v1.2 where they differ. The audit against it, the automatic
 interpretation rules A-1 to A-9, the risks and the owner decisions DQ-1 to DQ-6 are in
 [architecture/Blueprint_v1.3_Implementation_Audit.md](architecture/Blueprint_v1.3_Implementation_Audit.md); decisions
-D5-01 to D5-12 are in the decision log. In short, on branch `claude/happy-brahmagupta-su6tnr` (stacked on PR #4):
+D5-01 to D5-15 are in the decision log. In short, on branch `claude/happy-brahmagupta-su6tnr` (stacked on PR #4):
 
 - **Database engine:** `data_engine/auto_interpret.py` (reads a file's layout from evidence and generates an ordinary,
   content-addressed source profile), `data_engine/discovery.py` (folder sources and idempotent scans),

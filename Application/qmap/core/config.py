@@ -7,6 +7,7 @@ must be separate, non-overlapping locations.
 
 from __future__ import annotations
 
+import math
 import os
 import tempfile
 import tomllib
@@ -163,6 +164,10 @@ def _number(section: dict, key: str, default, kind, *, minimum):
                                                                             and not value.is_integer()):
         raise ConfigError(f"'{key}' must be a {'whole ' if kind is int else ''}number, got {value!r}.",
                           action="Correct the value in your local configuration file (no quotes around numbers).")
+    if not math.isfinite(value):  # TOML allows nan, inf and -inf; none is a usable limit (nan disables comparisons)
+        raise ConfigError(f"'{key}' must be a finite number, got {value!r}.",
+                          action=f"Replace it with an ordinary number in your local configuration file "
+                                 f"(the default is {default}); nan, inf and -inf are not allowed.")
     value = kind(value)
     if value < minimum:
         raise ConfigError(f"'{key}' must be {minimum} or more, got {value!r}.",

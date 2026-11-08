@@ -4,6 +4,11 @@ Prepared 02-Nov-26 on branch `claude/happy-brahmagupta-su6tnr` (stacked on PR #4
 on `main` (merged by PR #8, merge commit `f5129d2`). Blueprint §16.2 and §19.4 require that differences are recorded
 as findings first. Section 9 records what this branch then implemented.
 
+> **Historical document (note added 08-Nov-26).** Blueprint v1.3 has been superseded by **Master Blueprint v1.35**,
+> approved and adopted by the Project Owner on 3 November 2026. This audit is kept unchanged as the record of the
+> work as audited against v1.3; repository and PR states below are as inspected on 02-Nov-26. The requirement-level
+> reconciliation with v1.35 is in [Blueprint_v1.35_Reconciliation_PR9.md](Blueprint_v1.35_Reconciliation_PR9.md).
+
 **Evidence labels used below.** *Inspected* = read in the source on 02-Nov-26. *Tested here* = a test was run in this
 session (Linux container, Python 3.12, Tk 8.6 under Xvfb). *Reported* = stated in an earlier PR or report and not
 re-verified here.

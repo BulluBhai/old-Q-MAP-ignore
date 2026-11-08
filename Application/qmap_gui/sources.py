@@ -565,6 +565,10 @@ class SourcesFrame(tk.Frame):
                      "not processed (listed in the scan report). Work already done is kept.", fg=WARN_COLOR)
         elif summary.error:
             self.final_label.configure(text=f"Stopped: {summary.error}", fg=ERROR_COLOR)
+        elif getattr(summary, "incomplete", None):
+            self.final_label.configure(
+                text=f"Scan INCOMPLETE: {summary.incomplete} The files that could be read were processed. Fix the "
+                     f"folder's access and scan again. Run {summary.run_id}.", fg=ERROR_COLOR)
         else:
             attention = sum(n for k, n in summary.counts.items() if k in ss.ATTENTION)
             self.final_label.configure(
