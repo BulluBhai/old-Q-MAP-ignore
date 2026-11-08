@@ -1,7 +1,7 @@
 # Development & Quality Governance Standard
 
 **Version:** 1.1  
-**Status:** Proposed for adoption  
+**Status:** Approved and adopted by the Project Owner on 8 November 2026  
 **Applicability:** All software development projects, including Q-MAP  
 **Primary objective:** Reduce development cycles, prevent avoidable rework, improve quality and allow the Project Owner to focus on business and research objectives.  
 **Revision date:** 8 November 2026  
