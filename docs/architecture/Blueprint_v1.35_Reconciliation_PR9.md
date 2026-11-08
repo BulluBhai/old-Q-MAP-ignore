@@ -323,6 +323,8 @@ unchanged). The checksum-on-every-scan change does not cause reprocessing: uncha
 after their checksum is compared. PR #10's own stated effect remains: after updating to its rules version 6, every
 dataset is processed once more and the earlier ones are marked superseded; nothing is deleted.
 
-**Not covered:** owner Windows/IDLE acceptance of the combined build; PR #10's Windows/IDLE acceptance guide has no
-step for the incomplete-scan message; OneDrive online-only files; paths over 260 characters.
+**Not covered:** owner Windows/IDLE acceptance of the combined build; the incomplete-scan and stopped + incomplete
+messages are **automated-test coverage only** (acceptance guide v2, W19: producing an unreadable folder would need
+Windows permission changes, which are not part of owner testing), so the owner has not seen them on Windows; OneDrive
+online-only files; paths over 260 characters.
 

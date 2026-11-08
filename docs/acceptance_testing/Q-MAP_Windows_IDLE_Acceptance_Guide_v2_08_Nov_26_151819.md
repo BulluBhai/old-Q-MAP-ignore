@@ -1,4 +1,4 @@
-# Q-MAP PR #10: Windows and IDLE acceptance guide (W1 to W19), version 2
+# Q-MAP PR #10: Windows and IDLE acceptance guide (W1 to W18), version 2
 
 **08-Nov-26 | Program to test: PR #10, commit `33871b5` or later | Tracker:
 `Q-MAP_DQ7-DQ10_Acceptance_Checklist_v2_08_Nov_26_151819.md` (same folder)**
@@ -6,8 +6,13 @@
 **Written to `docs/standards/Q-MAP_User_Documentation_Standard.md`.**
 
 This guide replaces `Q-MAP_Windows_IDLE_Acceptance_Guide_03_Nov_26_150000.md`, which is kept unchanged as a record.
-It tests the PR #10 program **after PR #9 was added to it** (08-Nov-26). Check **W19** is new: it tests what Q-MAP
-does when a folder cannot be read.
+It tests the PR #10 program **after PR #9 was added to it** (08-Nov-26).
+
+**What you test, and what you do not:** you carry out W1 to W18 (sections 4 and 5). **W19 is not an owner check.**
+It is the case of a folder that cannot be read, and the case of a scan that is both stopped and incomplete. Producing
+an unreadable folder on purpose would mean changing Windows folder permissions, which you must not do. These cases are
+covered by automated tests only (section 5, Part C). **Do not change any Windows permission or security setting for
+this test.**
 
 **Status: OUTSTANDING.** To be carried out by the Project Owner.
 
@@ -91,14 +96,16 @@ section 6 changes them back at the end.
 6. Do not click these Q-MAP buttons; they are not part of the tests: **Delete Temporary dataset...**, **Move to
    Temporary**, **Make Permanent**, **DERIVE SELECTED TIMEFRAMES**, **Save answer / correction**, **LOAD FILES INTO
    Q-MAP**.
-7. The checks that change Q-MAP's records are W5 (alias name), W6/W7 (reject and restore), W10 (reject and restore)
-   and W19 (a folder setting). All of them are reversible and only affect the new test folders.
-8. If anything unexpected happens: take a picture, write it down, and **do not repair it**.
+7. The checks that change Q-MAP's records are W5 (alias name), W6/W7 (reject and restore) and W10 (reject and
+   restore). All of them are reversible and only affect the new test folders.
+8. **Never change Windows folder permissions or security settings** (the **Security** tab of a folder's
+   **Properties**). No check in this guide needs it.
+9. If anything unexpected happens: take a picture, write it down, and **do not repair it**.
 
 ### 3.3 What you need
 
 - Your laptop with IDLE (Python 3.12), as in round 2c. **Do not install or update anything.**
-- About 90 minutes. You may stop after any check; close Q-MAP with the **X** at the top right of each window.
+- About 80 minutes. You may stop after any check; close Q-MAP with the **X** at the top right of each window.
 - Notepad, and Excel to look at CSV files.
 
 ### 3.4 How to take a picture (PIC)
@@ -137,7 +144,7 @@ The file stays where it was. Never use **Ctrl+X** (cut), and never drag files ou
 1. **Do:** press **Windows key + E**, click **This PC**, double-click **D:**, then double-click **Q-MAP_V01**.
 2. **Do:** right-click an empty area → **New** → **Folder**, type `PR10_Test` and press **Enter**. Double-click it.
 3. **Do:** inside `PR10_Test`, make these new, empty folders the same way: `Q-MAP_APP`, `Q-MAP_DATA`, `Q-MAP_OUTPUT`,
-   `Evidence`, `W_Market`, `W_Pattern`, `W_Stop`, `W_Incomplete`.
+   `Evidence`, `W_Market`, `W_Pattern`, `W_Stop`.
 4. **Do:** in your web browser open `https://github.com/BulluBhai/Q-MAP/tree/claude/friendly-babbage-8xyrgo`, click the
    green **Code** button, then **Download ZIP**. *(GitHub wording; it may differ slightly.)*
 5. **Do:** open your **Downloads** folder, right-click the ZIP → **Extract All...** → **Extract**.
@@ -160,7 +167,6 @@ D:\Q-MAP_V01\PR10_Test\
     W_Market\       (filled in 4.3)
     W_Pattern\      (filled in 4.3)
     W_Stop\         (filled in 4.3)
-    W_Incomplete\   (filled in 4.3)
 ```
 
 **If different:** if `database_manager.py` is not in `PR10_Test\Q-MAP_APP`, open the extracted folder one level
@@ -216,18 +222,7 @@ D:\Q-MAP_V01\PR10_Test\W_Stop\
 
 That gives 33 files. Windows never asks to replace anything, because each copy goes into its own folder.
 
-**W_Incomplete (for W19):**
-1. **Do:** copy `NSE_RANDOMGAPS.csv` from `W_Pattern` into `PR10_Test\W_Incomplete`.
-2. **Do:** inside `W_Incomplete`, make a folder named `Locked`, and copy `NSE_SPARSE.csv` from `W_Pattern` into it.
-
-```text
-D:\Q-MAP_V01\PR10_Test\W_Incomplete\
-    NSE_RANDOMGAPS.csv
-    Locked\
-        NSE_SPARSE.csv
-```
-
-### 4.4 Adding a folder source (used in W1, W8, W13 and W19)
+### 4.4 Adding a folder source (used in W1, W8 and W13)
 
 1. **Do:** Database Manager → click **Sources** (top right).
 2. **Do:** in section **1. Input - folders Q-MAP reads market files from**, leave **Market time zone:** and **Default
@@ -453,58 +448,37 @@ Known and expected: for the two DAILY files, "Some days have fewer bars than usu
 6. **You should see** a `NOTE` line containing `Validated with warnings` and `interval_change_uncertain`.
 7. **Save:** TXT `W18_Workbench.txt` of the readiness box.
 
-### Part C: a folder that cannot be read (folder `W_Incomplete`), new
+### Part C: W19, a folder that cannot be read (AUTOMATED ONLY, NOT AN OWNER ACTION)
 
-This checks that Q-MAP never says a scan finished when it could not read part of the folder. You lock one folder
-yourself, and unlock it at the end of this check. The lock only affects `PR10_Test\W_Incomplete\Locked`.
+**Do not perform W19. Do not change Windows permissions.** In the tracker, W19 is already marked
+`AUTOMATED ONLY - not performed by the owner`; leave it as it is.
 
-#### W19a: lock the folder (PIC)
+**Why it is not a manual check.** When a folder inside a source cannot be read (for example because Windows denies
+access), Q-MAP must not say "Scan finished". It processes the files it can read, shows a red message starting
+`Scan INCOMPLETE:`, and never reports the files in that folder as missing. The only way to produce such a folder on
+purpose is to change Windows permissions. That could leave the folder, or other folders, inaccessible, so it is not
+part of owner testing. Q-MAP has no button that makes a folder unreadable, and no other safe method was found.
 
-1. **Do:** in File Explorer, right-click `PR10_Test\W_Incomplete\Locked` → **Properties** → **Security** tab →
-   **Edit...**.
-2. **Do:** in **Group or user names**, click your own user name (or **Users** if your name is not listed).
-3. **Do:** in the **Permissions** list, tick **Deny** in the row **Read**, click **OK**, then click **Yes** in the
-   warning that follows.
-4. **Do:** double-click `Locked` in File Explorer. **You should see** a message that access is denied.
-5. **Save:** PIC `W19a_Locked.png` of that message.
+**What covers it instead** (automated tests, run by the developer and by GitHub on Windows and Ubuntu; technical
+note, nothing for you to do):
 
-*(Windows wording in this check; it may differ slightly, and it could not be checked on your computer.)*
+| Case | Automated tests (file :: test) | Where it ran |
+|---|---|---|
+| A sub-folder cannot be read: scan INCOMPLETE, readable files processed, nothing reported missing; the next scan is complete once the folder is readable | `Tests/integration/test_scan_integrity.py` :: `test_an_unreadable_subfolder_makes_the_scan_incomplete_and_never_missing`, `test_the_folder_becomes_readable_again_and_the_next_scan_is_complete`, `test_an_unreadable_source_folder_marks_nothing_missing`, `test_an_entry_whose_location_cannot_be_read_is_reported_not_silently_dropped` | Windows and Ubuntu CI; the unreadable folder is simulated by the test |
+| The same with a **real** permission-denied folder | `test_scan_integrity.py` :: `test_a_real_permission_denied_folder_makes_the_scan_incomplete`, `test_a_real_permission_denied_child_folder_counts_only_when_included` (with and without sub-folders) | Ubuntu CI only (needs a non-root Linux user); skipped on Windows |
+| With **Include sub-folders** off, a locked child folder does not make the scan incomplete | `test_scan_integrity.py` :: `test_an_unreadable_child_folder_counts_only_when_sub_folders_are_included` (both settings), `test_links_inside_a_folder_that_is_not_scanned_are_not_listed` | Windows and Ubuntu CI |
+| The red `Scan INCOMPLETE:` message in the real Sources window | `Tests/gui/test_window_sources_incomplete.py` :: `test_an_unreadable_subfolder_is_shown_as_an_incomplete_scan` | Windows CI (real window); skipped on Ubuntu (no screen) |
+| A scan both **stopped** and **incomplete**: both messages shown; recorded as failed; nothing reported missing | `Tests/integration/test_pr9_pr10_integration.py` :: `test_a_stopped_scan_that_is_also_incomplete_reports_both`, `test_the_scan_job_carries_stopped_and_incomplete_to_the_window`; `Tests/gui/test_window_sources_stopped_incomplete.py` :: `test_stopped_and_incomplete_are_both_shown` | Integration tests: Windows and Ubuntu CI. Window test: Windows CI only |
+| Windows junctions (links) are never followed | `test_scan_integrity.py` :: `test_a_real_windows_junction_is_never_followed` | Windows CI only (a real junction) |
 
-**If different:** if there is no **Security** tab, the drive does not support locking. Write `NT - no Security tab`
-for W19 in the tracker and go to section 6.
+All of these passed in the GitHub runs for PR #10's commit `a3801f3`: push run `42469090550` and pull-request run
+`42469094096`. Windows: 1180 passed, 4 skipped (the Linux-only tests). Ubuntu: 1080 passed, 104 skipped (window tests
+and the Windows-only test). The application code is unchanged since then. The runs for the newest commit are shown on
+the PR #10 page (**Checks** tab).
 
-#### W19b: scan with sub-folders: INCOMPLETE (PIC + FILE)
-
-1. **Do:** tick **Include sub-folders**, then add `W_Incomplete` as a folder source (section 4.4).
-2. **Do:** click **SCAN SELECTED FOLDER NOW**.
-3. **You should see** under **Progress / Status**, in **red**: `Scan INCOMPLETE: 1 folder(s) could not be read, so
-   their files were not checked (Locked: ...). The files that could be read were processed. Fix the folder's access
-   and scan again. Run SCAN_...`. In section 2, `NSE_RANDOMGAPS.csv` shows **Imported** (or **Already loaded**). The
-   text after `Locked:` is Windows' own reason, for example "Access is denied" *(not checked)*.
-4. **Save:** PIC `W19b_Incomplete.png` of **Progress / Status**.
-5. **Do:** click **Open run folder** and copy `Scan_Report_....csv` (FILE). In Excel, **you should see** the first row
-   ending with `INCOMPLETE: ...`, and a row `Locked` with `Could not be read`. Close Excel with **Don't Save**.
-
-**If different:** if the message starts with `Scan finished` (green), the check has **failed**: write `F - incomplete
-scan shown as finished` and continue with W19c.
-
-#### W19c: scan without sub-folders: finished (PIC)
-
-1. **Do:** with `W_Incomplete` selected in section 1, untick **Include sub-folders**, then click **Save settings of
-   selected folder** (allowed for this check only).
-2. **Do:** click **SCAN SELECTED FOLDER NOW**.
-3. **You should see** a message starting `Scan finished` (not `INCOMPLETE`): the locked sub-folder is not part of the
-   scan now, so it does not matter.
-4. **Save:** PIC `W19c_Finished.png` of **Progress / Status**.
-
-#### W19d: unlock the folder (PIC)
-
-1. **Do:** repeat W19a steps 1-2, then **untick Deny** in the row **Read**, and click **OK**.
-2. **Do:** double-click `Locked`. **You should see** `NSE_SPARSE.csv` inside.
-3. **Save:** PIC `W19d_Unlocked.png`.
-
-**If different:** if you cannot unlock it, **STOP** and ask for help. The locked folder is only a test copy; nothing
-else is affected.
+**What this does not show.** These are automated tests. They do **not** mean that you have seen the red
+`Scan INCOMPLETE:` message, or the stopped-and-incomplete message, on your own computer. The stopped-and-incomplete
+case is automated only, because it also needs an unreadable folder.
 
 ### Part D: close (WRITE) (round 2c test 24)
 
@@ -540,5 +514,4 @@ Keep the whole `PR10_Test` folder until the review is finished. Do not delete it
    - **If every check is PASS:** wait for the review. Merging PR #10 stays your decision afterwards.
    - **If any check is FAIL or NOT SURE:** do not repeat it and do not try to fix anything. Send the files and wait.
    - **If you stopped early (a STOP line):** send what you have, and say at which check you stopped.
-   - **If you could not unlock `Locked` (W19d), or Q-MAP opened the wrong folders:** stop and ask for help before
-     using Q-MAP again.
+   - **If Q-MAP opened the wrong folders:** stop and ask for help before using Q-MAP again.

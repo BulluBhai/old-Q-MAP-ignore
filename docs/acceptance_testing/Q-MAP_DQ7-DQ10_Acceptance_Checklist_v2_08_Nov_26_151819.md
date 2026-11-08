@@ -1,4 +1,4 @@
-# Q-MAP PR #10: acceptance tracker W1 to W19, version 2
+# Q-MAP PR #10: acceptance tracker W1 to W18, version 2
 
 **08-Nov-26 | Guide: `Q-MAP_Windows_IDLE_Acceptance_Guide_v2_08_Nov_26_151819.md` (same folder)**
 
@@ -7,6 +7,9 @@
 This tracker replaces `Q-MAP_DQ7-DQ10_Acceptance_Checklist_03_Nov_26_120000.md`, which is kept unchanged as a record.
 Check numbers, evidence file names and the order are the same as in the guide. Every evidence file goes into
 `D:\Q-MAP_V01\PR10_Test\Evidence`.
+
+**W19 is not an owner check** (guide section 5, Part C): it is covered by automated tests only, and its row below is
+already filled in. Do not perform it, and do not change any Windows permission or security setting.
 
 How to fill it in:
 - **Result:** `PASS`, `FAIL` or `NOT SURE`; `NT` if not tested (say why in Notes).
@@ -44,14 +47,11 @@ How to fill it in:
 | W16 | GENUINE3M and DAILY0000: "has another bar interval" | TXT `W16a_Genuine3M.txt`; TXT `W16b_Daily0000.txt` | | |
 | W17 | DAILY0915: "may have another bar interval" | TXT `W17_Daily0915.txt` | | |
 | W18 | SPARSE; scan report; Workbench note | TXT `W18_Sparse.txt`; FILE `Scan_Report_....csv`; TXT `W18_Workbench.txt` | | |
-| W19a | Lock `Locked` | PIC `W19a_Locked.png` | | `NT - no Security tab` if there is none |
-| W19b | Scan with sub-folders: red **Scan INCOMPLETE** | PIC `W19b_Incomplete.png`; FILE `Scan_Report_....csv` | | `F - incomplete scan shown as finished` if it said Scan finished |
-| W19c | Scan without sub-folders: **Scan finished** | PIC `W19c_Finished.png` | | |
-| W19d | Unlock `Locked` | PIC `W19d_Unlocked.png` | | if it could not be unlocked: STOP and ask for help |
+| W19 | Unreadable folder; scan both stopped and incomplete | None (no owner evidence) | **AUTOMATED ONLY - not performed by the owner** | Covered by automated tests (guide section 5, Part C); passed in GitHub runs 42469090550 and 42469094096 for commit `a3801f3`. Not seen on the owner's computer |
 | W12 | Both windows close cleanly | WRITE | | `closed cleanly`, or what you saw |
 | End | Round 2c folders put back (guide section 6) | WRITE | | `done` |
 
-The three FILE copies named `Scan_Report_....csv` (W4, W18, W19b) have different times in their names, so they do not
+The two FILE copies named `Scan_Report_....csv` (W4, W18) have different times in their names, so they do not
 replace each other. If Windows offers to replace one, click **Skip these files** (guide section 3.2).
 
 ## 3. Overall
