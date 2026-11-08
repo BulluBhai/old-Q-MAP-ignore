@@ -139,6 +139,7 @@ class ScanSummary:
     summary: str = ""
     counts: dict = field(default_factory=dict)
     error: str | None = None
+    incomplete: str | None = None  # set when a folder could not be read: the scan did not check everything
 
 
 class ScanJob:
@@ -172,6 +173,9 @@ class ScanJob:
 
                 res = D.scan_source(run, self.source_id, progress=progress)
                 out.report_path, out.summary, out.counts = res.report_path, res.summary(), dict(res.counts)
+                out.incomplete = res.incomplete_text()
+                if out.incomplete:
+                    self.emit({"type": "stage", "text": "Scan INCOMPLETE: " + out.incomplete})
                 for rel, change, action, outcome, detail in res.files:
                     self.emit({"type": "file", "label": rel, "outcome": outcome,
                                "text": f"{D.OUTCOME_LABELS.get(outcome, outcome):<28} {rel}: {detail[:200]}"})

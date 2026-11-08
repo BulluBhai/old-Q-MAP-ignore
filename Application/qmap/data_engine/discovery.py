@@ -3,10 +3,13 @@
 A folder source is a folder the user chose (anywhere, including a locally synchronised OneDrive or Google Drive
 folder). A scan:
 
-  1. lists the supported files inside the folder (sub-folders only if chosen; hidden files, Office lock files and
-     Q-MAP's own data and output folders are never touched; exclusion patterns are respected);
-  2. skips files that have not changed since they were last handled (same size, modification time and checksum, and
-     the same interpretation inputs), so repeated scans are idempotent;
+  1. lists the supported files inside the folder (sub-folders only if chosen; hidden files, Office lock files,
+     links and Q-MAP's own data and output folders are never touched; exclusion patterns are respected). A folder
+     that cannot be read makes the scan INCOMPLETE: it is reported, the scan is recorded as failed, and files last
+     seen inside it are recorded as unreadable, never as missing;
+  2. skips files whose contents have not changed since they were last handled (same SHA-256 checksum, computed on
+     every scan, and the same interpretation inputs), so repeated scans are idempotent and a changed file is never
+     missed, even when its size and modification time are unchanged;
   3. interprets new and changed files automatically (auto_interpret), and either loads them through the normal
      ingestion pipeline, or records a QUESTION for the user, or records why the file was rejected;
   4. compares each newly registered dataset with existing datasets of the same instrument and timeframe and reports
@@ -105,10 +108,25 @@ class ScanResult:
     files: list = field(default_factory=list)  # (relative_path, change, action, outcome, detail)
     excluded: int = 0
     report_path: Path | None = None
+    unreadable_folders: list = field(default_factory=list)  # (relative folder, reason): the scan is INCOMPLETE
+    links_skipped: list = field(default_factory=list)  # relative paths of links and junctions, never followed
+
+    @property
+    def complete(self) -> bool:
+        return not self.unreadable_folders
+
+    def incomplete_text(self) -> str | None:
+        if self.complete:
+            return None
+        shown = "; ".join(f"{'(the folder itself)' if d == '.' else d}: {why}" for d, why in self.unreadable_folders[:3])
+        more = f" and {len(self.unreadable_folders) - 3} more" if len(self.unreadable_folders) > 3 else ""
+        return (f"{len(self.unreadable_folders)} folder(s) could not be read, so their files were not checked "
+                f"({shown}{more}).")
 
     def summary(self) -> str:
         parts = [f"{n} {OUTCOME_LABELS.get(k, k).lower()}" for k, n in sorted(self.counts.items()) if n]
-        return ", ".join(parts) or "no supported files found"
+        text = ", ".join(parts) or "no supported files found"
+        return text if self.complete else f"INCOMPLETE SCAN: {text}"
 
 
 # ---------------------------------------------------------------------------------------------------------------
@@ -300,37 +318,88 @@ def _hidden(name: str) -> bool:
     return name.startswith(".") or name.startswith("~$") or name.lower() in ("thumbs.db", "desktop.ini")
 
 
-def _redirected(entry: Path, parent_real: Path, root_real: Path) -> bool:
-    """True if `entry` is a link of any kind (symbolic link, Windows junction or other reparse point), i.e. its real
-    location is not simply `parent_real / name`, or if it lies outside the source folder. os.walk(followlinks=False)
-    does not recognise Windows junctions as links, so this is checked separately (review of 08-Nov-26)."""
+LINK, UNREADABLE = "link", "unreadable"
+
+
+def _entry_kind(entry: Path, parent_real: Path, root_real: Path) -> tuple[str | None, str]:
+    """(None, "") for an ordinary entry; (LINK, why) for a link of any kind (symbolic link, Windows junction or other
+    reparse point: its real location is not simply `parent_real / name`) or anything outside the source folder;
+    (UNREADABLE, why) if its real location cannot be determined. os.walk(followlinks=False) does not recognise
+    Windows junctions as links, so this is checked separately (review of 08-Nov-26)."""
     try:
         if entry.is_symlink():
-            return True
+            return LINK, "symbolic link"
         real = entry.resolve()
-    except (OSError, RuntimeError):
-        return True  # cannot be resolved safely: never followed or read
-    return real != parent_real / entry.name or not _is_inside(real, root_real)
+    except (OSError, RuntimeError) as exc:
+        return UNREADABLE, f"its location cannot be read ({getattr(exc, 'strerror', None) or exc})"
+    if real != parent_real / entry.name:
+        return LINK, "link or junction"
+    if not _is_inside(real, root_real):
+        return LINK, "outside the source folder"
+    return None, ""
 
 
-def list_candidate_files(settings: Settings, src: FolderSource) -> tuple[list[Path], int]:
+def _rel(path, root: Path) -> str:
+    try:
+        rel = Path(path).relative_to(root).as_posix()
+    except ValueError:
+        return str(path)
+    return rel or "."
+
+
+def list_candidate_files(settings: Settings, src: FolderSource, *, unreadable: list | None = None,
+                         links: list | None = None) -> tuple[list[Path], int]:
     """(files to look at, number excluded by the source's patterns). Never follows links out of the folder:
-    symbolic links, Windows junctions and anything whose real location is not inside the folder are skipped."""
+    symbolic links, Windows junctions and anything whose real location is not inside the folder are skipped (and
+    listed in `links`). Every folder or entry that cannot be read is listed in `unreadable` as (relative path, reason),
+    so a caller can never mistake an incomplete listing for a complete one (os.walk ignores such errors by default)."""
+    unreadable = [] if unreadable is None else unreadable
+    links = [] if links is None else links
     root = Path(src.location)
-    root_real = root.resolve()
+
+    def walk_error(exc: OSError) -> None:
+        unreadable.append((_rel(exc.filename or root, root), exc.strerror or str(exc)))
+
+    try:
+        root_real = root.resolve()
+    except (OSError, RuntimeError) as exc:
+        unreadable.append((".", getattr(exc, "strerror", None) or str(exc)))
+        return [], 0
     managed = [Path(settings.data_root).resolve(), Path(settings.output_root).resolve(), Path(settings.code_root).resolve()]
     found, excluded = [], 0
-    for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
+    for dirpath, dirnames, filenames in os.walk(root, onerror=walk_error, followlinks=False):
         here = Path(dirpath)
-        here_real = here.resolve()
-        dirnames[:] = sorted(d for d in dirnames if not _hidden(d)
-                             and not _redirected(here / d, here_real, root_real)
-                             and not any(_is_inside((here / d).resolve(), m) for m in managed))
-        if not src.include_subfolders:
+        try:
+            here_real = here.resolve()
+        except (OSError, RuntimeError) as exc:
+            unreadable.append((_rel(here, root), getattr(exc, "strerror", None) or str(exc)))
             dirnames[:] = []
+            continue
+        keep = []
+        for d in sorted(dirnames):
+            if _hidden(d):
+                continue
+            kind, why = _entry_kind(here / d, here_real, root_real)
+            if kind == UNREADABLE:
+                unreadable.append((_rel(here / d, root), why))
+                continue
+            if kind == LINK:
+                if src.include_subfolders:
+                    links.append((_rel(here / d, root) + "/", why))
+                continue
+            if not any(_is_inside((here / d).resolve(), m) for m in managed):
+                keep.append(d)
+        dirnames[:] = keep if src.include_subfolders else []
         for name in sorted(filenames):
             p = here / name
-            if _hidden(name) or _redirected(p, here_real, root_real):
+            if _hidden(name):
+                continue
+            kind, why = _entry_kind(p, here_real, root_real)
+            if kind == UNREADABLE:
+                unreadable.append((_rel(p, root), why))
+                continue
+            if kind == LINK:
+                links.append((_rel(p, root), why))
                 continue
             rel = p.relative_to(root).as_posix()
             if any(fnmatch.fnmatch(rel, pat) or fnmatch.fnmatch(name, pat) for pat in src.exclude_patterns):
@@ -388,7 +457,10 @@ def scan_source(run: Run, source_id: int, *, today: date | None = None, progress
     result = ScanResult(scan_id, run.run_id, source_id)
     today = today or datetime.now(timezone.utc).date()
     try:
-        files, result.excluded = list_candidate_files(settings, src)
+        files, result.excluded = list_candidate_files(settings, src, unreadable=result.unreadable_folders,
+                                                      links=result.links_skipped)
+        for d, why in result.unreadable_folders:
+            log.warning("Scan of '%s' is incomplete: %s could not be read (%s)", src.label, d, why)
         latest = _latest_rows(db, source_id)
         seen = set()
         for n, path in enumerate(files, start=1):
@@ -406,17 +478,31 @@ def scan_source(run: Run, source_id: int, *, today: date | None = None, progress
             result.counts[outcome] = result.counts.get(outcome, 0) + 1
             result.files.append((rel, change, action, outcome, detail))
         for rel, row in latest.items():
-            if rel not in seen and row["outcome"] != "missing":
-                detail = "No longer found in the folder (moved, renamed, deleted or now excluded). Data already " \
-                         "loaded from it are unchanged."
-                _observe(db, scan_id, source_id, rel, change="missing", action="none", outcome="missing",
+            if rel in seen or row["outcome"] == "missing":
+                continue
+            blocked = next((d for d, _ in result.unreadable_folders if d == "." or rel == d or rel.startswith(d + "/")),
+                           None)
+            if blocked is not None:
+                # not seen because its folder could not be read: unknown, never reported as missing
+                where = "the source folder" if blocked == "." else f"the folder {blocked}"
+                detail = (f"Not checked: {where} could not be read. Data already loaded from this file are unchanged; "
+                          "the next scan tries again.")
+                _observe(db, scan_id, source_id, rel, change="unreadable", action="none", outcome="failed",
                          sha256=row["sha256"], dataset_ids_json=row["dataset_ids_json"], detail=detail)
-                result.counts["missing"] = result.counts.get("missing", 0) + 1
-                result.files.append((rel, "missing", "none", "missing", detail))
+                result.counts["failed"] = result.counts.get("failed", 0) + 1
+                result.files.append((rel, "unreadable", "none", "failed", detail))
+                continue
+            detail = "No longer found in the folder (moved, renamed, deleted or now excluded). Data already " \
+                     "loaded from it are unchanged."
+            _observe(db, scan_id, source_id, rel, change="missing", action="none", outcome="missing",
+                     sha256=row["sha256"], dataset_ids_json=row["dataset_ids_json"], detail=detail)
+            result.counts["missing"] = result.counts.get("missing", 0) + 1
+            result.files.append((rel, "missing", "none", "missing", detail))
         if progress:
             progress(len(files), len(files), "")
         result.report_path = _write_report(run, src, result)
-        status, err = "completed", None
+        # an incomplete listing is never recorded as a completed scan
+        status, err = ("completed", None) if result.complete else ("failed", "Incomplete: " + result.incomplete_text())
     except BaseException as exc:
         status, err = "failed", f"{type(exc).__name__}: {exc}"
         raise
@@ -424,7 +510,10 @@ def scan_source(run: Run, source_id: int, *, today: date | None = None, progress
         with db.transaction() as conn:
             conn.execute("UPDATE source_scans SET status = ?, finished_at = ?, summary_json = ?, detail = ? "
                          "WHERE scan_id = ?", (status, utc_now_iso(),
-                                               json.dumps({"counts": result.counts, "excluded": result.excluded},
+                                               json.dumps({"counts": result.counts, "excluded": result.excluded,
+                                                           "complete": result.complete,
+                                                           "unreadable_folders": result.unreadable_folders,
+                                                           "links_skipped": result.links_skipped},
                                                           sort_keys=True), err, scan_id))
     log.info("Scan %s of '%s': %s", scan_id, src.label, result.summary())
     return result
@@ -464,8 +553,8 @@ def _scan_one(run: Run, src: FolderSource, scan_id: int, path: Path, rel: str, l
 
     can_skip = (last is not None and last["outcome"] in FINAL_OUTCOMES and last["inputs_fingerprint"] == fp
                 and not retry_due and last["sha256"])
-    if can_skip and last["file_size"] == st.st_size and last["file_mtime_ns"] == st.st_mtime_ns:
-        return unchanged_skip(last["sha256"])
+    # The checksum is computed on EVERY scan (review of 08-Nov-26): an edited file can keep its size and modification
+    # time (copy tools, restored timestamps), so those are recorded but never used to decide that a file is unchanged.
     try:
         sha = sha256_file(path)
     except OSError as exc:
@@ -546,8 +635,15 @@ def _write_report(run: Run, src: FolderSource, result: ScanResult) -> Path:
     path = run.output_path(f"Scan_Report_{stamp}.csv")
     with open(path, "x", newline="", encoding="utf-8") as fh:
         w = csv.writer(fh)
-        w.writerow(("Source", src.label, "Folder", src.location))
+        w.writerow(("Source", src.label, "Folder", src.location, "Scan",
+                    "complete" if result.complete else "INCOMPLETE: " + result.incomplete_text()))
         w.writerow(REPORT_COLUMNS)
         for rel, change, action, outcome, detail in result.files:
             w.writerow((rel, change, action, OUTCOME_LABELS.get(outcome, outcome), detail))
+        for rel, why in result.unreadable_folders:
+            w.writerow((rel, "unreadable", "none", "Could not be read",
+                        f"{why}. Files inside were not checked, so this scan is incomplete."))
+        for rel, why in result.links_skipped:
+            w.writerow((rel, "skipped", "none", "Link not followed",
+                        f"{why}: Q-MAP never reads through links, so files behind it are not scanned."))
     return path
