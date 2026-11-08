@@ -1,6 +1,6 @@
 # Q-MAP outstanding work register
 
-Updated 02-Nov-26 for **Blueprint v1.3** (merged to `main` by PR #8): decisions DQ-1 to DQ-6 and items OW-18 to OW-24
+Updated 08-Nov-26 (PR #9 brought up to date with PR #4; reconciliation with Blueprint **v1.35**, approved and adopted 3 November 2026: `docs/architecture/Blueprint_v1.35_Reconciliation_PR9.md`; no status changed). Earlier update 02-Nov-26 for **Blueprint v1.3** (merged to `main` by PR #8): decisions DQ-1 to DQ-6 and items OW-18 to OW-24
 added; see `docs/architecture/Blueprint_v1.3_Implementation_Audit.md`. Earlier update 02-Nov-26 (roadmap wording: PR #4 vs PR #5). Earlier update 01-Nov-26, after reviewing Blueprint v1.2 (approved and adopted 1 November 2026, in PR #5). Status words:
 **Open**, **Decision needed** (Project Owner), **Planned** (Blueprint v1.2 roadmap stage), **Resolved**.
 
@@ -10,7 +10,7 @@ added; see `docs/architecture/Blueprint_v1.3_Implementation_Audit.md`. Earlier u
 |---|---|---|---|
 | DQ-3 | Name the first API providers and supply permitted credentials | §8.5.2 needs your priorities and a licensing review | One broker API you already hold an account for |
 | DQ-5 | Optional scheduled scanning? | §8.5.6 optional | On demand only, until daily use shows a need |
-| DQ-6 | v1.3 "Version authority", paragraph 2, still calls v1.2 the primary reference | Editorial inconsistency in the approved document | Correct both copies in a maintenance edit |
+| DQ-6 | v1.3 "Version authority", paragraph 2, still calls v1.2 the primary reference | Editorial inconsistency in the approved document. Note 08-Nov-26: v1.35 (the governing version) no longer contains it; the v1.3 copies still do. Status unchanged until the owner decides | Correct both copies in a maintenance edit, or close because v1.35 resolves it |
 | OD-1 | Confirm D4-01: the repository folder is `Q-MAP_APP`, with both entry points at its top level | Blueprint v1.2 §4.4 and §9.1 describe exactly this target. Internal sub-folders are mapped onto existing packages, not renamed (architecture document, C3). | Approve D4-01 |
 | OD-2 | Supply the **QLOPB source code** and the **MIQP specifications** | Blueprint v1.2 §14 and Stages 5-6; nothing can be migrated until they are in the repository | Add them on a branch; QLOPB first (it is existing working code) |
 | OD-3 | When a Temporary dataset's file was deleted and the same source file is loaded again unchanged: keep today's behaviour (reported, not re-created), or re-create it? | Re-creating changes the approved reuse identity (D2-32) | Re-create, recorded as a new attempt linked to the old one; needs a schema migration |
