@@ -9,6 +9,10 @@ from dataclasses import dataclass
 CHECKS: dict[str, tuple[str, str, str]] = {
     "format_supported": ("File type not supported", "Q-MAP does not recognise this as a CSV, text, Excel or Parquet file.",
                          "Save the data as CSV or Excel (.xlsx) and try again."),
+    "format_matches_profile": ("The profile is for a different file type",
+                               "This file is readable, but the chosen profile was written for another file type "
+                               "(for example a CSV profile for an Excel file).",
+                               "Choose a profile made for this file type (see 'File type' in the profile details)."),
     "extension_matches_content": ("File name ending does not match the contents",
                                   "The file was read by what it really contains, not by its ending.",
                                   "Rename the file with the correct ending to avoid confusion."),
@@ -17,6 +21,10 @@ CHECKS: dict[str, tuple[str, str, str]] = {
     "required_columns": ("A required column is missing",
                          "The profile expects columns (date, open, high, low, close) that are not in this file.",
                          "Choose the profile that matches this file, or edit the profile's column names."),
+    "first_row_looks_like_header": ("The first row looks like column names",
+                                    "The profile says this file has no header row, but row 1 contains words such as "
+                                    "'time' and 'open'. Row 1 was treated as data, as the profile says.",
+                                    "If the file has a header row, choose a profile with 'First row is a header: Yes'."),
     "row_accounting": ("Rows could not all be accounted for", "An internal safety check failed.",
                        "Please report this; nothing was loaded."),
     "datetime_parseable": ("Some dates or times could not be understood",
@@ -49,9 +57,11 @@ CHECKS: dict[str, tuple[str, str, str]] = {
     "constant_volume": ("Volume is the same number on every row", "That looks like a placeholder, not real volume.",
                         "Check the source before relying on volume."),
     "zero_volume_bars": ("Some bars have zero volume", "This is allowed.", "Nothing to do."),
-    "instrument_declared": ("Exchange or symbol is missing",
-                            "Q-MAP needs to know exactly which instrument the file is for and will not guess.",
-                            "Type the exchange and symbol in the options, or set them in the profile."),
+    "instrument_declared": ("Exchange, symbol or timeframe is missing or not valid",
+                            "Q-MAP needs to know exactly which instrument and timeframe the file is for, and will not guess.",
+                            "Follow the advice under Details. Depending on the profile: type the value in section 3, "
+                            "rename the file to fit the profile's file-name pattern, or choose a profile that asks you "
+                            "for it."),
     "instrument_registered": ("New instrument added", "This exchange and symbol were seen for the first time.",
                               "Nothing to do. Check the spelling if it is not what you expected."),
     "no_duplicate_timestamps": ("Two or more rows have the same date/time",
@@ -68,8 +78,17 @@ CHECKS: dict[str, tuple[str, str, str]] = {
                     "Check these rows are real (splits and bad ticks look like this)."),
     "timeframe_spacing": ("Bar spacing does not match the timeframe", "The gaps between bars differ from the profile's timeframe.",
                           "Check the timeframe you chose."),
-    "partial_session": ("Some trading days are incomplete", "Some days have fewer bars than usual.",
-                        "This is normal for the first and last day of an export."),
+    "one_bar_per_period": ("More than one bar per day, week or month",
+                           "The profile declares a daily, weekly or monthly timeframe, but some days (weeks, months) "
+                           "have several bars, which looks like intraday data.",
+                           "Check the timeframe you chose (for example 5m instead of 1D). Q-MAP never changes it for you."),
+    "partial_session": ("Some days have fewer bars than usual",
+                        "Q-MAP found days with fewer bars than the most common number of bars per day in this file. "
+                        "This does not show whether a trading session is complete or incomplete: Q-MAP has no trading "
+                        "calendar, so a day can also be missing bars without this note appearing (for example when "
+                        "every day in the file is short).",
+                        "Check the source data and its session coverage (first and last bar time of each day) before "
+                        "using these days in session-based analysis."),
     "not_empty": ("The file has no data rows", "There is a header but no data, or the file is empty.", "Check you chose the right file."),
     "profile_version": ("The profile changed without a new version number",
                         "This profile version was used before with different settings.",
@@ -88,6 +107,7 @@ OUTCOMES = {
     "reused": "Already loaded (nothing new)",
     "rejected": "Rejected - see problems",
     "blocked": "Not retried (already rejected)",
+    "waiting": "Waiting - its dates are not allowed yet",
     "unsupported": "File type not supported",
     "failed": "Failed",
     "would_be_accepted": "Would be accepted",

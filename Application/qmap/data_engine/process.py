@@ -89,8 +89,11 @@ def _timeframe(profile: SourceProfile, filename: str, overrides: dict) -> str:
     elif tf == "filename_pattern":
         m = re.compile(spec.filename_pattern).search(filename)
         if not m or not m.group("timeframe"):
-            raise IngestError(f"The file name {filename!r} does not match the profile's filename_pattern, so the "
-                              "timeframe cannot be read from it.", code="E_TIMEFRAME_REQUIRED", check="instrument_declared")
+            raise IngestError(f"The file name {filename!r} does not fit this profile's file-name pattern "
+                              f"{spec.filename_pattern!r}, so the timeframe cannot be read from it.",
+                              code="E_TIMEFRAME_REQUIRED", check="instrument_declared",
+                              action="Rename the file so that it fits the pattern, or use a profile that asks for the "
+                                     "timeframe (timeframe = \"ingest\").")
         tf = dict(spec.timeframe_map).get(m.group("timeframe"), m.group("timeframe"))
     if tf not in ALLOWED_TIMEFRAMES:
         raise IngestError(f"Timeframe {tf!r} is not one of {ALLOWED_TIMEFRAMES}.", code="E_TIMEFRAME_REQUIRED",
@@ -111,11 +114,43 @@ def _scalar_instrument(kind: str, label: str, fixed, pattern: str | None, filena
     if kind == "filename_pattern":
         m = re.compile(pattern).search(filename)
         if not m:
-            raise IngestError(f"The file name {filename!r} does not match the profile's filename_pattern, so the "
-                              f"{label} cannot be read from it.", code="E_INSTRUMENT_REQUIRED", check="instrument_declared",
-                              action="Rename the file, correct the pattern, or supply the value when ingesting.")
+            # A value typed when loading is NOT used for a file-name profile (D2-26): do not suggest it.
+            raise IngestError(f"The file name {filename!r} does not fit this profile's file-name pattern {pattern!r}, "
+                              f"so the {label} cannot be read from it. This profile reads the {label} only from the "
+                              "file name; a value typed when loading is not used.",
+                              code="E_INSTRUMENT_REQUIRED", check="instrument_declared",
+                              action="Rename the file so that it fits the pattern, or use a profile that asks for the "
+                                     "exchange and symbol (exchange_from and symbol_from = \"ingest\").")
         return normalise(m.group(label))
     return None  # column-based: resolved per row
+
+
+def _first_row_header_check(table: SourceTable, mapping: dict, profile: SourceProfile) -> CheckResult:
+    """Profile says 'no header row', but row 1's date and price cells are all words such as 'time', 'open'.
+    Advice only (a warning): row 1 is still treated as data, exactly as the profile declares, and its date and
+    price checks still fail on their own."""
+    cells = [table.columns[mapping[k]][0] for k in ("date", *OHLC)]
+    wordy = all(isinstance(v, str) and re.search(r"[A-Za-z]", v)
+                and parse_number(v, profile.file.decimal, profile.file.thousands)[1] == INVALID for v in cells)
+    detail = ("" if not wordy else f"Row 1 looks like column names ({', '.join(repr(v) for v in cells)}), but the profile "
+              "says the file has no header row. If it has one, choose a profile with header = true.")
+    return CheckResult("first_row_looks_like_header", WARNING, not wordy, 1 if wordy else 0, detail)
+
+
+def filename_identity_problem(profile: SourceProfile, filename: str) -> str | None:
+    """None if every value this profile reads from the file NAME (exchange, symbol, timeframe) can be read from
+    `filename` by the same rules ingestion uses; otherwise the reason, in plain words. Reads nothing from disk."""
+    ins = profile.instrument
+    try:
+        for kind, label, normalise in ((ins.exchange_from, "exchange", normalise_exchange),
+                                       (ins.symbol_from, "symbol", normalise_symbol)):
+            if kind == "filename_pattern":
+                _scalar_instrument(kind, label, None, ins.filename_pattern, filename, None, normalise)
+        if ins.timeframe == "filename_pattern":
+            _timeframe(profile, filename, {})
+    except IngestError as exc:
+        return f"{exc.message} {exc.action}".strip()
+    return None
 
 
 def process_table(table: SourceTable, profile: SourceProfile, settings: Settings, *, filename: str,
@@ -136,6 +171,8 @@ def process_table(table: SourceTable, profile: SourceProfile, settings: Settings
         # --- map the mandatory columns ----------------------------------------------------
         mapping = {k: resolve_column(ref, table, field=k) for k, ref in profile.columns.items()}
         checks_pre.append(CheckResult("required_columns", ERROR, True, 0, ""))
+        if not profile.file.header:
+            checks_pre.append(_first_row_header_check(table, mapping, profile))
         timeframe = _timeframe(profile, filename, overrides)
 
         # --- instrument identity per row ---------------------------------------------------

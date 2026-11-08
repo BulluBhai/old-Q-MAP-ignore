@@ -1,0 +1,4 @@
+[NOTE] Volume is the same number on every row
+    What it means: That looks like a placeholder, not real volume.
+    Details: Volume is 3.89482e+07 in every row, which looks like a placeholder.
+    What to do: Check the source before relying on volume.

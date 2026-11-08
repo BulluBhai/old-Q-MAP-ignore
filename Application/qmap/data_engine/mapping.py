@@ -35,6 +35,9 @@ class SourceTable:
         return [{"position": i, "name": n, "source_type": t} for i, (n, t) in enumerate(zip(self.names, self.source_types))]
 
 
+_LOOKS_LIKE_DATA = re.compile(r"^[+-]?(\d|\.\d)")  # a number, a date such as 2026-10-23 or a Unix time
+
+
 def _norm(text) -> str:
     return str(text).strip().casefold()
 
@@ -73,6 +76,13 @@ def resolve_column(ref: ColumnRef, table: SourceTable, *, field: str, check: str
                           code="E_COLUMN_AMBIGUOUS", check=check,
                           action=f"Refer to it by position, or by occurrence, e.g. name = \"{wanted}#1\" (first match).")
     found = [n for n in table.names if n is not None]
+    if found and all(_LOOKS_LIKE_DATA.match(str(n).strip()) for n in found):
+        # Advice only: nothing is re-read or re-interpreted. The profile's header setting stays authoritative.
+        raise IngestError(f"Column {ref.describe()} for '{field}' was not found. The first row of this file looks like "
+                          f"data, not column names: {found[:4]}{' ...' if len(found) > 4 else ''}.",
+                          code="E_COLUMN_MISSING", check=check,
+                          action="If the file has no header row, choose a profile with header = false that takes the "
+                                 "columns by position (position = 0, 1, 2 ...). Otherwise fix the column name in the profile.")
     raise IngestError(f"Column {ref.describe()} for '{field}' was not found. Columns found: {found}.",
                       code="E_COLUMN_MISSING", check=check,
                       action="Fix the column name in the profile (or add an alias).")

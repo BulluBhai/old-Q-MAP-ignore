@@ -1,0 +1,27 @@
+# Sample-test profile for "csv headers std.csv": CSV, header row, DD-MM-YY dates (daily).
+profile_id      = "csv_headers_dd_mm_yy"
+profile_version = 1
+source_label    = "CSV, header row, DD-MM-YY dates"
+description     = "time (DD-MM-YY), open, high, low, close, Volume, Net Volume"
+[file]
+expected_format = "delimited_text"
+header = true
+[instrument]
+exchange_from = "ingest"
+symbol_from   = "ingest"
+timeframe     = "ingest"
+[columns]
+date  = { name = "time" }
+open  = { name = "open" }
+high  = { name = "high" }
+low   = { name = "low" }
+close = { name = "close" }
+[datetime]
+kind = "format"
+format = "%d-%m-%y"
+two_digit_year_pivot = 69   # CONFIRM: 69-99 = 1969-1999, 00-68 = 2000-2068
+[volume]
+rule = "use_column"
+column = "Volume"
+preserved_not_volume = ["Net Volume"]
+requirement_set = "price_only"

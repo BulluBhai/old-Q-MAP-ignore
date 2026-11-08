@@ -72,3 +72,37 @@ def test_real_automatic_retry_is_explained_in_plain_english(settings, db, src):
     shown = retry[0].text() + messages.readable(blocked.message)
     assert "retry_after_date_limit" not in retry[0].text() and "E_" not in shown
     assert messages.OUTCOMES["blocked"] and messages.OUTCOMES["accepted"]
+
+
+# ---- the results-table status of a file that is waiting for its dates (not "already rejected") -----------------
+@needs_retry_rule
+def test_a_file_waiting_for_its_dates_is_shown_as_waiting_with_the_date_and_a_true_block_is_not(settings, db, src):
+    from fixtures.profiles import do_ingest
+    from qmap.core.runs import finish_run, start_run
+    from qmap_gui.jobs import outcome_from_result
+
+    future = write_delimited(src / "future_only.csv", HEADER, daily_rows(8))  # last bar 14-Jan-26
+    rows = daily_rows(8)
+    rows[2][3] = 500  # an OHLC error too: time can never cure this one
+    broken = write_delimited(src / "future_and_broken.csv", HEADER, rows)
+
+    def ingest_on(path, today):
+        run = start_run(settings, db, "FOUND", area="Ingestion")
+        try:
+            return do_ingest(run, path, today=today)
+        finally:
+            finish_run(run)
+
+    for path in (future, broken):
+        assert ingest_on(path, date(2026, 1, 10)).outcome == "rejected"
+    waiting = outcome_from_result(ingest_on(future, date(2026, 1, 12)), future, db)
+    assert (waiting.outcome, waiting.label) == ("waiting", "Waiting - its dates are not allowed yet")
+    assert "13-Jan-26" in waiting.message and "2026-01-13" not in waiting.message  # dd-mmm-yy in the window (D3-10)
+    assert "already rejected" not in waiting.label.lower() and not waiting.ok
+    blocked = outcome_from_result(ingest_on(broken, date(2026, 1, 12)), broken, db)
+    assert (blocked.outcome, blocked.label) == ("blocked", "Not retried (already rejected)")
+
+
+def test_the_waiting_label_is_plain():
+    assert messages.OUTCOMES["waiting"] and "_" not in messages.OUTCOMES["waiting"]
+    assert "rejected" not in messages.OUTCOMES["waiting"].lower()

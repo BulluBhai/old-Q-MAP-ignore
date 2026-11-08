@@ -1,0 +1,26 @@
+PREVIEW (nothing is registered or written): text no headers ymd.txt
+Detected format: delimited_text
+Suggested delimiter: ','
+The first row looks like DATA, so the file may have no header. Confirm [file] header.
+Rows: 10   Columns: 7   Reader: csv python-stdlib
+Columns (position: name [source type]):
+  0: None [str]
+  1: None [str]
+  2: None [str]
+  3: None [str]
+  4: None [str]
+  5: None [str]
+  6: None [str]
+First 8 row(s):
+  1995-11-03 | 994.2 | 1000.91 | 992.69 | 1000 | 38948210 | 38948210
+  1995-11-06 | 1001.53 | 1001.53 | 988.92 | 988.92 | 38948210 | 38948210
+  1995-11-07 | 987.17 | 987.17 | 977.05 | 978.22 | 38948210 | 38948210
+  1995-11-08 | 976.28 | 976.28 | 962.98 | 964.01 | 38948210 | 38948210
+  1995-11-09 | 960.32 | 960.32 | 952.13 | 953.07 | 38948210 | 38948210
+  1995-11-10 | 951.93 | 951.93 | 946 | 948.82 | 38948210 | 38948210
+  1995-11-13 | 949.29 | 949.29 | 916.48 | 917.26 | 38948210 | 38948210
+  1995-11-14 | 916.66 | 916.66 | 897.52 | 902.56 | 38948210 | 38948210
+Date/time suggestions for column 0 (suggestions only, never applied automatically):
+  - ISO dates (declare kind = "iso")
+With profile example_text_headerless_seven_columns v1: WOULD BE ACCEPTED
+  WARNING constant_volume: Volume is 3.89482e+07 in every row, which looks like a placeholder.

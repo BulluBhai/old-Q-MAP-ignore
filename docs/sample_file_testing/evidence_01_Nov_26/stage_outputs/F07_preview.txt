@@ -1,0 +1,25 @@
+PREVIEW (nothing is registered or written): text headers ymd.txt
+Detected format: delimited_text
+Suggested delimiter: ','
+The first row looks like a header (text above numbers). Confirm with [file] header = true.
+Rows: 10   Columns: 6   Reader: csv python-stdlib
+Columns (position: name [source type]):
+  0: 'date' [str]
+  1: 'open' [str]
+  2: 'high' [str]
+  3: 'low' [str]
+  4: 'close' [str]
+  5: 'Volume' [str]
+Volume-like columns: ['Volume']. Decide in [volume] which one is volume; nothing is merged for you.
+First 8 row(s):
+  2026-10-16 | 23065.1 | 23149.85 | 22913.8 | 23146.15 | 391557143
+  2026-10-19 | 23150.85 | 23175.25 | 22845 | 22888.95 | 285859145
+  2026-10-21 | 23016 | 23120.9 | 22649.9 | 22811.35 | 324842141
+  2026-10-22 | 22687.75 | 22785 | 22554.85 | 22687.65 | 391598666
+  2026-10-23 | 22742.2 | 22787.25 | 22372 | 22600.0 | 364190826
+  2026-10-26 | 22524.4 | 22753.2 | 22387.35 | 22753.2 | 310215880
+  2026-10-27 | 22708.8 | 22829.75 | 22636.85 | 22749.75 | 400951492
+  2026-10-28 | 22678 | 22778.05 | 22497.7 | 22698.85 | 294951884
+Date/time suggestions for column 0 (suggestions only, never applied automatically):
+  - ISO dates (declare kind = "iso")
+With profile example_text_headered_iso_date v1: WOULD BE ACCEPTED

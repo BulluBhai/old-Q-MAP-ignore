@@ -1,0 +1,26 @@
+# Sample-test profile for "xls headers std.xlsx": XLSX, header row, real Excel date cells (daily).
+profile_id      = "xlsx_headers_native_date"
+profile_version = 1
+source_label    = "XLSX, header row, Excel date cells"
+description     = "time (Excel date), open, high, low, close, Volume, Net Volume"
+[file]
+expected_format = "xlsx"
+header = true
+[instrument]
+exchange_from = "ingest"
+symbol_from   = "ingest"
+timeframe     = "ingest"
+[columns]
+date  = { name = "time" }
+open  = { name = "open" }
+high  = { name = "high" }
+low   = { name = "low" }
+close = { name = "close" }
+[datetime]
+kind = "native"
+precision = "date"
+[volume]
+rule = "use_column"
+column = "Volume"
+preserved_not_volume = ["Net Volume"]
+requirement_set = "price_only"

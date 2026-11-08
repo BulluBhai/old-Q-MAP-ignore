@@ -135,6 +135,24 @@ def test_rejected_files_cannot_be_retried_unchanged_without_a_reason(dm, world):
     assert rows(dm)[0][1] == "Rejected - see problems"  # retried (and still rejected), not blocked
 
 
+def test_a_file_rejected_only_for_future_dates_is_shown_as_waiting_not_as_rejected(dm, world):
+    from datetime import datetime, timedelta, timezone
+
+    today = datetime.now(timezone.utc).date()  # the Foundation's "today" for the future-date limit is the UTC date
+    data = dd_mm_yy_rows(8)
+    for i, row in enumerate(data):  # 8 consecutive days ending 3 days after today: the last 2 are beyond today + 1
+        row[0] = (today + timedelta(days=i - 4)).strftime("%d-%m-%y")
+    f = write_delimited(world.src / "NSE_FUTURE_1D.csv", NET_HEADER, data)
+    dm.add_paths([f])
+    choose_profile(dm, "example_csv_dd_mm_yy")
+    run_and_wait(dm, dm.start_ingest)
+    assert rows(dm)[0][1] == "Rejected - see problems"
+    run_and_wait(dm, dm.start_ingest)
+    assert rows(dm)[0][1] == "Waiting - its dates are not allowed yet"
+    assert (today + timedelta(days=2)).strftime("%d-%b-%y") in rows(dm)[0][3]
+    assert "Open the problem report" not in dm.final_label.cget("text")
+
+
 def test_a_profile_that_cannot_read_the_instrument_asks_for_it(dm, world):
     f = write_delimited(world.src / "weird_name.txt", ["date", "open", "high", "low", "close", "Volume"],
                         [r[:6] for r in daily_rows(8)])
@@ -161,6 +179,57 @@ def test_fields_the_profile_reads_itself_are_not_editable(dm):
         assert str(w.cget("state")) == "disabled"
     choose_profile(dm, "example_csv_unix_seconds")
     assert str(dm.timeframe_combo.cget("state")) == "readonly" and str(dm.exchange_entry.cget("state")) == "disabled"
+
+
+def test_a_switched_off_box_does_not_keep_showing_an_earlier_value(dm):
+    choose_profile(dm, "example_csv_unix_seconds")
+    dm.timeframe_var.set("5m")
+    choose_profile(dm, "example_parquet_naive_timestamp")  # timeframe fixed in the profile (1m)
+    assert str(dm.timeframe_combo.cget("state")) == "disabled" and dm.timeframe_var.get() == ""
+    assert "Timeframe: fixed in the profile (1m)" in dm.identity_note.cget("text")
+
+
+def test_typing_the_exchange_and_symbol_enables_check_and_load_at_once(dm, world):
+    """Regression: typing used to leave Check/Load disabled until some other event refreshed the window."""
+    f = write_delimited(world.src / "weird_name.txt", ["date", "open", "high", "low", "close", "Volume"],
+                        [r[:6] for r in daily_rows(8)])
+    dm.add_paths([f])
+    choose_profile(dm, "example_text_headered_iso_date")
+    assert str(dm.run_button.cget("state")) == "disabled"
+    dm.exchange_entry.insert("end", "NSE")  # what a key press does: the box's text changes, nothing else is called
+    dm.symbol_entry.insert("end", "NIFTY")
+    dm.gui.pump(0.05)
+    assert str(dm.run_button.cget("state")) == "normal" and str(dm.check_button.cget("state")) == "normal"
+    assert dm.hint.cget("text").startswith("Ready")
+    dm.symbol_entry.delete(0, "end")
+    dm.symbol_entry.insert("end", "NIFTY 50")  # not a valid symbol: explained before anything runs
+    assert str(dm.run_button.cget("state")) == "disabled" and "'NIFTY 50' is not valid" in dm.hint.cget("text")
+
+
+def test_a_file_name_profile_explains_its_switched_off_boxes_and_can_be_copied_to_ask_for_them(dm, world):
+    f = write_delimited(world.src / "csv headers std.csv", NET_HEADER, dd_mm_yy_rows())
+    dm.add_paths([f])
+    choose_profile(dm, "example_csv_dd_mm_yy")
+    assert str(dm.exchange_entry.cget("state")) == "disabled"
+    assert "read from the file name" in dm.identity_note.cget("text")
+    assert dm.hint.cget("text").startswith("Note (1 file(s)):") and "does not fit" in dm.hint.cget("text")
+    assert str(dm.run_button.cget("state")) == "normal"  # advice only; the engine decides per file
+    run_and_wait(dm, dm.check_files)
+    assert rows(dm)[0][1] == "Would be rejected"
+    assert str(dm.ask_identity_button.cget("state")) == "normal"
+    dm.gui.dialogs.strings.append("std_csv_asks")
+    dm.ask_identity_button.invoke()
+    assert dm.current_info.profile.profile_id == "std_csv_asks"
+    assert dm.current_info.path.parent == dm.app.store.profiles_dir  # the user's own folder, not the repository
+    assert str(dm.exchange_entry.cget("state")) == "normal" and str(dm.ask_identity_button.cget("state")) == "disabled"
+    dm.exchange_entry.insert("end", "NSE")
+    dm.symbol_entry.insert("end", "NIFTY")
+    dm.gui.pump(0.05)
+    run_and_wait(dm, dm.start_ingest)
+    assert rows(dm)[0][1] == "Accepted"
+    db = open_database(dm.app.core_settings.db_path)
+    assert dict(db.one("SELECT exchange, symbol FROM instruments")) == {"exchange": "NSE", "symbol": "NIFTY"}
+    db.close()
 
 
 def test_a_problem_in_a_column_name_is_explained_without_codes(dm, world):

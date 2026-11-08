@@ -1,0 +1,4 @@
+[NOTE] Some trading days are incomplete
+    What it means: Some days have fewer bars than usual.
+    Details: Sessions with fewer bars than the usual 71: 2026-10-27: 67/71 bars
+    What to do: This is normal for the first and last day of an export.

@@ -1,0 +1,25 @@
+PREVIEW (nothing is registered or written): xls noheaders iso.xlsx
+Detected format: xlsx
+Rows: 210   Columns: 7   Reader: openpyxl 3.1.5
+Reader note: {'step': 'sheet', 'name': 'csv noheaders iso'}
+Columns (position: name [source type]):
+  0: None [str]
+  1: None [float]
+  2: None [float]
+  3: None [float]
+  4: None [float]
+  5: None [int]
+  6: None [int]
+First 8 row(s):
+  2026-10-23T09:20:00+05:30 | 22726.25 | 22747.65 | 22699.7 | 22712.1 | 7428682 | -1100468
+  2026-10-23T09:25:00+05:30 | 22711.2 | 22763.5 | 22710 | 22725.95 | 5588684 | 1602636
+  2026-10-23T09:30:00+05:30 | 22726.45 | 22733 | 22676 | 22681.6 | 5554880 | -3014892
+  2026-10-23T09:35:00+05:30 | 22681.95 | 22695.2 | 22663.75 | 22687.6 | 4479368 | -652522
+  2026-10-23T09:40:00+05:30 | 22686.9 | 22730.9 | 22686.9 | 22689 | 4267954 | -362250
+  2026-10-23T09:45:00+05:30 | 22689.7 | 22703.15 | 22657.45 | 22661.7 | 4363932 | -2916870
+  2026-10-23T09:50:00+05:30 | 22664.45 | 22669.4 | 22630.05 | 22638 | 5288440 | -839796
+  2026-10-23T09:55:00+05:30 | 22637.95 | 22649.95 | 22602.6 | 22609.15 | 4672720 | -2645172
+Date/time suggestions for column 0 (suggestions only, never applied automatically):
+  - ISO timestamps (declare kind = "iso"); UTC offsets seen: ['+05:30']
+With profile xlsx_noheaders_iso_offset v1: WOULD BE ACCEPTED
+  WARNING partial_session: Sessions with fewer bars than the usual 71: 2026-10-27: 67/71 bars

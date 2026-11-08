@@ -1,7 +1,7 @@
 # Q-MAP
 Quantitative Market Analytics Platform [Q-MAP]
 
-The governing document is [Q-MAP_Master_Blueprint_v1.35.md](Q-MAP_Master_Blueprint_v1.35.md).
+The governing document is **Q-MAP Master Blueprint v1.35** ([Q-MAP_Master_Blueprint_v1.35.md](Q-MAP_Master_Blueprint_v1.35.md), with an `.html` copy), approved and adopted by the Project Owner on 3 November 2026.
 Material decisions are recorded in [docs/decision_log.md](docs/decision_log.md).
 
 ## Status: Stage 2 (Foundation) and the first graphical version
@@ -33,7 +33,12 @@ Not implemented (later roadmap stages): research modules, backtesting, portfolio
    - **2. Output**: your two folders, and buttons to open the last run folder and the problem report.
    - **3. Options**: pick a source profile (its settings are shown in plain English; you can copy an example,
      edit and check it, or browse for a profile file). Type exchange, symbol or timeframe only if the profile
-     says it cannot read them from the file.
+     says it cannot read them from the file; a note under the boxes says where this profile takes each value from.
+     Some examples read the exchange and symbol from the file NAME (for example `NSE_NIFTY_1D.csv`). If your file
+     names do not look like that, click **Copy so it asks me for exchange and symbol...**: it makes your own copy of
+     the profile that asks you to type them (Q-MAP still never guesses them).
+   - Example profiles exist for CSV and text (with or without a header row), Excel `.xlsx` (with or without a header
+     row, ISO text timestamps or real Excel date cells) and Parquet. Check every setting against your file first.
    - **Check files** tests everything and saves nothing. **Load files into Q-MAP** loads them with the Foundation.
    - Progress, results (click a row for a plain-English explanation of any problem) and a live log are shown below.
 5. The Home screen lists every planned module. Only the ones that really work say **READY**; the rest say
@@ -230,6 +235,17 @@ restore, run `recover`, then ingest the original again.
   screen), **not yet on Windows**: Windows-only behaviour (opening folders, remembered-settings location, high-DPI
   text) is covered by simulation. The command line remains for `recover`, `verify` and `restore-raw`.
 - Selecting the "current" dataset across several raw files for one instrument is not defined yet.
+- A daily, weekly or monthly timeframe on data with several bars per day/week/month (for example 5-minute bars
+  declared `1D`) is reported as a warning (`one_bar_per_period`), not rejected; a 5-minute file declared `1m` is
+  likewise only a warning (`timeframe_spacing`). The timeframe you declare is always used as declared.
+- **Incomplete trading days are not reliably detected.** The note "Some days have fewer bars than usual" compares each day with
+  the most common day length in the same file; there is no trading calendar. In the owner's sample files 4 of 5
+  incomplete intraday days were not flagged. Every bar is still stored exactly as in the source, but do not treat
+  the absence of this warning as proof that a day is complete before session-based analysis (daily values built
+  from intraday bars, opening/closing studies). Details: `docs/sample_file_testing/`, section F.3.
+- Bar timestamps are stored exactly as given; whether a source stamps the start or the end of each bar is not
+  recorded yet and must be confirmed per source.
+- Results of testing the Project Owner's 11 sample files: `docs/sample_file_testing/`.
 - Re-receiving registered content re-reads the stored copy to verify it, so very large files take correspondingly longer.
 - A result is reused only when the raw content, processing version, ingest request **and validation settings** match.
   Changing `plausible_min_date`, `plausible_max_days_ahead`, `max_daily_move_pct`, `min_rows` or a requirement set's

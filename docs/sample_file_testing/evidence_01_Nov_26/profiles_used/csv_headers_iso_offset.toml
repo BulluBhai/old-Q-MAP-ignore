@@ -1,0 +1,26 @@
+# Sample-test profile for "csv headers iso.xlsx": CSV, header row, ISO 8601 text with +05:30 offset.
+profile_id      = "csv_headers_iso_offset"
+profile_version = 1
+source_label    = "CSV, header row, ISO timestamps with offset"
+description     = "time (ISO +HH:MM), open, high, low, close, Volume, Net Volume"
+[file]
+expected_format = "delimited_text"
+header = true
+[instrument]
+exchange_from = "ingest"
+symbol_from   = "ingest"
+timeframe     = "ingest"
+[columns]
+date  = { name = "time" }
+open  = { name = "open" }
+high  = { name = "high" }
+low   = { name = "low" }
+close = { name = "close" }
+[datetime]
+kind = "iso"
+exchange_timezone = "Asia/Kolkata"
+[volume]
+rule = "use_column"
+column = "Volume"
+preserved_not_volume = ["Net Volume"]
+requirement_set = "price_only"

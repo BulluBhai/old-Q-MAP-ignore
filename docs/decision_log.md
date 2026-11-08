@@ -34,7 +34,8 @@ Status of every entry: implemented on branch `claude/keen-carson-x872ge`; **awai
 
 Every change below has a regression test in `Tests/integration/test_review_regressions.py`, `Tests/integration/test_config_fingerprint.py` or
 `Tests/unit/test_placement_and_migration.py` that failed on the code as first submitted. Status: implemented on
-branch `claude/keen-carson-x872ge`; **awaiting Project Owner review**.
+branch `claude/keen-carson-x872ge`. D2-22 to D2-31: **awaiting Project Owner review**. D2-32: Project Owner decision
+(see the entry). D2-33 and D2-34: **approved by the Project Owner on 31-Oct-26** (comment on PR #1).
 
 | Ref | Decision | Previously | Why | Affects |
 |---|---|---|---|---|
@@ -59,7 +60,8 @@ Owner and implemented as D2-32.
 
 Regression tests: `Tests/integration/test_future_date_retry.py` (D2-33) and the migration tests in
 `Tests/unit/test_placement_and_migration.py` (D2-34). Status: implemented on branch `claude/keen-carson-x872ge`;
-**awaiting Project Owner review**. No change to methodology: the validation rules and their severities are unchanged;
+**approved by the Project Owner on 31-Oct-26** (comment on PR #1). No change to methodology: the validation rules and
+their severities are unchanged;
 only the decision of when an unchanged rejected file may be processed again.
 
 ## Open decisions carried forward (not needed for Stage 2)
@@ -85,3 +87,30 @@ Status of every entry: implemented on branch `claude/gui-data-management`; **awa
 | D3-09 | Plain tkinter in one scrollable frame (`_scroll_frame`) with the specified `_on_closing` order, split over several small files instead of one file | The requested GUI/processing separation outweighs the single-file preference | app, widgets |
 | D3-10 | Dates shown in the window use dd-mmm-yy; technical error codes are never shown to the user | Owner preference; understandable messages | data_management, messages |
 | D3-11 | Not in this version: data-coverage view and restoring a damaged raw file from the screen (the command line keeps `restore-raw`, `recover`, `verify`) | Keep the first workflow small | docs |
+
+## Audit fixes and sample-file testing (01-Nov-26)
+
+Status of every entry: implemented on branch `claude/qmap-audit-miqp-plan-547lid` (pull request against PR #2's branch);
+**awaiting Project Owner review**. Nothing here changes an identity, parsing or validation rule, and nothing is accepted
+that was rejected before. Evidence: `docs/sample_file_testing/`.
+
+| Ref | Decision | Why | Affects |
+|---|---|---|---|
+| D2-35 | `IngestResult.retry_on`: the first run date on which an unchanged file rejected only for future dates (D2-33) is processed again, as data; no database or file change | The window needs the state, not a message to parse | ingest |
+| D2-36 | A profile written for another file type fails check `format_matches_profile` (was `format_supported`, which is kept for genuinely unsupported files) | "File type not supported - save as CSV or Excel" was shown for readable files | readers |
+| D2-37 | An Excel workbook is opened by its content (file object), whatever its file-name ending | Detection already used the content, but openpyxl refused e.g. a `.csv` name in Check/Preview | readers/excel |
+| D2-38 | File-name profiles: the mismatch message names the pattern and no longer says "supply the value when ingesting" (a typed value is not used, D2-26). `filename_identity_problem()` reuses the ingestion rules to tell before loading whether a name fits | The advice could not be followed | process |
+| D2-39 | Header diagnostics, advice only: a headered profile on a file whose first row looks like data says so; a headerless profile on a file whose first row looks like column names adds warning `first_row_looks_like_header`. Row 1 is always treated exactly as the profile declares | Clear, actionable errors for an incompatible profile | mapping, process |
+| D2-40 | Warning `one_bar_per_period`: a 1D/1W/1M dataset with more than one bar per day/week/month. Report-only; the declared timeframe is never changed. **Project Owner decision (01-Nov-26): keep it non-blocking for now** (likewise `timeframe_spacing`) | Five-minute bars declared 1D were accepted with no message | validation |
+| D2-41 | Five example profiles (layout only; exchange, symbol and timeframe typed per load): XLSX with header + ISO offset, XLSX without header, XLSX with Excel date cells, CSV without header + ISO offset, CSV without header + Unix seconds | No example could read an XLSX file or these headerless CSV layouts | Configuration |
+| D3-12 | Windows CI requires every GUI test to run (`QMAP_REQUIRE_GUI_TESTS=1`); every run prints a GUI-test count | A Tk start-up failure could skip all window tests with a green result | Tests/gui, CI |
+| D3-13 | After each GUI test, garbage is collected on the main thread (test harness only) | Root cause of the intermittent test crash: closed Tk windows freed in another test's thread | Tests/gui |
+| D3-14 | Profile drop-down selection read the way Python 3.12+ does | Python 3.11 + Tk 9 failed when nothing was chosen | widgets |
+| D3-15 | A file held back only by the future-date limit is shown as "Waiting - its dates are not allowed yet" with the date; grey; not counted as a problem in the final line. **The grey row and summary text await owner approval** | It was labelled "already rejected" | jobs, messages |
+| D3-16 | Typing an exchange, symbol or timeframe re-checks at once; typed codes are validated with the Foundation's rules before anything runs; a switched-off box is cleared | Check/Load stayed disabled after typing; stale values were shown in switched-off boxes | data_management, services |
+| D3-17 | A note says where the profile takes exchange, symbol and timeframe from; a file name that does not fit is an advisory note (not a block); "Copy so it asks me for exchange and symbol..." copies a file-name profile into the user's own profiles folder with `exchange_from`/`symbol_from = "ingest"` (original unchanged; identity still typed, never guessed) | A practical, explicit way to load files whose names carry no identity | data_management, services |
+| D3-18 | The identity check's title is "Exchange, symbol or timeframe is missing or not valid" | It said "Exchange or symbol is missing" for a missing timeframe or an invalid code | messages |
+
+Project Owner instruction (01-Nov-26): `ONESOURCE.parquet` stays rejected until its conflicting prices and data-quality
+problems are investigated (no code change; this is existing behaviour). Known limitation, not yet decided: incomplete
+trading days are not reliably detected without a trading calendar (sample-file report, section F.3).

@@ -1,0 +1,26 @@
+# Sample-test profile for "csv noheaders unix.csv": CSV, NO header row, Unix SECONDS, columns by position.
+profile_id      = "csv_noheaders_unix_seconds"
+profile_version = 1
+source_label    = "CSV, no header row, Unix seconds"
+description     = "0 time (Unix seconds), 1 open, 2 high, 3 low, 4 close, 5 Volume, 6 Net Volume"
+[file]
+expected_format = "delimited_text"
+header = false
+[instrument]
+exchange_from = "ingest"
+symbol_from   = "ingest"
+timeframe     = "ingest"
+[columns]
+date  = { position = 0 }
+open  = { position = 1 }
+high  = { position = 2 }
+low   = { position = 3 }
+close = { position = 4 }
+[datetime]
+kind = "unix_s"
+exchange_timezone = "Asia/Kolkata"
+[volume]
+rule = "use_column"
+column = { position = 5 }
+preserved_not_volume = [{ position = 6 }]
+requirement_set = "price_only"

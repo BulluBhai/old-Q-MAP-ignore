@@ -168,7 +168,26 @@ def validate_group(frame: dict, ctx: GroupContext, collector: Collector) -> Vali
             detail = "; ".join(f"{d}: {k}/{mode} bars" for d, k in partial[:10]) + (" ..." if len(partial) > 10 else "")
             out.append(CheckResult("partial_session", WARNING, not partial, len(partial), "" if not partial else
                                    f"Sessions with fewer bars than the usual {mode}: {detail}"))
+    elif ctx.timeframe in PERIOD_OF and (ctx.is_instant or ctx.timeframe != "1D"):
+        # A daily/weekly/monthly dataset must have at most one bar per day/week/month. (Date-only daily data is already
+        # covered by no_duplicate_timestamps.) Report-only: the declared timeframe is never changed or inferred.
+        unit, key = PERIOD_OF[ctx.timeframe]
+        per = Counter(key(d) for d in frame["session_date"] if d is not None)
+        multi = sorted(k for k, cnt in per.items() if cnt > 1)
+        detail = ("" if not multi else f"{len(multi)} {unit}(s) have more than one bar (e.g. "
+                  + "; ".join(f"{k}: {per[k]} bars" for k in multi[:5])
+                  + f"), so the data look finer than the declared timeframe {ctx.timeframe}.")
+        out.append(CheckResult("one_bar_per_period", WARNING, not multi, len(multi), detail))
+        if multi:
+            collector.add("one_bar_per_period", WARNING, None, "date", None, detail)
     return ValidationOutput(out, large)
+
+
+PERIOD_OF = {  # declared non-intraday timeframe -> (unit name, period key of a session date)
+    "1D": ("day", lambda d: d.isoformat()),
+    "1W": ("week", lambda d: "%04d-W%02d" % d.isocalendar()[:2]),
+    "1M": ("month", lambda d: d.strftime("%Y-%m")),
+}
 
 
 def merge_results(per_group: list[tuple[str, list[CheckResult]]]) -> list[CheckResult]:

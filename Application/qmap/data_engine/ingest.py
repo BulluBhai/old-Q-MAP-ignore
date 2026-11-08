@@ -46,6 +46,7 @@ class IngestResult:
     checks: list = field(default_factory=list)
     issues_report: Path | None = None
     receipt_status: str | None = None
+    retry_on: date | None = None  # blocked only by the future-date limit: first run date on which it is retried (D2-33)
 
     @property
     def ok(self) -> bool:
@@ -257,7 +258,8 @@ def _process_registered(run: Run, receipt: Receipt, src: Path, profile: SourcePr
             conn.execute("UPDATE ingest_events SET detail = ? WHERE event_id = ?", (msg, receipt.event_id))
         log.warning(msg)
         return IngestResult(outcome="blocked", message=msg, event_id=receipt.event_id, raw_dataset_id=raw["dataset_id"],
-                            attempt_id=rejected_same[-1]["attempt_id"], receipt_status=receipt.status)
+                            attempt_id=rejected_same[-1]["attempt_id"], receipt_status=receipt.status,
+                            retry_on=earliest)
     last_rejected = db.one("SELECT attempt_id FROM ingest_attempts WHERE raw_dataset_id = ? AND outcome = 'rejected' "
                            "ORDER BY attempt_id DESC LIMIT 1", (raw["dataset_id"],))
 

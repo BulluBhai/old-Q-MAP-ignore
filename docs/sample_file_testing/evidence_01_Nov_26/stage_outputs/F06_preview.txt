@@ -1,0 +1,28 @@
+PREVIEW (nothing is registered or written): ONESOURCE.parquet
+Detected format: parquet
+Rows: 39903   Columns: 7   Reader: pyarrow 26.0.0
+Columns (position: name [source type]):
+  0: 'Date' [timestamp[ns]]
+  1: 'Open' [double]
+  2: 'High' [double]
+  3: 'Low' [double]
+  4: 'Close' [double]
+  5: 'Volume' [int64]
+  6: 'index' [double]
+Volume-like columns: ['Volume']. Decide in [volume] which one is volume; nothing is merged for you.
+First 8 row(s):
+  2025-06-30 09:15:00 | 2198.4 | 2198.4 | 2171.2 | 2174.0 | 1634 | None
+  2025-06-30 09:16:00 | 2177.7 | 2180.2 | 2171.0 | 2172.1 | 2444 | None
+  2025-06-30 09:17:00 | 2178.9 | 2179.1 | 2175.3 | 2176.0 | 516 | None
+  2025-06-30 09:18:00 | 2177.0 | 2185.7 | 2176.3 | 2185.7 | 94 | None
+  2025-06-30 09:19:00 | 2185.7 | 2186.0 | 2177.0 | 2180.7 | 1849 | None
+  2025-06-30 09:20:00 | 2180.0 | 2184.3 | 2178.1 | 2182.9 | 508 | None
+  2025-06-30 09:21:00 | 2182.9 | 2185.6 | 2182.0 | 2185.6 | 111 | None
+  2025-06-30 09:22:00 | 2185.3 | 2185.3 | 2180.1 | 2182.0 | 859 | None
+Date/time suggestions for column 0 (suggestions only, never applied automatically):
+  - ISO timestamps (declare kind = "iso"); NO UTC offset: a time zone must be declared
+With profile example_parquet_naive_timestamp v1: WOULD BE REJECTED
+  ERROR   low_le_open_close: 3 row(s): source rows 34187, 34188, 34191
+  ERROR   no_duplicate_timestamps: 1500 row(s) share a timestamp: source rows 28501, 28502, 28503, 28504, 28505, 28506, 28507, 28508, 28509, 28510 (+1490 more)
+  WARNING source_order: 2 out-of-order step(s) in the source
+  WARNING partial_session: Sessions with fewer bars than the usual 375: 2025-10-21: 61/375 bars; 2025-11-08: 92/375 bars

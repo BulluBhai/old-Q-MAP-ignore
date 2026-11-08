@@ -254,6 +254,25 @@ def test_outcome_labels_are_plain():
         assert messages.OUTCOMES[key] and "_" not in messages.OUTCOMES[key]
 
 
+def test_fewer_bars_wording_does_not_claim_whether_a_session_is_complete():
+    """Regression: the note said "This is normal for the first and last day of an export", but the owner's sample
+    files had short days in the middle of an export, and a bar count compared within one file cannot establish
+    whether a session is complete (no trading calendar). The wording must stay neutral and point to the source."""
+    from qmap.data_engine.results import WARNING, CheckResult
+
+    title, meaning, todo = messages.explain("partial_session")
+    shown = messages.findings_from_checks([CheckResult(
+        "partial_session", WARNING, False, 1, "Sessions with fewer bars than the usual 71: 2026-10-27: 67/71 bars")])[0]
+    text = " ".join((title, meaning, todo, shown.text())).lower()
+    for misleading in ("normal for the first and last day", "this is normal", "trading days are incomplete",
+                       "nothing to do"):
+        assert misleading not in text
+    assert title == "Some days have fewer bars than usual"
+    assert "does not show whether a trading session is complete" in meaning
+    assert "check the source data" in todo.lower() and "session coverage" in todo
+    assert shown.severity == "warning" and "67/71 bars" in shown.detail  # severity and Foundation detail unchanged
+
+
 # ---- opening folders ------------------------------------------------------------------------------------------
 def test_opening_a_missing_path_is_reported_not_raised(tmp_path):
     ok, msg = services.open_in_file_manager(tmp_path / "nope")

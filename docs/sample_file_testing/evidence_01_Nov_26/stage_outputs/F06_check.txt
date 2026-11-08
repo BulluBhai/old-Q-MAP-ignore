@@ -1,0 +1,24 @@
+[PROBLEM] Low price is higher than Open or Close
+    What it means: A bar cannot have its low above its open or close.
+    Details: 3 row(s): source rows 34187, 34188, 34191
+    What to do: These rows are wrong in the source; correct them there.
+
+[PROBLEM] Two or more rows have the same date/time
+    What it means: Each date/time may appear only once. Q-MAP will not choose between duplicates.
+    Details: 1500 row(s) share a timestamp: source rows 28501, 28502, 28503, 28504, 28505, 28506, 28507, 28508, 28509, 28510 (+1490 more)
+    What to do: Remove or correct the duplicates in the source.
+
+[NOTE] Rows were not in date order
+    What it means: Q-MAP stored a sorted copy and kept each row's original position.
+    Details: 2 out-of-order step(s) in the source
+    What to do: Nothing is lost. Check the source if the order matters to you.
+
+[NOTE] Some trading days are incomplete
+    What it means: Some days have fewer bars than usual.
+    Details: Sessions with fewer bars than the usual 375: 2025-10-21: 61/375 bars; 2025-11-08: 92/375 bars
+    What to do: This is normal for the first and last day of an export.
+
+[INFO] Some bars have zero volume
+    What it means: This is allowed.
+    Details: 922 bar(s) with zero volume
+    What to do: Nothing to do.

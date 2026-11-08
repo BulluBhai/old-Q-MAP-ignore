@@ -1,0 +1,29 @@
+# EXAMPLE source profile (layout only, no data). Text file, header row, ISO dates, one Volume column.
+profile_id      = "example_text_headered_iso_date"
+profile_version = 1
+source_label    = "Text, headered, ISO dates"
+description     = "Headered text/CSV: date (YYYY-MM-DD), open, high, low, close, Volume"
+
+[file]
+header = true
+delimiter = ","
+
+[instrument]
+exchange_from = "ingest"        # the file name carries no exchange/symbol: supply them when ingesting
+symbol_from   = "ingest"
+timeframe = "1D"
+
+[columns]
+date  = { name = "date" }
+open  = { name = "open" }
+high  = { name = "high" }
+low   = { name = "low" }
+close = { name = "close" }
+
+[datetime]
+kind = "iso"
+
+[volume]
+rule = "use_column"
+column = "Volume"
+requirement_set = "price_only"

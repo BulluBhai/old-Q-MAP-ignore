@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import os
 import sys
+from collections import Counter
 from datetime import datetime
 from pathlib import Path
 
@@ -16,6 +18,16 @@ from fixtures.builders import HEADER, daily_rows, write_delimited  # noqa: E402
 NET_HEADER = HEADER + ["Net Volume"]
 
 TK_STARTUP_ATTEMPTS = 3
+
+# Set to 1 where a desktop is guaranteed (the Windows CI job). Then the GUI tests are REQUIRED: a Tk/display start-up
+# failure fails the window tests instead of skipping them, and the run fails if any GUI test was skipped or none ran.
+# Unset (a laptop without tkinter, a Linux server without a screen) the window tests may still skip, as before.
+REQUIRE_GUI_TESTS_ENV = "QMAP_REQUIRE_GUI_TESTS"
+GUI_NODE_PREFIX = "Tests/gui/"
+
+
+def gui_tests_required() -> bool:
+    return os.environ.get(REQUIRE_GUI_TESTS_ENV, "").strip() == "1"
 
 
 def failed_while_creating_the_tk_interpreter(exc: BaseException) -> bool:
@@ -91,6 +103,8 @@ def display():
 
         create_with_tk_startup_retry(tkinter.Tk).destroy()
     except Exception as exc:  # no display / no tkinter
+        if gui_tests_required():
+            pytest.fail(f"{REQUIRE_GUI_TESTS_ENV}=1 but tkinter could not open a window: {exc}", pytrace=False)
         pytest.skip(f"no usable display for tkinter ({exc}). Run under xvfb-run, or on a desktop.")
 
 
@@ -164,3 +178,83 @@ def gui(world, display):
     g = Gui(world)
     yield g
     g.close()
+
+
+# ---- closed windows are freed on the main thread, before any later test can start threads ---------------------------
+def collect_tk_garbage_on_the_main_thread() -> None:
+    """Free, now and on this (the main) thread, every Tk window that is no longer used but still sits in a reference
+    cycle. Otherwise the cyclic garbage collector frees it later in whichever thread happens to allocate memory - for
+    example the 20 threads of `Tests/unit/test_runs.py` - and Tcl aborts the whole test process ("Tcl_AsyncDelete:
+    async handler deleted by the wrong thread"), seen as "Illegal instruction" or "Segmentation fault". The same hazard
+    inside the application is handled by D3-08 (`qmap_gui.app._hold_garbage_collector`)."""
+    import gc
+
+    gc.collect()
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_protocol(item, nextitem):
+    yield
+    # Only here are the test's fixture values (windows, frames) released: a fixture's own teardown is too early.
+    if item.nodeid.replace("\\", "/").startswith(GUI_NODE_PREFIX):
+        collect_tk_garbage_on_the_main_thread()
+
+
+# ---- GUI test accounting: visible in every run, enforced where GUI tests are required -------------------------------
+_gui_outcomes: Counter = Counter()
+
+
+def _is_gui(report) -> bool:
+    return report.nodeid.replace("\\", "/").startswith(GUI_NODE_PREFIX)
+
+
+def pytest_runtest_logreport(report):
+    """One count per GUI test: its call outcome, or the setup outcome if it never got that far, plus teardown errors."""
+    if not _is_gui(report):
+        return
+    if report.when == "call":
+        _gui_outcomes[report.outcome] += 1
+    elif report.when == "setup" and not report.passed:
+        _gui_outcomes["skipped" if report.skipped else "error"] += 1
+    elif report.when == "teardown" and report.failed:
+        _gui_outcomes["error"] += 1
+
+
+def pytest_collectreport(report):
+    """A whole GUI test module skipped at import (e.g. importorskip("tkinter")) or failing to import."""
+    if _is_gui(report) and not report.passed:
+        _gui_outcomes["skipped" if report.skipped else "error"] += 1
+
+
+def gui_summary_problem(outcomes: Counter, required: bool) -> str:
+    """Why a run whose GUI tests are required must fail, or "" if it need not."""
+    if not required:
+        return ""
+    if outcomes["skipped"]:
+        return f"{outcomes['skipped']} GUI test(s) were skipped although {REQUIRE_GUI_TESTS_ENV}=1"
+    if not outcomes["passed"] + outcomes["failed"]:
+        return f"no GUI test ran although {REQUIRE_GUI_TESTS_ENV}=1"
+    return ""
+
+
+def pytest_sessionfinish(session, exitstatus):
+    if gui_summary_problem(_gui_outcomes, gui_tests_required()) and session.exitstatus == 0:
+        session.exitstatus = pytest.ExitCode.TESTS_FAILED
+
+
+def pytest_terminal_summary(terminalreporter, exitstatus, config):
+    o, required = _gui_outcomes, gui_tests_required()
+    line = (f"GUI tests: {o['passed']} passed, {o['skipped']} skipped, {o['failed']} failed, {o['error']} errors "
+            f"(required here: {'yes' if required else 'no'})")
+    problem = gui_summary_problem(o, required)
+    bad = bool(problem or o["failed"] or o["error"])
+    terminalreporter.write_sep("-", line, red=bad, green=not bad)
+    if problem:
+        terminalreporter.write_line(f"FAILED: {problem}.", red=True)
+    summary_file = os.environ.get("GITHUB_STEP_SUMMARY")
+    if summary_file:
+        try:
+            with open(summary_file, "a", encoding="utf-8") as fh:
+                fh.write(f"**{line}**" + (f"  \n**FAILED: {problem}.**" if problem else "") + "\n")
+        except OSError:
+            pass

@@ -1,0 +1,26 @@
+# Sample-test profile for "csv headers unix.csv": CSV, header row, Unix SECONDS.
+profile_id      = "csv_headers_unix_seconds"
+profile_version = 1
+source_label    = "CSV, header row, Unix seconds"
+description     = "0 time (Unix seconds), 1 open, 2 high, 3 low, 4 close, 5 Volume, 6 Net Volume"
+[file]
+expected_format = "delimited_text"
+header = true
+[instrument]
+exchange_from = "ingest"
+symbol_from   = "ingest"
+timeframe     = "ingest"
+[columns]
+date  = { name = "time" }
+open  = { name = "open" }
+high  = { name = "high" }
+low   = { name = "low" }
+close = { name = "close" }
+[datetime]
+kind = "unix_s"
+exchange_timezone = "Asia/Kolkata"
+[volume]
+rule = "use_column"
+column = "Volume"
+preserved_not_volume = ["Net Volume"]
+requirement_set = "price_only"

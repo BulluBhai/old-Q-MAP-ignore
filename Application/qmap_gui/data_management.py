@@ -18,7 +18,7 @@ from . import services
 from .jobs import FileOutcome, IngestJob, RunSummary
 from .locations import LocationsPanel
 from .messages import OUTCOMES
-from .widgets import ERROR_COLOR, MUTED_COLOR, OK_COLOR, WARN_COLOR, LogText, ReadOnlyText, section
+from .widgets import ERROR_COLOR, MUTED_COLOR, OK_COLOR, WARN_COLOR, LogText, ReadOnlyText, combobox_index, section
 
 TIMEFRAMES = ("", "1m", "5m", "15m", "30m", "1h", "4h", "1D", "1W", "1M")
 
@@ -131,7 +131,10 @@ class DataManagementFrame(tk.Frame):
         self.browse_profile_button = tk.Button(row, text="Browse for a profile file...", command=self.browse_profile)
         self.edit_button = tk.Button(row, text="Edit / check profile...", command=self.edit_profile)
         self.copy_button = tk.Button(row, text="New profile from this one...", command=self.copy_profile)
-        for b in (self.refresh_button, self.browse_profile_button, self.edit_button, self.copy_button):
+        self.ask_identity_button = tk.Button(row, text="Copy so it asks me for exchange and symbol...",
+                                             command=self.copy_profile_asking_for_identity, state="disabled")
+        for b in (self.refresh_button, self.browse_profile_button, self.edit_button, self.copy_button,
+                  self.ask_identity_button):
             b.pack(side="left", padx=2, pady=3)
         self.profile_details = ReadOnlyText(box, height=11, mono=False)
         self.profile_details.pack(fill="x", pady=3)
@@ -139,6 +142,8 @@ class DataManagementFrame(tk.Frame):
         grid = tk.Frame(box)
         grid.pack(fill="x", pady=3)
         self.exchange_var, self.symbol_var, self.timeframe_var = tk.StringVar(), tk.StringVar(), tk.StringVar()
+        for var in (self.exchange_var, self.symbol_var, self.timeframe_var):  # re-check as the user types
+            var.trace_add("write", lambda *_args: self._on_request_typed())
         self.label_var = tk.StringVar(value=self.app.gui_settings.source_label)
         self.note_var, self.force_var = tk.StringVar(), tk.StringVar()
         tk.Label(grid, text="Exchange:", anchor="w", width=18).grid(row=0, column=0, sticky="w")
@@ -160,6 +165,8 @@ class DataManagementFrame(tk.Frame):
                  text="Exchange, Symbol and Timeframe are needed only when the profile cannot read them from the file. "
                       "'Retry reason' is only for retrying, unchanged, a file that was rejected before.").grid(
             row=3, column=0, columnspan=7, sticky="w", pady=(2, 0))
+        self.identity_note = tk.Label(grid, text="", anchor="w", justify="left", fg=MUTED_COLOR, wraplength=900)
+        self.identity_note.grid(row=4, column=0, columnspan=7, sticky="w")
         self.hint = tk.Label(box, text="", anchor="w", justify="left", wraplength=940)
         self.hint.pack(fill="x", pady=(4, 2))
         row = tk.Frame(box)
@@ -277,7 +284,7 @@ class DataManagementFrame(tk.Frame):
         self.on_profile_selected()
 
     def on_profile_selected(self) -> None:
-        index = self.profile_combo.current()
+        index = combobox_index(self.profile_combo)
         self.current_info = self.profile_infos[index] if 0 <= index < len(self.profile_infos) else None
         info = self.current_info
         if info is None:
@@ -292,6 +299,14 @@ class DataManagementFrame(tk.Frame):
         self.exchange_entry.configure(state="normal" if needs.exchange else "disabled")
         self.symbol_entry.configure(state="normal" if needs.symbol else "disabled")
         self.timeframe_combo.configure(state="readonly" if needs.timeframe else "disabled")
+        for var, used in ((self.exchange_var, needs.exchange), (self.symbol_var, needs.symbol),
+                          (self.timeframe_var, needs.timeframe)):
+            if not used and var.get():
+                var.set("")  # a switched-off box must not show a value the profile will not use
+        usable = bool(info and info.profile)
+        self.identity_note.configure(text=services.identity_note(info.profile) if usable else "")
+        self.ask_identity_button.configure(
+            state="normal" if usable and services.reads_identity_from_filename(info.profile) else "disabled")
         self.update_state()
 
     def select_profile_index(self, index: int) -> None:
@@ -342,6 +357,30 @@ class DataManagementFrame(tk.Frame):
             return
         self.refresh_profiles(select=path)
 
+    def _on_request_typed(self) -> None:
+        """Typing an exchange, symbol or timeframe must re-enable Check/Load at once (it used to wait for another event)."""
+        if self._closing or not hasattr(self, "run_button"):
+            return
+        self.update_state()
+
+    def copy_profile_asking_for_identity(self) -> None:
+        info = self.current_info
+        if info is None or info.profile is None or not services.reads_identity_from_filename(info.profile):
+            return
+        name = self.app.dialogs.ask_string(
+            "New profile that asks for exchange and symbol",
+            f"This makes a copy of '{info.profile.profile_id}' that asks you to type the exchange and symbol, instead of "
+            "reading them from the file name. Everything else stays the same; the original is not changed.\n\n"
+            "Name for the new profile (letters, digits, _ . - only):")
+        if not name:
+            return
+        try:
+            path = services.copy_profile_asking_for_identity(info.path, name.strip(), self.app.store.profiles_dir)
+        except (services.GuiError, services.ProfileError) as exc:
+            self.app.dialogs.error("Q-MAP", str(exc))
+            return
+        self.refresh_profiles(select=path)
+
     # ------------------------------------------------------------------------------------------------
     # state, hints and validation of what the user asked for
     # ------------------------------------------------------------------------------------------------
@@ -373,6 +412,9 @@ class DataManagementFrame(tk.Frame):
             self.hint.configure(text="Working...", fg=MUTED_COLOR)
         elif problems:
             self.hint.configure(text="Next step: " + problems[0], fg=WARN_COLOR)
+        elif self.current_info and self.current_info.profile and services.file_name_notes(self.current_info.profile, self.files):
+            notes = services.file_name_notes(self.current_info.profile, self.files)
+            self.hint.configure(text=f"Note ({len(notes)} file(s)): " + notes[0], fg=WARN_COLOR)
         else:
             self.hint.configure(text="Ready. 'Check files' tests everything without saving; 'Load files into Q-MAP' loads them.",
                                 fg=OK_COLOR)
@@ -520,7 +562,7 @@ class DataManagementFrame(tk.Frame):
         self._done += 1
         if isinstance(obj, FileOutcome):
             label, rows, message, path = obj.label, obj.rows_read, obj.message, obj.path
-            tag = "ok" if obj.outcome == "accepted" else "muted" if obj.outcome == "reused" else "bad"
+            tag = "ok" if obj.outcome == "accepted" else "muted" if obj.outcome in ("reused", "waiting") else "bad"
             key = obj.outcome
         else:  # CheckReport
             label, rows, message, path = OUTCOMES.get(obj.outcome, obj.outcome), obj.rows_read, "", obj.file
@@ -550,7 +592,7 @@ class DataManagementFrame(tk.Frame):
         else:
             cancelled = summary is not None and summary.cancelled
             self.stage_var.set("Stopped (as you asked)" if cancelled else "Finished")
-            bad = sum(v for k, v in self._counts.items() if k not in ("accepted", "reused", "would_be_accepted"))
+            bad = sum(v for k, v in self._counts.items() if k not in ("accepted", "reused", "waiting", "would_be_accepted"))
             what = "Check" if self.mode == "check" else "Load"
             self.final_label.configure(
                 text=f"{what} finished: {self.counts_var.get()}." + (" Nothing was saved." if self.mode == "check" else

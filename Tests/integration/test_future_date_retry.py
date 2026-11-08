@@ -80,6 +80,7 @@ def test_a_retry_before_the_dates_are_valid_stays_blocked_and_says_when_it_will_
     assert too_soon.outcome == "blocked"
     assert "2026-01-13" in too_soon.message or "13-Jan-26" in too_soon.message  # earliest run date that works
     assert len(attempts(db)) == 1
+    assert too_soon.retry_on == date(2026, 1, 13)  # the same date, as data, so a screen need not read the message
 
 
 # ---- Scenario B: unchanged retry on the same date ----------------------------------------------------------
@@ -89,6 +90,16 @@ def test_b_unchanged_retry_on_the_same_date_is_blocked_deterministically(setting
     third = ingest_on(settings, db, good, EARLY)
     assert first.outcome == "rejected" and (second.outcome, third.outcome) == ("blocked", "blocked")
     assert second.message == third.message and len(attempts(db)) == 1 and not cleaned(db)
+    assert second.retry_on == date(2026, 1, 13) == third.retry_on  # still curable later: it is waiting
+
+
+def test_b_a_block_that_time_cannot_cure_has_no_retry_date(settings, db, src):
+    rows = [list(r) for r in ROWS]
+    rows[2][3] = 500  # OHLC error as well as future dates: never retried automatically
+    bad = write_delimited(src / "bad_no_retry.csv", HEADER, rows)
+    ingest_on(settings, db, bad, EARLY)
+    blocked = ingest_on(settings, db, bad, LAST)
+    assert blocked.outcome == "blocked" and blocked.retry_on is None
 
 
 def test_b_a_rejection_that_time_cannot_cure_stays_blocked_on_later_dates(settings, db, src):

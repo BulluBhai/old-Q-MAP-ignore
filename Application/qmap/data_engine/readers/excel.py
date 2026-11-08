@@ -74,17 +74,20 @@ def read_excel(path: Path, spec: FileSpec, kind: str) -> SourceTable:
 def _read_xlsx(path: Path, spec: FileSpec) -> SourceTable:
     import openpyxl
 
-    try:
-        wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
-    except Exception as exc:  # openpyxl raises a variety of errors for damaged files
-        raise IngestError(f"The Excel file could not be opened: {exc}.", code="E_MALFORMED", check="file_readable") from exc
-    try:
-        names = list(wb.sheetnames)
-        nonempty = [n for n in names if any(any(c is not None for c in row) for row in wb[n].iter_rows(values_only=True))]
-        sheet = _pick_sheet(names, nonempty, spec)
-        rows = list(wb[sheet].iter_rows(values_only=True))
-    finally:
-        wb.close()
+    # Opened through a file object, so the CONTENT decides (format detection already did): openpyxl refuses a file
+    # NAME that does not end in .xlsx/.xlsm, e.g. an Excel workbook saved as "prices.csv".
+    with path.open("rb") as fh:
+        try:
+            wb = openpyxl.load_workbook(fh, read_only=True, data_only=True)
+        except Exception as exc:  # openpyxl raises a variety of errors for damaged files
+            raise IngestError(f"The Excel file could not be opened: {exc}.", code="E_MALFORMED", check="file_readable") from exc
+        try:
+            names = list(wb.sheetnames)
+            nonempty = [n for n in names if any(any(c is not None for c in row) for row in wb[n].iter_rows(values_only=True))]
+            sheet = _pick_sheet(names, nonempty, spec)
+            rows = list(wb[sheet].iter_rows(values_only=True))
+        finally:
+            wb.close()
     table = _assemble(rows, spec, "openpyxl", openpyxl.__version__, XLSX)
     table.transformations.append({"step": "sheet", "name": sheet})
     return table

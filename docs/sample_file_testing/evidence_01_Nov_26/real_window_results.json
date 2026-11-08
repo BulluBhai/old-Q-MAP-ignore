@@ -1,0 +1,359 @@
+[
+  {
+    "no": 1,
+    "file": "csv headers iso.xlsx",
+    "profile": "xlsx_headers_iso_offset",
+    "profile_selected": "xlsx_headers_iso_offset",
+    "boxes_enabled": {
+      "exchange": "normal",
+      "symbol": "normal",
+      "timeframe": "readonly"
+    },
+    "hint_before": "Ready. 'Check files' tests everything without saving; 'Load files into Q-MAP' loads them.",
+    "load_button": "normal",
+    "preview_first_lines": [
+      "PREVIEW (nothing is registered or written): csv headers iso.xlsx",
+      "Detected format: xlsx",
+      "Rows: 210   Columns: 7   Reader: openpyxl 3.1.5"
+    ],
+    "check_row": [
+      "csv headers iso.xlsx",
+      "Would be accepted",
+      "210",
+      "No problems, 1 note(s)"
+    ],
+    "check_explanation": "csv headers iso.xlsx\nResult: Would be accepted (nothing was saved)\nRows read: 210\n\n[NOTE] Some trading days are incomplete\n    What it means: Some days have fewer bars than usual.\n    Details: Sessions with fewer bars than the usual 71: 2026-10-27: 67/71 bars\n    What to do: This is normal for the first and last day of an export.",
+    "load_row": [
+      "csv headers iso.xlsx",
+      "Accepted",
+      "210",
+      "1 dataset(s) created"
+    ],
+    "final_line": "Load finished: 1 accepted. Everything was loaded.",
+    "screenshot": "F01_window.png"
+  },
+  {
+    "no": 2,
+    "file": "csv headers std.csv",
+    "profile": "csv_headers_dd_mm_yy",
+    "profile_selected": "csv_headers_dd_mm_yy",
+    "boxes_enabled": {
+      "exchange": "normal",
+      "symbol": "normal",
+      "timeframe": "readonly"
+    },
+    "hint_before": "Ready. 'Check files' tests everything without saving; 'Load files into Q-MAP' loads them.",
+    "load_button": "normal",
+    "preview_first_lines": [
+      "PREVIEW (nothing is registered or written): csv headers std.csv",
+      "Detected format: delimited_text",
+      "Suggested delimiter: ','"
+    ],
+    "check_row": [
+      "csv headers std.csv",
+      "Would be accepted",
+      "24",
+      "No problems"
+    ],
+    "check_explanation": "csv headers std.csv\nResult: Would be accepted (nothing was saved)\nRows read: 24\n\nNo problems or notes.",
+    "load_row": [
+      "csv headers std.csv",
+      "Accepted",
+      "24",
+      "1 dataset(s) created"
+    ],
+    "final_line": "Load finished: 1 accepted. Everything was loaded.",
+    "screenshot": "F02_window.png"
+  },
+  {
+    "no": 3,
+    "file": "csv headers unix.csv",
+    "profile": "csv_headers_unix_seconds",
+    "profile_selected": "csv_headers_unix_seconds",
+    "boxes_enabled": {
+      "exchange": "normal",
+      "symbol": "normal",
+      "timeframe": "readonly"
+    },
+    "hint_before": "Ready. 'Check files' tests everything without saving; 'Load files into Q-MAP' loads them.",
+    "load_button": "normal",
+    "preview_first_lines": [
+      "PREVIEW (nothing is registered or written): csv headers unix.csv",
+      "Detected format: delimited_text",
+      "Suggested delimiter: ','"
+    ],
+    "check_row": [
+      "csv headers unix.csv",
+      "Would be accepted",
+      "431",
+      "No problems"
+    ],
+    "check_explanation": "csv headers unix.csv\nResult: Would be accepted (nothing was saved)\nRows read: 431\n\nNo problems or notes.",
+    "load_row": [
+      "csv headers unix.csv",
+      "Accepted",
+      "431",
+      "1 dataset(s) created"
+    ],
+    "final_line": "Load finished: 1 accepted. Everything was loaded.",
+    "screenshot": "F03_window.png"
+  },
+  {
+    "no": 4,
+    "file": "csv noheaders iso.csv",
+    "profile": "csv_noheaders_iso_offset",
+    "profile_selected": "csv_noheaders_iso_offset",
+    "boxes_enabled": {
+      "exchange": "normal",
+      "symbol": "normal",
+      "timeframe": "readonly"
+    },
+    "hint_before": "Ready. 'Check files' tests everything without saving; 'Load files into Q-MAP' loads them.",
+    "load_button": "normal",
+    "preview_first_lines": [
+      "PREVIEW (nothing is registered or written): csv noheaders iso.csv",
+      "Detected format: delimited_text",
+      "Suggested delimiter: ','"
+    ],
+    "check_row": [
+      "csv noheaders iso.csv",
+      "Would be accepted",
+      "210",
+      "No problems, 1 note(s)"
+    ],
+    "check_explanation": "csv noheaders iso.csv\nResult: Would be accepted (nothing was saved)\nRows read: 210\n\n[NOTE] Some trading days are incomplete\n    What it means: Some days have fewer bars than usual.\n    Details: Sessions with fewer bars than the usual 71: 2026-10-27: 67/71 bars\n    What to do: This is normal for the first and last day of an export.",
+    "load_row": [
+      "csv noheaders iso.csv",
+      "Accepted",
+      "210",
+      "1 dataset(s) created"
+    ],
+    "final_line": "Load finished: 1 accepted. Everything was loaded.",
+    "screenshot": "F04_window.png"
+  },
+  {
+    "no": 5,
+    "file": "csv noheaders unix.csv",
+    "profile": "csv_noheaders_unix_seconds",
+    "profile_selected": "csv_noheaders_unix_seconds",
+    "boxes_enabled": {
+      "exchange": "normal",
+      "symbol": "normal",
+      "timeframe": "readonly"
+    },
+    "hint_before": "Ready. 'Check files' tests everything without saving; 'Load files into Q-MAP' loads them.",
+    "load_button": "normal",
+    "preview_first_lines": [
+      "PREVIEW (nothing is registered or written): csv noheaders unix.csv",
+      "Detected format: delimited_text",
+      "Suggested delimiter: ','"
+    ],
+    "check_row": [
+      "csv noheaders unix.csv",
+      "Would be accepted",
+      "144",
+      "No problems"
+    ],
+    "check_explanation": "csv noheaders unix.csv\nResult: Would be accepted (nothing was saved)\nRows read: 144\n\nNo problems or notes.",
+    "load_row": [
+      "csv noheaders unix.csv",
+      "Accepted",
+      "144",
+      "1 dataset(s) created"
+    ],
+    "final_line": "Load finished: 1 accepted. Everything was loaded.",
+    "screenshot": "F05_window.png"
+  },
+  {
+    "no": 6,
+    "file": "ONESOURCE.parquet",
+    "profile": "example_parquet_naive_timestamp",
+    "profile_selected": "example_parquet_naive_timestamp",
+    "boxes_enabled": {
+      "exchange": "normal",
+      "symbol": "normal",
+      "timeframe": "disabled"
+    },
+    "hint_before": "Ready. 'Check files' tests everything without saving; 'Load files into Q-MAP' loads them.",
+    "load_button": "normal",
+    "preview_first_lines": [
+      "PREVIEW (nothing is registered or written): ONESOURCE.parquet",
+      "Detected format: parquet",
+      "Rows: 39903   Columns: 7   Reader: pyarrow 26.0.0"
+    ],
+    "check_row": [
+      "ONESOURCE.parquet",
+      "Would be rejected",
+      "39903",
+      "2 problem(s), 2 note(s)"
+    ],
+    "check_explanation": "ONESOURCE.parquet\nResult: Would be rejected (nothing was saved)\nRows read: 39,903\n\n[PROBLEM] Low price is higher than Open or Close\n    What it means: A bar cannot have its low above its open or close.\n    Details: 3 row(s): source rows 34187, 34188, 34191\n    What to do: These rows are wrong in the source; correct them there.\n\n[PROBLEM] Two or more rows have the same date/time\n    What it means: Each date/time may appear only once. Q-MAP will not choose between duplicates.\n    Details: 1500 row(s) share a timestamp: source rows 28501, 28502, 28503, 28504, 28505, 28506, 28507, 28508, 28509, 28510 (+1490 more)\n    What to do: Remove or correct the duplicates in the source.\n\n[NOTE] Rows were not in date order\n    What it means: Q-MAP stored a sorted copy and kept each row's original position.\n    Details: 2 out-of-order step(s) in the source\n    What to do: Nothing is lost. Check the source if the order matters to you.\n\n[NOTE] Some trading days are incomplete\n    What it means: Some days have fewer bars than usual.\n    Details: Sessions with fewer bars than the usual 375: 2025-10-21: 61/375 bars; 2025-11-08: 92/375 bars\n    What to do: This is normal for the first and last day of an export.\n\n[INFO] Some bars have zero volume\n    What it means: This is allowed.\n    Details: 922 bar(s) with zero volume\n    What to do: Nothing to do.",
+    "load_row": "not attempted (check did not pass)",
+    "screenshot": "F06_window.png"
+  },
+  {
+    "no": 7,
+    "file": "text headers ymd.txt",
+    "profile": "example_text_headered_iso_date",
+    "profile_selected": "example_text_headered_iso_date",
+    "boxes_enabled": {
+      "exchange": "normal",
+      "symbol": "normal",
+      "timeframe": "disabled"
+    },
+    "hint_before": "Ready. 'Check files' tests everything without saving; 'Load files into Q-MAP' loads them.",
+    "load_button": "normal",
+    "preview_first_lines": [
+      "PREVIEW (nothing is registered or written): text headers ymd.txt",
+      "Detected format: delimited_text",
+      "Suggested delimiter: ','"
+    ],
+    "check_row": [
+      "text headers ymd.txt",
+      "Would be accepted",
+      "10",
+      "No problems"
+    ],
+    "check_explanation": "text headers ymd.txt\nResult: Would be accepted (nothing was saved)\nRows read: 10\n\nNo problems or notes.",
+    "load_row": [
+      "text headers ymd.txt",
+      "Accepted",
+      "10",
+      "1 dataset(s) created"
+    ],
+    "final_line": "Load finished: 1 accepted. Everything was loaded.",
+    "screenshot": "F07_window.png"
+  },
+  {
+    "no": 8,
+    "file": "text no headers ymd.txt",
+    "profile": "example_text_headerless_seven_columns",
+    "profile_selected": "example_text_headerless_seven_columns",
+    "boxes_enabled": {
+      "exchange": "normal",
+      "symbol": "normal",
+      "timeframe": "disabled"
+    },
+    "hint_before": "Ready. 'Check files' tests everything without saving; 'Load files into Q-MAP' loads them.",
+    "load_button": "normal",
+    "preview_first_lines": [
+      "PREVIEW (nothing is registered or written): text no headers ymd.txt",
+      "Detected format: delimited_text",
+      "Suggested delimiter: ','"
+    ],
+    "check_row": [
+      "text no headers ymd.txt",
+      "Would be accepted",
+      "10",
+      "No problems, 1 note(s)"
+    ],
+    "check_explanation": "text no headers ymd.txt\nResult: Would be accepted (nothing was saved)\nRows read: 10\n\n[NOTE] Volume is the same number on every row\n    What it means: That looks like a placeholder, not real volume.\n    Details: Volume is 3.89482e+07 in every row, which looks like a placeholder.\n    What to do: Check the source before relying on volume.",
+    "load_row": [
+      "text no headers ymd.txt",
+      "Accepted",
+      "10",
+      "1 dataset(s) created"
+    ],
+    "final_line": "Load finished: 1 accepted. Everything was loaded.",
+    "screenshot": "F08_window.png"
+  },
+  {
+    "no": 9,
+    "file": "xls headers iso.csv",
+    "profile": "csv_headers_iso_offset",
+    "profile_selected": "csv_headers_iso_offset",
+    "boxes_enabled": {
+      "exchange": "normal",
+      "symbol": "normal",
+      "timeframe": "readonly"
+    },
+    "hint_before": "Ready. 'Check files' tests everything without saving; 'Load files into Q-MAP' loads them.",
+    "load_button": "normal",
+    "preview_first_lines": [
+      "PREVIEW (nothing is registered or written): xls headers iso.csv",
+      "Detected format: delimited_text",
+      "Suggested delimiter: ','"
+    ],
+    "check_row": [
+      "xls headers iso.csv",
+      "Would be accepted",
+      "210",
+      "No problems, 1 note(s)"
+    ],
+    "check_explanation": "xls headers iso.csv\nResult: Would be accepted (nothing was saved)\nRows read: 210\n\n[NOTE] Some trading days are incomplete\n    What it means: Some days have fewer bars than usual.\n    Details: Sessions with fewer bars than the usual 71: 2026-10-27: 67/71 bars\n    What to do: This is normal for the first and last day of an export.",
+    "load_row": [
+      "xls headers iso.csv",
+      "Accepted",
+      "210",
+      "1 dataset(s) created"
+    ],
+    "final_line": "Load finished: 1 accepted. Everything was loaded.",
+    "screenshot": "F09_window.png"
+  },
+  {
+    "no": 10,
+    "file": "xls headers std.xlsx",
+    "profile": "xlsx_headers_native_date",
+    "profile_selected": "xlsx_headers_native_date",
+    "boxes_enabled": {
+      "exchange": "normal",
+      "symbol": "normal",
+      "timeframe": "readonly"
+    },
+    "hint_before": "Ready. 'Check files' tests everything without saving; 'Load files into Q-MAP' loads them.",
+    "load_button": "normal",
+    "preview_first_lines": [
+      "PREVIEW (nothing is registered or written): xls headers std.xlsx",
+      "Detected format: xlsx",
+      "Rows: 24   Columns: 7   Reader: openpyxl 3.1.5"
+    ],
+    "check_row": [
+      "xls headers std.xlsx",
+      "Would be accepted",
+      "24",
+      "No problems"
+    ],
+    "check_explanation": "xls headers std.xlsx\nResult: Would be accepted (nothing was saved)\nRows read: 24\n\nNo problems or notes.",
+    "load_row": [
+      "xls headers std.xlsx",
+      "Accepted",
+      "24",
+      "1 dataset(s) created"
+    ],
+    "final_line": "Load finished: 1 accepted. Everything was loaded.",
+    "screenshot": "F10_window.png"
+  },
+  {
+    "no": 11,
+    "file": "xls noheaders iso.xlsx",
+    "profile": "xlsx_noheaders_iso_offset",
+    "profile_selected": "xlsx_noheaders_iso_offset",
+    "boxes_enabled": {
+      "exchange": "normal",
+      "symbol": "normal",
+      "timeframe": "readonly"
+    },
+    "hint_before": "Ready. 'Check files' tests everything without saving; 'Load files into Q-MAP' loads them.",
+    "load_button": "normal",
+    "preview_first_lines": [
+      "PREVIEW (nothing is registered or written): xls noheaders iso.xlsx",
+      "Detected format: xlsx",
+      "Rows: 210   Columns: 7   Reader: openpyxl 3.1.5"
+    ],
+    "check_row": [
+      "xls noheaders iso.xlsx",
+      "Would be accepted",
+      "210",
+      "No problems, 1 note(s)"
+    ],
+    "check_explanation": "xls noheaders iso.xlsx\nResult: Would be accepted (nothing was saved)\nRows read: 210\n\n[NOTE] Some trading days are incomplete\n    What it means: Some days have fewer bars than usual.\n    Details: Sessions with fewer bars than the usual 71: 2026-10-27: 67/71 bars\n    What to do: This is normal for the first and last day of an export.",
+    "load_row": [
+      "xls noheaders iso.xlsx",
+      "Accepted",
+      "210",
+      "1 dataset(s) created"
+    ],
+    "final_line": "Load finished: 1 accepted. Everything was loaded.",
+    "screenshot": "F11_window.png"
+  }
+]

@@ -1,0 +1,25 @@
+PREVIEW (nothing is registered or written): csv noheaders unix.csv
+Detected format: delimited_text
+Suggested delimiter: ','
+The first row looks like DATA, so the file may have no header. Confirm [file] header.
+Rows: 144   Columns: 7   Reader: csv python-stdlib
+Columns (position: name [source type]):
+  0: None [str]
+  1: None [str]
+  2: None [str]
+  3: None [str]
+  4: None [str]
+  5: None [str]
+  6: None [str]
+First 8 row(s):
+  1738381500 | 23528.6 | 23632.45 | 23318.3 | 23482.15 | 287703637 | -7575497
+  1738554300 | 23319.35 | 23381.6 | 23222 | 23361.05 | 347241171 | -23160005
+  1738640700 | 23509.9 | 23762.75 | 23423.15 | 23739.25 | 376742506 | -17141569
+  1738727100 | 23801.75 | 23807.3 | 23680.45 | 23696.3 | 267014345 | -80475221
+  1738813500 | 23761.95 | 23773.55 | 23556.25 | 23603.35 | 306978683 | -2739322
+  1738899900 | 23649.5 | 23694.5 | 23443.2 | 23559.95 | 368092482 | 20980964
+  1739159100 | 23543.8 | 23568.6 | 23316.3 | 23381.6 | 234202469 | -40107040
+  1739245500 | 23383.55 | 23390.05 | 22986.65 | 23071.8 | 281920833 | -72327446
+Date/time suggestions for column 0 (suggestions only, never applied automatically):
+  - 10-digit integers: could be Unix seconds (declare kind = "unix_s")
+With profile csv_noheaders_unix_seconds v1: WOULD BE ACCEPTED

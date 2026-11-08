@@ -1,0 +1,31 @@
+# EXAMPLE source profile (layout only, no data). NO header row; seven columns by position:
+# 0 date, 1 open, 2 high, 3 low, 4 close, 5 volume, 6 duplicate of volume.
+profile_id      = "example_text_headerless_seven_columns"
+profile_version = 1
+source_label    = "Text, headerless, duplicated volume"
+description     = "Headerless text: date, open, high, low, close, volume, volume (duplicate)"
+
+[file]
+header = false                  # must be stated: Q-MAP does not guess whether a header exists
+delimiter = ","
+
+[instrument]
+exchange_from = "ingest"
+symbol_from   = "ingest"
+timeframe = "1D"
+
+[columns]
+date  = { position = 0 }
+open  = { position = 1 }
+high  = { position = 2 }
+low   = { position = 3 }
+close = { position = 4 }
+
+[datetime]
+kind = "iso"
+
+[volume]
+rule = "use_column"
+column = { position = 5 }
+verify_identical = [{ position = 6 }]   # the duplicate must match, otherwise ingest stops
+requirement_set = "price_only"

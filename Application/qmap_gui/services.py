@@ -20,7 +20,8 @@ from qmap.core.config import (Settings, load_settings, location_rule_violation, 
 from qmap.core.errors import ConfigError, IngestError, ProfileError, QmapError
 from qmap.data_engine.format_detect import detect_format
 from qmap.data_engine.preview import preview_file
-from qmap.data_engine.process import process_table
+from qmap.data_engine.instruments import normalise_exchange, normalise_symbol
+from qmap.data_engine.process import filename_identity_problem, process_table
 from qmap.data_engine.profiles import (SourceProfile, check_profile_against_settings, load_profile,
                                        parse_profile)
 from qmap.data_engine.readers import read_source
@@ -222,6 +223,7 @@ def describe_profile(profile: SourceProfile) -> list[tuple[str, str]]:
 
 
 def request_problems(profile: SourceProfile, exchange: str, symbol: str, timeframe: str) -> list[str]:
+    """What must still be fixed before checking or loading, in plain words. Uses the Foundation's own rules."""
     needs, out = profile_needs(profile), []
     if needs.exchange and not exchange.strip():
         out.append("Type the exchange (for example NSE). This profile cannot read it from the file.")
@@ -229,7 +231,68 @@ def request_problems(profile: SourceProfile, exchange: str, symbol: str, timefra
         out.append("Type the symbol (for example NIFTY). This profile cannot read it from the file.")
     if needs.timeframe and not timeframe.strip():
         out.append("Choose the timeframe (for example 1D or 5m). Q-MAP never guesses it.")
+    for wanted, typed, normalise in ((needs.exchange, exchange, normalise_exchange), (needs.symbol, symbol, normalise_symbol)):
+        if wanted and typed.strip():
+            try:
+                normalise(typed)
+            except IngestError as exc:
+                out.append(plain(exc))
     return out
+
+
+def file_name_notes(profile: SourceProfile, files) -> list[str]:
+    """Advice, not a block: files whose NAME cannot give this profile its exchange/symbol/timeframe. Each such file
+    would be rejected on its own when checked or loaded (unless its content was already loaded), so the other files
+    in the list can still go ahead."""
+    out = []
+    for f in files:
+        reason = filename_identity_problem(profile, Path(f).name)
+        if reason:
+            out.append(f"{reason} (In this window: 'Copy so it asks me for exchange and symbol...' makes such a profile.)")
+    return out
+
+
+def identity_note(profile: SourceProfile) -> str:
+    """Where this profile takes the instrument and timeframe from, and so why the boxes are on or off."""
+    ins = profile.instrument
+    where = {"fixed": "fixed in the profile", "column": "read from a column of the file",
+             "filename_pattern": f"read from the file name (pattern {ins.filename_pattern})", "ingest": "typed by you below"}
+    parts = [f"Exchange: {where[ins.exchange_from]}" + (f" ({ins.exchange})" if ins.exchange_from == "fixed" else ""),
+             f"Symbol: {where[ins.symbol_from]}" + (f" ({ins.symbol})" if ins.symbol_from == "fixed" else ""),
+             "Timeframe: " + ("typed by you below" if ins.timeframe == "ingest" else
+                              where["filename_pattern"] if ins.timeframe == "filename_pattern" else f"fixed in the profile ({ins.timeframe})")]
+    note = "This profile: " + "; ".join(parts) + ". A box is switched off when the profile does not use what you type."
+    if "filename_pattern" in (ins.exchange_from, ins.symbol_from):
+        note += (" If your file names do not fit the pattern, rename the files, or use 'Copy so it asks me for exchange "
+                 "and symbol...'.")
+    return note
+
+
+def reads_identity_from_filename(profile: SourceProfile) -> bool:
+    return "filename_pattern" in (profile.instrument.exchange_from, profile.instrument.symbol_from)
+
+
+def copy_profile_asking_for_identity(source: Path, new_id: str, directory: str | Path) -> Path:
+    """A copy of a profile that reads exchange and symbol from the file name, changed so that you type them instead.
+    Everything else is unchanged. The copy is a new profile (new name, version 1) in your own profiles folder; the
+    original is never edited. Q-MAP still never guesses the instrument: you must type it for every load."""
+    text = Path(source).read_text(encoding="utf-8")
+    for key in ("exchange_from", "symbol_from"):
+        text = re.sub(rf'(?m)^(\s*{key}\s*=\s*)"filename_pattern"', r'\1"ingest"', text, count=1)
+    folder = Path(directory)
+    folder.mkdir(parents=True, exist_ok=True)
+    tmp = folder / f".{new_id}.converting"
+    try:
+        tmp.write_text(text, encoding="utf-8")
+        path = copy_example_as(tmp, new_id, folder)
+    finally:
+        tmp.unlink(missing_ok=True)
+    converted = load_profile(path)
+    if reads_identity_from_filename(converted):  # pragma: no cover - only for an unusual profile layout
+        path.unlink()
+        raise GuiError("This profile could not be converted automatically. Edit 'exchange_from' and 'symbol_from' "
+                       "to \"ingest\" in a copy instead.")
+    return path
 
 
 def validate_profile_text(text: str, settings: Settings) -> tuple[SourceProfile | None, str]:
