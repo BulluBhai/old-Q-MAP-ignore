@@ -1,9 +1,17 @@
 # Q-MAP MA Affinity beta: Windows acceptance guide (A1 to A8)
 
-**09-Nov-26 | Program to test: PR #23, branch `claude/beta-ma-affinity` (the final commit is named in the PR's
-completion report) | Tracker: `Q-MAP_MA_Affinity_Beta_Acceptance_Tracker_09_Nov_26_125357.md` (same folder)**
+**09-Nov-26 | Program to test: PR #23, exactly commit `215d8ebe9c2cbb8ce3975e1f48d22711457790c3` | Tracker:
+`Q-MAP_MA_Affinity_Beta_Acceptance_Tracker_09_Nov_26_125357.md` (same folder)**
+
+**Test exactly this commit:** `215d8ebe9c2cbb8ce3975e1f48d22711457790c3`. It holds the final program, the example file and the expected results. Step
+2.1.5 downloads that commit, not the branch: the branch can move on, a commit never changes. (The pull request's last
+commit after it only adds this commit number to this guide and its tracker; nothing in the program differs.)
 
 **Written to `docs/standards/Q-MAP_User_Documentation_Standard.md`.**
+
+**Automated tests are not this test.** The developer's automated tests (on Linux and on GitHub's Windows and Linux
+computers) passed before this guide was issued; they are reported in the pull request. This guide is your own check, on
+your laptop, which no automated test replaces. Nothing in it has been done by you yet.
 
 This guide checks that the MA Affinity beta works on your laptop, from loading a file to reproducing a result. It
 uses one **synthetic** file (made-up prices, no real company), `NSE_BETADEMO.csv`, so the expected results are known
@@ -59,15 +67,15 @@ behaviour on the later (out-of-sample) part?*
      `Beta_Test`, use that new name.**
 4. **Do:** double-click your new folder. It must be empty. Inside it make these new folders: `Q-MAP_APP`,
    `Q-MAP_DATA`, `Q-MAP_OUTPUT`, `Beta_Files`, `Evidence`.
-5. **Do:** in your browser open `https://github.com/BulluBhai/Q-MAP/tree/claude/beta-ma-affinity`, click the green
-   **Code** button, then **Download ZIP**. *(GitHub wording; it may differ slightly.)*
+5. **Do:** in your browser open exactly this address (it downloads the ZIP of that one commit straight away):
+   `https://github.com/BulluBhai/Q-MAP/archive/215d8ebe9c2cbb8ce3975e1f48d22711457790c3.zip`
 6. **Do:** in **Downloads**, right-click the ZIP → **Extract All...** → **Extract**.
-7. **Do:** open the extracted folder until you see `database_manager.py`. Press **Ctrl+A**, **Ctrl+C**, open
+7. **Do:** open the extracted folder (its name is `Q-MAP-215d8ebe9c2cbb8ce3975e1f48d22711457790c3`) until you see `database_manager.py`. Press **Ctrl+A**, **Ctrl+C**, open
    `D:\Q-MAP_V01\Beta_Test\Q-MAP_APP` and press **Ctrl+V**.
 8. **Do:** in `Q-MAP_APP`, open `docs` → `acceptance_testing` → `beta_ma_affinity_09_Nov_26`. Click
    `NSE_BETADEMO.csv` once, press **Ctrl+C**, open `D:\Q-MAP_V01\Beta_Test\Beta_Files` and press **Ctrl+V**.
-9. **Do:** on `https://github.com/BulluBhai/Q-MAP/pull/23` click **Commits** and write the 7-character code on the
-   last line in the tracker, section 1 (**Commit tested**).
+9. **Check:** the name of the extracted folder ends with `215d8ebe9c2cbb8ce3975e1f48d22711457790c3`. If it does not, you downloaded something else:
+   **STOP** and ask for help (go to section 5). The tracker already shows this commit in section 1.
 
 **You should see** `Beta_Files` holding exactly one file, `NSE_BETADEMO.csv`.
 
