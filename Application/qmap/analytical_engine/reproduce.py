@@ -143,12 +143,20 @@ def load_earlier_run(settings: Settings, db: Database, run_id: str, analyses: di
     if not folder.is_dir():
         raise ReproduceError(f"The folder of run {run_id} ({folder}) is missing; it was moved or deleted.")
     meta = _read_metadata(run_id, folder)
-    spec = analyses.get(meta.get("analysis_id"))
+    # checked before they are used: a damaged record can hold any JSON value here (a list or an object would make the
+    # analysis lookup fail, and JSON true would compare equal to version 1)
+    analysis_id, version = meta.get("analysis_id"), meta.get("analysis_version")
+    if not isinstance(analysis_id, str) or not analysis_id.strip():
+        raise ReproduceError(f"The Run_Metadata of run {run_id} is incomplete or damaged: 'analysis_id' is missing or "
+                             "not an analysis name.")
+    if not isinstance(version, int) or isinstance(version, bool):
+        raise ReproduceError(f"The Run_Metadata of run {run_id} is incomplete or damaged: 'analysis_version' is "
+                             "missing or not a version number.")
+    spec = analyses.get(analysis_id)
     if spec is None:
-        raise ReproduceError(f"The analysis of run {run_id} ('{meta.get('analysis_id')}') is not available in this "
-                             "program.")
-    if meta.get("analysis_version") != spec.version:
-        raise ReproduceError(f"Run {run_id} used {spec.name} version {meta.get('analysis_version')}; this program has "
+        raise ReproduceError(f"The analysis of run {run_id} ('{analysis_id}') is not available in this program.")
+    if version != spec.version:
+        raise ReproduceError(f"Run {run_id} used {spec.name} version {version}; this program has "
                              f"version {spec.version}. A changed method cannot reproduce the earlier result.")
     if "raw_parameters" not in meta:
         raise ReproduceError(f"Run {run_id} was made before runs recorded the parameters exactly as entered "
