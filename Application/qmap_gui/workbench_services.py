@@ -153,3 +153,32 @@ class AnalysisJob:
                 db.close()
         self.emit({"type": "done", "result": result})
         return result
+
+
+@dataclass
+class ReproduceJob:
+    """Repeats an earlier run from its Run ID (qmap.analytical_engine.reproduce) and reports events. No widgets."""
+    settings: Settings
+    run_id: str
+    emit: Callable[[dict], None] = field(default=lambda event: None)
+
+    def run(self) -> AnalysisRunResult:
+        from qmap.analytical_engine.reproduce import reproduce_run
+
+        handler = _EmitHandler(self.emit)
+        logger = logging.getLogger("qmap")
+        logger.addHandler(handler)
+        db = None
+        try:
+            self.emit({"type": "stage", "text": f"Reproducing run {self.run_id}"})
+            db = open_database(self.settings.db_path)
+            result = reproduce_run(self.settings, db, self.run_id,
+                                   log=lambda m: self.emit({"type": "progress", "text": m}))
+        except Exception as exc:
+            result = AnalysisRunResult("failed", f"Unexpected problem ({type(exc).__name__}): {exc}")
+        finally:
+            logger.removeHandler(handler)
+            if db is not None:
+                db.close()
+        self.emit({"type": "done", "result": result})
+        return result

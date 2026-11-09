@@ -138,4 +138,5 @@ SPEC = AnalysisSpec(
                           help="Optional, same formats. Empty = to the last bar.")),
     min_datasets=1, max_datasets=50,
     kind_note="descriptive statistics only - no signals, rankings or methodology",
+    result_tables=("Dataset_Summary_",),
 )

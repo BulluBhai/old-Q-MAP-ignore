@@ -106,6 +106,15 @@ class AnalysisFrame(tk.Frame):
         self.run_folder_entry.pack(side="left", fill="x", expand=True)
         self.open_run_button = tk.Button(row, text="Open Output Folder", state="disabled", command=self.open_run_folder)
         self.open_run_button.pack(side="right")
+        # beta T7: repeat an earlier run from its Run ID and check that its result tables are identical
+        row = tk.Frame(box)
+        row.pack(fill="x", pady=(4, 0))
+        tk.Label(row, text="Reproduce Run ID:", width=18, anchor="w").pack(side="left")
+        self.reproduce_var = tk.StringVar(self, value="")
+        tk.Entry(row, textvariable=self.reproduce_var, width=28).pack(side="left")
+        self.reproduce_button = tk.Button(row, text="Reproduce run (runs it again and compares)",
+                                          command=self.start_reproduce)
+        self.reproduce_button.pack(side="left", padx=6)
 
         box = section(self, "3. Options - parameters")
         self.params_frame = tk.Frame(box)
@@ -250,6 +259,8 @@ class AnalysisFrame(tk.Frame):
         can = n > 0 and not self.running and self.app.core_settings is not None and self.choice is not None
         for b in (self.check_button, self.run_button):
             b.configure(state="normal" if can else "disabled")
+        self.reproduce_button.configure(state="normal" if not self.running and self.app.core_settings is not None
+                                        else "disabled")
         if self.running:
             self.hint.configure(text="Working...", fg=MUTED_COLOR)
         elif self.app.core_settings is None:
@@ -304,6 +315,30 @@ class AnalysisFrame(tk.Frame):
 
         self.app.tasks.start(work, self.on_job_event, self.on_task_error)
 
+    def start_reproduce(self) -> None:
+        settings, run_id = self.app.core_settings, self.reproduce_var.get().strip()
+        if settings is None or self.running:
+            return
+        if not run_id:
+            self.final_label.configure(text="Type the Run ID to reproduce (for example the last run's ID).",
+                                       fg=WARN_COLOR)
+            return
+        job = ws.ReproduceJob(settings, run_id)
+        self.running, self._t0 = True, time.monotonic()
+        self.started_var.set(fmt_clock(datetime.now()))
+        self.elapsed_var.set("0 s")
+        self.run_id_var.set("-")
+        self.final_label.configure(text="", fg="black")
+        self.progress.start(80)
+        self.log.append(f"--- Reproduce run {run_id} ---")
+        self._update_state()
+
+        def work(emit):
+            job.emit = emit
+            job.run()
+
+        self.app.tasks.start(work, self.on_job_event, self.on_task_error)
+
     # ---- events from the worker (always handled on the main thread) -----------------------------------
     def on_job_event(self, ev: dict) -> None:
         if self._closing:
@@ -340,6 +375,12 @@ class AnalysisFrame(tk.Frame):
                     f"{result.metadata_path.name} saved in {result.run_dir}")
             if result.readiness and result.readiness.warnings:
                 text += f"  ({len(result.readiness.warnings)} warning(s) - see the readiness box and the metadata file)"
+            rep = getattr(result, "reproduction", None)
+            if rep:
+                text = rep["verdict"] + f". New run {result.run_id}; details in its Reproducibility_Report file."
+                color = OK_COLOR if rep["identical"] else ERROR_COLOR
+            elif result.run_id:
+                self.reproduce_var.set(result.run_id)  # ready to be reproduced later
         self.final_label.configure(text=text, fg=color)
         self._update_state()
 

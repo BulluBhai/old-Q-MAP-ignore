@@ -65,6 +65,9 @@ class RunContext:
     stamp: str
     log: Callable[[str], None]
     readiness_warnings: list[str] = field(default_factory=list)  # shown to the user before the run (NOTE lines)
+    # what the analysis actually used (for example the bars and the in-sample/out-of-sample split); recorded in
+    # Run_Metadata under "analysis_details" (beta provenance, 09-Nov-26)
+    details: dict = field(default_factory=dict)
 
     def output(self, name: str) -> Path:
         return self.run_dir / name
@@ -89,6 +92,9 @@ class AnalysisSpec:
     # (settings, db, dataset_id, cleaned params, report) -> None; adds items to the report with report.add(...).
     dataset_checks: Callable[[Settings, Database, int, dict, ReadinessReport], None] | None = None
     method_source: str = ""  # where the method comes from (recorded in Run_Metadata)
+    # output-name prefixes of the RESULT TABLES: the files that must be identical when a run is reproduced (charts,
+    # PDF and Excel carry the Run ID and the time, so they always differ)
+    result_tables: tuple[str, ...] = ()
 
 
 INVALID_INPUT, NO_ELIGIBLE_DATA, NOT_READY, READY = "invalid_input", "no_eligible_data", "not_ready", "ready"
@@ -158,6 +164,7 @@ class AnalysisRunResult:
     outputs: list[Path] = field(default_factory=list)
     metadata_path: Path | None = None
     readiness: AnalysisReadiness | None = None
+    reproduction: dict | None = None  # set when this run repeated an earlier one (see reproduce.py)
 
     @property
     def ok(self) -> bool:
@@ -239,7 +246,10 @@ def _dataset_record(db: Database, dataset_id: int, report: ReadinessReport) -> d
 
 
 def run_analysis(settings: Settings, db: Database, spec: AnalysisSpec, dataset_ids: list[int], raw_params: dict, *,
-                 log: Callable[[str], None] | None = None, now: datetime | None = None) -> AnalysisRunResult:
+                 log: Callable[[str], None] | None = None, now: datetime | None = None,
+                 reproduce_of: dict | None = None) -> AnalysisRunResult:
+    """`reproduce_of` (from qmap.analytical_engine.reproduce): the earlier run this run repeats. Its result tables are
+    compared with the new ones and a Reproducibility_Report is written into the new run folder."""
     say = log or (lambda _m: None)
     say(f"Checking readiness of {len(dataset_ids)} dataset(s) for {spec.name}...")
     readiness = check_analysis(settings, db, spec, dataset_ids, raw_params)
@@ -271,15 +281,26 @@ def run_analysis(settings: Settings, db: Database, spec: AnalysisSpec, dataset_i
             ctx = RunContext(settings, db, run.run_id, run.dir, ids, readiness.params, stamp,
                              lambda m: (run.logger.info(m), say(m)), list(readiness.warnings))
             outputs = list(spec.execute(ctx))
+            reproduction = None
+            if reproduce_of is not None:
+                from .reproduce import compare_and_report
+                report_path, reproduction = compare_and_report(ctx, spec, reproduce_of, outputs)
+                outputs.append(report_path)
             meta = {
                 "run_id": run.run_id, "analysis_id": spec.analysis_id, "analysis_name": spec.name,
                 "analysis_version": spec.version, "result_kind": spec.kind_note, "method_source": spec.method_source,
                 "qmap_version": __version__, "cleaning_code_version": CLEANING_CODE_VERSION, "build": current_build(),
                 "created_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
                 "parameters": params["parameters"], "readiness_warnings": readiness.warnings,
+                # exactly what was entered (None = left empty): what a later reproduction runs with again
+                "raw_parameters": {p.key: (None if raw_params.get(p.key) is None else str(raw_params.get(p.key)))
+                                   for p in spec.parameters},
+                "analysis_details": ctx.details,
                 "input_datasets": [_dataset_record(db, r.dataset_id, r) for r in readiness.reports],
                 "outputs": [p.name for p in outputs],
             }
+            if reproduction is not None:
+                meta["reproduction"] = reproduction
             meta_path = run.dir / f"Run_Metadata_{stamp}.json"
             atomic_write_bytes(meta_path, json.dumps(meta, indent=2, default=str, sort_keys=True).encode("utf-8"))
     except Exception as exc:
@@ -288,4 +309,4 @@ def run_analysis(settings: Settings, db: Database, spec: AnalysisSpec, dataset_i
                                  "failed; see its log.", run_id, run_dir, readiness=readiness)
     say(f"Run {run_id} completed: {len(outputs)} output file(s).")
     return AnalysisRunResult("completed", f"Completed. Results are in {run_dir}", run_id, run_dir, outputs, meta_path,
-                             readiness)
+                             readiness, reproduction)

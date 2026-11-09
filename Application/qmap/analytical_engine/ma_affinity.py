@@ -232,6 +232,13 @@ def execute(ctx: RunContext) -> list[Path]:
     res = run_ma_affinity(frame, s, label=label, log=ctx.log, quality=QmapDataNote(ctx, info, frame))
     for w in res.warnings:
         ctx.log(f"WARNING: {w}")
+    # provenance: the bars the calculation actually used and the in-sample / out-of-sample split (Run_Metadata)
+    ctx.details.update({"bars_used": {"count": int(len(frame)), "first": frame.index[0].date().isoformat(),
+                                      "last": frame.index[-1].date().isoformat()},
+                        "split": {k: res.data_info[k] for k in ("is_bars", "is_first", "is_last", "oos_bars",
+                                                                 "oos_first", "oos_last")},
+                        "frozen_top": [f"{t}-{p}" for t, p in res.frozen_top], "status_counts": res.counts(),
+                        "engine": METHOD_SOURCE})
     # The reports print res.warnings; the Q-MAP data notes shown before the run are added so that the Excel and PDF
     # carry them too (Blueprint v1.35 8.5.5 / 8.5.11 E). Nothing in the calculation reads this list.
     res.warnings.extend(f"Q-MAP data: {w}" for w in ctx.readiness_warnings)
@@ -257,4 +264,5 @@ SPEC = AnalysisSpec(
     kind_note="exploratory historical research - not a trading signal; Directed IR and the weight scheme are pending "
               "owner review; p-values are not corrected for the many candidates tested",
     check_params=check_params, dataset_checks=dataset_checks, method_source=METHOD_SOURCE,
+    result_tables=("MA_Affinity_Candidates_", "MA_Affinity_Interactions_"),
 )

@@ -86,3 +86,23 @@ def test_a_run_completes_and_writes_the_reports(ma, gui):
     names = {p.name for p in res.outputs}
     assert any(n.endswith(".xlsx") for n in names) and any(n.endswith(".pdf") for n in names)
     assert res.run_id.startswith("MAAF_")
+
+
+def test_a_completed_run_is_reproduced_from_the_window(ma, gui):
+    """Beta T7: after a run, its Run ID is filled in; Reproduce runs it again as a new run and says REPRODUCED."""
+    screen, ids = ma
+    _select(screen, ids["long"])
+    screen.param_vars["ma_end"].set("40")
+    screen.start_run()
+    gui.wait(lambda: not screen.running and screen.last_result is not None, timeout=180)
+    first = screen.last_result
+    assert first.ok and screen.reproduce_var.get() == first.run_id
+    screen.reproduce_button.invoke()
+    gui.wait(lambda: not screen.running and screen.last_result is not first, timeout=180)
+    again = screen.last_result
+    assert again.ok and again.run_id != first.run_id, again.message
+    assert screen.final_label.cget("text").startswith(f"REPRODUCED: every result table is identical to run {first.run_id}")
+    screen.reproduce_var.set("NO_SUCH_RUN")
+    screen.reproduce_button.invoke()
+    gui.wait(lambda: not screen.running and screen.last_result is not again, timeout=60)
+    assert screen.last_result.outcome == "blocked" and "no run" in screen.final_label.cget("text")
