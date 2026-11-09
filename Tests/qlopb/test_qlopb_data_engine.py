@@ -238,7 +238,7 @@ class Timeframes(unittest.TestCase):
 
 
 class RealSampleFiles(unittest.TestCase):
-    """Run only when the owner's real sample files are present in data/raw."""
+    """The two synthetic sample files (layouts of the former QLOPB samples; synthetic since 09-Nov-26)."""
 
     def test_sbin_hourly_csv(self):
         if not _helpers.SBIN_FILE.exists():
@@ -273,15 +273,15 @@ class RealSampleFiles(unittest.TestCase):
         self.assertEqual(len(r.df), 228)
         self.assertEqual(r.df.index[0], pd.Timestamp("2025-11-10"))
         self.assertEqual(r.df.index[-1], pd.Timestamp("2026-10-09"))
-        self.assertAlmostEqual(r.df["close"].iloc[0], 18932.15)
-        self.assertAlmostEqual(r.df["close"].iloc[-1], 20679.4)
+        self.assertAlmostEqual(r.df["close"].iloc[0], 19046.92)
+        self.assertAlmostEqual(r.df["close"].iloc[-1], 19779.06)
         self.assertTrue(r.report.volume_available)
         self.assertEqual(r.report.inferred_frequency, "daily")
         lowvol = [v for k, v in r.report.flags.items() if "volume at or below" in k][0]
         self.assertIn("02-Dec-25", lowvol["examples"])
         self.assertTrue(any("CONFIRMED" in n for n in r.report.structure_notes))
 
-    def test_real_files_unchanged_by_loading(self):
+    def test_sample_files_unchanged_by_loading(self):
         for p in (_helpers.SBIN_FILE, _helpers.NIFTY_FILE):
             if p.exists():
                 h = sha256_of_file(p)

@@ -229,12 +229,12 @@ class BruteForceAgreement(unittest.TestCase):
     def test_synthetic(self):
         self.check(_helpers.synthetic_ohlc(900, seed=5), [10, 20, 50, 100, 150])
 
-    def test_real_sbin(self):
+    def test_sample_hourly(self):
         if not _helpers.SBIN_FILE.exists():
             self.skipTest("SBIN sample not present")
         self.check(load_file(_helpers.SBIN_FILE).df, [20, 50, 97, 141, 195])
 
-    def test_real_nifty(self):
+    def test_sample_daily(self):
         if not _helpers.NIFTY_FILE.exists():
             self.skipTest("Nifty sample not present")
         self.check(load_file(_helpers.NIFTY_FILE).df, [10, 20, 30, 45])
@@ -353,7 +353,7 @@ class Reports(unittest.TestCase):
             self.assertEqual(out["status"], "FAILED")
             self.assertTrue(out["log"].exists())
 
-    def test_real_files_end_to_end(self):
+    def test_sample_files_end_to_end(self):
         for p in (_helpers.SBIN_FILE, _helpers.NIFTY_FILE):
             if not p.exists():
                 continue

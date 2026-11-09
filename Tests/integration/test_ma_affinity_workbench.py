@@ -1,6 +1,6 @@
 """MA Affinity in the Analytical Workbench (owner decisions 2-5, 03-Nov-26).
 
-- Same results as QLOPB standalone on the same data (real QLOPB sample file and synthetic data): methodology preserved.
+- Same results as QLOPB standalone on the same data (the headerless sample file and other synthetic data): methodology preserved.
 - Only registered datasets are read; the engine never aggregates (daily, weekly, monthly registered datasets only).
 - Eligibility: genuine conflicting observations and MIXED block; overlap with other datasets, gaps and edge periods only
   warn; exact duplicates removed at load do not block. Dataset Summary keeps its existing behaviour (DQ rules unchanged).
@@ -75,8 +75,8 @@ def test_ma_affinity_is_registered_with_the_agreed_scope():
     assert defaults["w_forward"] == str(d.weight_forward_return) and defaults["oos_scope"] == d.oos_scope
 
 
-def test_real_daily_file_same_results_as_qlopb_standalone(settings, db, folder, roots):
-    src = folder / "Nifty500 Healthcare.txt"
+def test_sample_daily_file_same_results_as_qlopb_standalone(settings, db, folder, roots):
+    src = folder / "Synth500 Sector.txt"
     shutil.copy2(FIXTURES / src.name, src)
     before = sha(src)
     _scan(settings, db, folder)
@@ -141,7 +141,7 @@ def test_weekly_and_monthly_registered_datasets_run_and_are_not_aggregated_again
 
 
 def test_intraday_and_quarterly_datasets_are_refused_with_the_reason(settings, db, folder, run):
-    shutil.copy2(FIXTURES / "NSE_SBIN, 60.csv", folder / "NSE_SBIN, 60.csv")
+    shutil.copy2(FIXTURES / "NSE_SYNTHHOURLY, 60.csv", folder / "NSE_SYNTHHOURLY, 60.csv")
     _long_daily(folder / "NSE_LONGQ.csv", n=1200)
     _scan(settings, db, folder)
     daily = next(d for d in list_datasets(db) if d.timeframe == "1D")
