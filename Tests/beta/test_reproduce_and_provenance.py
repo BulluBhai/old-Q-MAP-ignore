@@ -128,14 +128,29 @@ def test_changed_data_are_refused_before_anything_runs(settings, db, dataset):
     assert db.one("SELECT COUNT(*) AS n FROM runs")["n"] == runs_before  # no run, no folder
 
 
-def test_a_different_result_is_reported_as_not_reproduced(settings, db, dataset):
+def test_a_different_result_is_reported_as_not_reproduced(settings, db, dataset, monkeypatch):
+    """The reproduction's calculation is made to give one different affinity score (as a changed engine would): the
+    comparison must say NOT REPRODUCED and name the differing table; the earlier run stays untouched."""
+    import qlopb.core.research_engine as RE
+
     first = run_analysis(settings, db, MA_AFFINITY, [dataset], PARAMS)
-    with db.transaction() as conn:  # as if the earlier run had produced a different candidates table
-        conn.execute("UPDATE run_outputs SET sha256 = 'x' WHERE run_id = ? AND relative_path LIKE ?",
-                     (first.run_id, "%MA_Affinity_Candidates_%"))
+    before = _folder_hashes(first.run_dir)
+    real = RE.run_ma_affinity
+
+    def changed(*a, **k):
+        res = real(*a, **k)
+        res.results[0]["is_affinity_score"] = round(res.results[0]["is_affinity_score"] + 1.0, 2)
+        return res
+
+    monkeypatch.setattr(RE, "run_ma_affinity", changed)
     again = R.reproduce_run(settings, db, first.run_id)
     assert again.ok and again.reproduction["identical"] is False
     assert again.reproduction["verdict"].startswith("NOT REPRODUCED")
+    rows = list(csv.reader(next(again.run_dir.glob("Reproducibility_Report_*.csv")).open(encoding="utf-8")))
+    verdicts = {r[0]: r[-1] for r in rows}
+    assert verdicts["Result table MA_Affinity_Candidates_..."] == "DIFFERENT"
+    assert verdicts["Result table MA_Affinity_Interactions_..."] == "IDENTICAL"
+    assert _folder_hashes(first.run_dir) == before
 
 
 def test_a_different_code_build_is_stated(settings, db, dataset, monkeypatch):

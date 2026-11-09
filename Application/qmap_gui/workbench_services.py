@@ -174,7 +174,8 @@ class ReproduceJob:
             db = open_database(self.settings.db_path)
             result = reproduce_run(self.settings, db, self.run_id,
                                    log=lambda m: self.emit({"type": "progress", "text": m}))
-        except Exception as exc:
+        except Exception as exc:  # a programming defect: one plain line on screen, the full traceback in the log
+            logger.exception("Reproduction of %s failed unexpectedly", self.run_id)
             result = AnalysisRunResult("failed", f"Unexpected problem ({type(exc).__name__}): {exc}")
         finally:
             logger.removeHandler(handler)
