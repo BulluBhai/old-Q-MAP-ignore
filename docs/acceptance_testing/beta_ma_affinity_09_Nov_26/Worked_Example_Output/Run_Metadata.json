@@ -1,0 +1,139 @@
+{
+  "analysis_details": {
+    "bars_used": {
+      "count": 1500,
+      "first": "2019-01-01",
+      "last": "2024-09-30"
+    },
+    "engine": "MA Affinity Scanner V2, BulluBhai/QLOPB commit 6cbadc7 (safeguards S-1..S-3); calculations unchanged",
+    "frozen_top": [
+      "EMA-37",
+      "EMA-34",
+      "SMA-38",
+      "SMA-49",
+      "SMA-39"
+    ],
+    "research_question": "For this instrument, which moving averages (type and period) has price historically interacted with most reliably - coming within the proximity zone and then moving in the expected direction over the following bars - and do the leaders chosen on the earlier (in-sample) part of the history keep that behaviour on the later (out-of-sample) part?",
+    "split": {
+      "is_bars": 1050,
+      "is_first": "01-Jan-19",
+      "is_last": "09-Jan-23",
+      "oos_bars": 450,
+      "oos_first": "10-Jan-23",
+      "oos_last": "30-Sep-24"
+    },
+    "status_counts": {
+      "INSUFFICIENT_DATA": 2,
+      "NO_INTERACTIONS": 0,
+      "OK": 480
+    }
+  },
+  "analysis_id": "ma_affinity",
+  "analysis_name": "MA Affinity (QLOPB)",
+  "analysis_version": 1,
+  "build": {
+    "cleaning_code_version": "c2",
+    "git_commit": "b5e6bbe9bb1ffcd125e49b7f239e6ea8b9977d71",
+    "git_modified": true,
+    "source_fingerprint": "aede066bc0a8eee3536c78a5d72f77fff811c00caba7409334a80f8289195a81",
+    "version": "0.1.0rc1"
+  },
+  "cleaning_code_version": "c2",
+  "created_utc": "2026-11-09T12:51:35Z",
+  "input_datasets": [
+    {
+      "canonical_schema_version": 1,
+      "config_fingerprint": "vs2:7d8e2f3b9e747e4c",
+      "dataset_id": 2,
+      "date_from": "2019-01-01",
+      "date_to": "2024-09-30",
+      "instrument": "NSE:BETADEMO",
+      "layer": "cleaned",
+      "lineage": [
+        "Standardised Daily dataset 2: auto_ee0bc735274c@1+c2, settings vs2:7d8e2f3b9e747e4c, run SCAN_20261109_125126, from original file dataset 1",
+        "Original file (dataset 1), preserved unchanged, SHA-256 0cfd1d999e32b6f2...: NSE_BETADEMO.csv"
+      ],
+      "processing_version": "auto_ee0bc735274c@1+c2",
+      "relative_path": "Cleaned_Data/NSE/BETADEMO/1D/0cfd1d999e32_54090d02_SCAN_20261109_125126.parquet",
+      "row_count": 1500,
+      "rows_in_window": 1500,
+      "sha256": "c48c0f91dc4222af2cbb06681d7f652fbb39f446a0d42db52c7a061a37e7e9a0",
+      "source_files": [
+        "NSE_BETADEMO.csv"
+      ],
+      "storage_class": "permanent",
+      "timeframe": "1D",
+      "timeframe_classified_by": "DQ-7 corrected comparison (04-Nov-26)",
+      "validation_status": "passed",
+      "validation_warnings": []
+    }
+  ],
+  "method_source": "MA Affinity Scanner V2, BulluBhai/QLOPB commit 6cbadc7 (safeguards S-1..S-3); calculations unchanged",
+  "outputs": [
+    "QLOPB_MA_Affinity_09_Nov_26_125126.xlsx",
+    "QLOPB_MA_Affinity_Report_09_Nov_26_125126.pdf",
+    "chart_price_top_mas_09_Nov_26_125126.png",
+    "chart_is_vs_oos_09_Nov_26_125126.png",
+    "chart_forward_returns_09_Nov_26_125126.png",
+    "chart_score_by_period_09_Nov_26_125126.png",
+    "chart_interactions_sr_09_Nov_26_125126.png",
+    "MA_Affinity_Candidates_09_Nov_26_125126.csv",
+    "MA_Affinity_Interactions_09_Nov_26_125126.csv",
+    "MA_Affinity_Findings_09_Nov_26_125126.txt"
+  ],
+  "parameters": {
+    "date_from": null,
+    "date_to": null,
+    "qlopb_settings": {
+      "cooldown_bars": 5,
+      "fwd_windows": [
+        5,
+        10,
+        20,
+        50
+      ],
+      "is_pct": 70,
+      "ma_end": 250,
+      "ma_start": 10,
+      "ma_types": [
+        "SMA",
+        "EMA"
+      ],
+      "min_interactions": 10,
+      "min_oos_outcomes_for_consistency": 10,
+      "oos_scope": "top_n",
+      "proximity_pct": 3.0,
+      "regime_ma": 200,
+      "timeframe": "as_loaded",
+      "top_n": 5,
+      "weight_forward_return": 25.0,
+      "weight_interaction_strength": 20.0,
+      "weight_stability": 15.0,
+      "weight_success_rate": 25.0
+    }
+  },
+  "qmap_version": "0.1.0rc1",
+  "raw_parameters": {
+    "cooldown_bars": "5",
+    "date_from": "",
+    "date_to": "",
+    "fwd_windows": "5,10,20,50",
+    "is_pct": "70",
+    "ma_end": "250",
+    "ma_start": "10",
+    "ma_types": "SMA,EMA",
+    "min_interactions": "10",
+    "min_oos": "10",
+    "oos_scope": "top_n",
+    "proximity_pct": "3.0",
+    "regime_ma": "200",
+    "top_n": "5",
+    "w_forward": "25",
+    "w_interaction": "20",
+    "w_stability": "15",
+    "w_success": "25"
+  },
+  "readiness_warnings": [],
+  "result_kind": "exploratory historical research - not a trading signal; Directed IR and the weight scheme are pending owner review; p-values are not corrected for the many candidates tested",
+  "run_id": "MAAF_20261109_125126"
+}

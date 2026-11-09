@@ -1,0 +1,12 @@
+2026-11-09T12:51:26 INFO    [MAAF_20261109_125126] qmap: Run MAAF_20261109_125126 started (module MAAF, area Research_Reports)
+2026-11-09T12:51:27 INFO    [MAAF_20261109_125126] qmap: MA Affinity on NSE:BETADEMO Daily (dataset 2), Run MAAF_20261109_125126: 1500 bars, 01-Jan-19 to 30-Sep-24. Method: MA Affinity Scanner V2, BulluBhai/QLOPB commit 6cbadc7 (safeguards S-1..S-3); calculations unchanged.
+2026-11-09T12:51:27 INFO    [MAAF_20261109_125126] qmap: Data: 1500 bars, 01-Jan-19 to 30-Sep-24. IS 1050 bars (01-Jan-19 to 09-Jan-23), OOS 450 bars.
+2026-11-09T12:51:27 INFO    [MAAF_20261109_125126] qmap: Candidates: 482 (SMA, EMA, periods 10-250). Primary forward window 5 bars.
+2026-11-09T12:51:27 INFO    [MAAF_20261109_125126] qmap: Phase 1/3: in-sample scoring of all candidates...
+2026-11-09T12:51:28 INFO    [MAAF_20261109_125126] qmap: Phase 2/3: ranking on in-sample scores only and freezing the Top-N...
+2026-11-09T12:51:28 INFO    [MAAF_20261109_125126] qmap: 480 of 482 candidates have enough in-sample interactions (min 10). Frozen Top-5: EMA-37, EMA-34, SMA-38, SMA-49, SMA-39
+2026-11-09T12:51:28 INFO    [MAAF_20261109_125126] qmap: Phase 3/3: out-of-sample validation of 5 candidate(s) (scope: top_n). OOS never changes ranks.
+2026-11-09T12:51:28 INFO    [MAAF_20261109_125126] qmap: Research finished in 1.0s. 12669 interactions recorded.
+2026-11-09T12:51:28 INFO    [MAAF_20261109_125126] qmap: WARNING: Near-duplicate neighbours in the Top-N (periods within 3): EMA-37/EMA-34; SMA-38/SMA-39.
+2026-11-09T12:51:35 INFO    [MAAF_20261109_125126] qmap: Frozen Top-5: EMA-37, EMA-34, SMA-38, SMA-49, SMA-39. Status counts: {'OK': 480, 'INSUFFICIENT_DATA': 2, 'NO_INTERACTIONS': 0}.
+2026-11-09T12:51:35 INFO    [MAAF_20261109_125126] qmap: Run MAAF_20261109_125126 finished with status completed
