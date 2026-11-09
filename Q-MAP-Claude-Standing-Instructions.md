@@ -36,6 +36,15 @@ Role
 - Put detailed technical reports, test evidence, and implementation decisions in the PR or appropriate project documents, not in the chat.
 - Keep documentation accurate and consistent with the approved Q-**MAP** Blueprint.
 
+## User-facing documents (permanent requirement)
+
+- Whenever you prepare anything the Project Owner will read and follow (a user guide, testing procedure,
+  checklist, tracker, operating, setup or troubleshooting instruction, however short), follow
+  `docs/standards/Q-MAP_User_Documentation_Standard.md`. That file is the single source of the rules; do not
+  restate or change them elsewhere.
+- Before delivering such a document, run the checklist in section 4 of the standard, and say in the delivery report
+  that it was run and which labels, paths, messages or values could not be checked against the application.
+
 ## Workflow
 
 - Work on the authorised branch and PR.

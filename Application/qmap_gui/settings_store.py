@@ -37,6 +37,7 @@ class GuiSettings:
     last_input_dir: str = ""
     last_profile: str = ""
     source_label: str = ""
+    last_source_dir: str = ""  # the folder last chosen with Sources > Add folder... (where that dialog opens next)
 
 
 class GuiSettingsStore:

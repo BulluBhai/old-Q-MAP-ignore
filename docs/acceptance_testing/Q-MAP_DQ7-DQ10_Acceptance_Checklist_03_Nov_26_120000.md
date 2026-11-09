@@ -1,5 +1,9 @@
 # Q-MAP data automation (DQ-7 to DQ-10): owner acceptance checklist, Windows and IDLE
 
+> **Superseded on 08-Nov-26** by `Q-MAP_DQ7-DQ10_Acceptance_Checklist_v2_08_Nov_26_151819.md` (same folder), the tracker
+> of the new guide (W1-W18 for the owner; W19 automated only). Use the new tracker. This file is kept unchanged below as the record of 03-Nov-26.
+
+
 Prepared 03-Nov-26 for the branch `claude/friendly-babbage-8xyrgo`; W13-W18 added the same day. **Status: OUTSTANDING — not yet performed by the Project Owner.**
 Only what a Linux container cannot establish is listed; everything else is covered by the automated tests (see the
 implementation report). Expected figures for your eight files are in

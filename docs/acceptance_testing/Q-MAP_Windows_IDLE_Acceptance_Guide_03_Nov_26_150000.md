@@ -1,5 +1,10 @@
 # Q-MAP — Windows/IDLE acceptance guide for PR #10 (W1 to W18), for a non-programmer
 
+> **Superseded on 08-Nov-26** by `Q-MAP_Windows_IDLE_Acceptance_Guide_v2_08_Nov_26_151819.md` (same folder), written to
+> the User Documentation Standard for the PR #10 program after PR #9 was added. Use the new guide. This file is kept
+> unchanged below as the record of 03-Nov-26.
+
+
 Prepared 03-Nov-26. **Status: OUTSTANDING — to be carried out by the Project Owner.** This guide explains how to carry
 out the 18 checks in `Q-MAP_DQ7-DQ10_Acceptance_Checklist_03_Nov_26_120000.md` (same folder). You record results in that
 checklist. No command line is needed at any point.

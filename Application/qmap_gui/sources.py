@@ -172,7 +172,7 @@ class SourcesFrame(tk.Frame):
         self.answer_button.grid(row=0, column=6, rowspan=2, padx=10)
         self._date_ids: dict[str, str] = {}
         self._decisions: dict = {}
-        self._warnings: dict = {}
+        self._warnings: dict | None = None
         self._restored_at: dict = {}
         tk.Label(box, anchor="w", fg=MUTED_COLOR, justify="left", wraplength=940,
                  text="Everything Q-MAP reads is accepted by default. If something is wrong, select the file(s) above "
@@ -281,18 +281,19 @@ class SourcesFrame(tk.Frame):
             except Exception as exc:
                 self.details.set(f"Could not read the scan results: {exc}", "error")
         shown = [s for s in states if not self.attention_var.get() or s.outcome in ss.ATTENTION]
+        ids = [i for s in states for i in s.dataset_ids]
         try:
-            self._decisions = ss.dataset_decisions(settings, [i for s in states for i in s.dataset_ids]) if states else {}
+            self._decisions = ss.dataset_decisions(settings, ids) if states else {}
         except Exception:
             self._decisions = {}
         try:
-            self._restored_at = ss.dataset_restore_times(settings, [i for s in states for i in s.dataset_ids]) if states else {}
+            self._restored_at = ss.dataset_restore_times(settings, ids) if states else {}
         except Exception:
             self._restored_at = {}
-        try:
-            self._warnings = ss.dataset_warnings(settings, [i for s in states for i in s.dataset_ids]) if states else {}
+        try:  # the whole-file checks recorded on each dataset, shown in the file's details (W14-W18, 09-Nov-26)
+            self._warnings = ss.dataset_warnings(settings, ids) if states else {}
         except Exception:
-            self._warnings = {}
+            self._warnings = None
         for s in shown:
             rejected = s.dataset_ids and all(self._decisions.get(i) == "rejected" for i in s.dataset_ids)
             item = self.files_tree.insert("", "end", values=ss.file_row(s, self._decisions, self._restored_at),
@@ -325,7 +326,7 @@ class SourcesFrame(tk.Frame):
         keys = ss.question_keys(s) if s is not None else set()
         if s is not None:
             many = len(self.selected_files())
-            self.details.set_parts(ss.file_details(s, getattr(self, "_decisions", {}), getattr(self, "_warnings", {}),
+            self.details.set_parts(ss.file_details(s, getattr(self, "_decisions", {}), getattr(self, "_warnings", None),
                                                    getattr(self, "_restored_at", {})) +
                                    ([(f"\n{many} files selected: Reject, Restore, Save correction and Add to alias "
                                       "registry apply to all of them.\n", "bold")] if many > 1 else []))
@@ -387,9 +388,12 @@ class SourcesFrame(tk.Frame):
         settings = self.app.core_settings
         if settings is None or self.running:
             return
-        folder = self.app.dialogs.ask_directory("Choose the folder with your market-data files", str(Path.home()))
+        folder = self.app.dialogs.ask_directory("Choose the folder with your market-data files", self.add_folder_start())
         if not folder:
             return
+        # remembered even if Q-MAP then refuses the folder, so the window opens there next time (gui_settings.json;
+        # a settings file that cannot be written is reported by remember() and changes nothing else)
+        self.app.remember(last_source_dir=str(Path(folder)))
         try:
             src = ss.add_source(settings, folder, **self._source_options())
         except (ss.SourceError, ValueError) as exc:
@@ -400,6 +404,13 @@ class SourcesFrame(tk.Frame):
         item = next(i for i, sid in self.source_rows.items() if sid == src.source_id)
         self.sources_tree.selection_set(item)
         self.on_source_select()
+
+    def add_folder_start(self) -> str:
+        """Where Add folder... opens: the folder chosen last time; the first time, the folder Q-MAP is running from
+        (its application folder, worked out from the program file, not the current working directory); a folder
+        that no longer exists falls back to its nearest existing parent, and finally to the home folder."""
+        return ss.first_existing_folder(getattr(self.app.gui_settings, "last_source_dir", ""),
+                                        str(getattr(self.app, "code_root", "") or ""))
 
     def save_settings(self) -> None:
         sid, settings = self.selected_source(), self.app.core_settings
@@ -511,9 +522,39 @@ class SourcesFrame(tk.Frame):
             if not ok:
                 self.app.dialogs.warn("Q-MAP", msg)
 
+    def _settings_ready_for_scan(self, sid: int, settings) -> bool:
+        """A scan always uses the folder's SAVED settings. If the settings on screen differ (for example Include
+        sub-folders ticked but not saved), ask: save them and scan, or put the screen back to the saved settings and
+        scan with those. The screen never shows one thing while the scan does another (owner acceptance W08)."""
+        src = next((s for s in ss.sources(settings) if s.source_id == sid), None)
+        if src is None:
+            return False
+        changes = ss.unsaved_changes(src, self._source_options())
+        if not changes:
+            return True
+        lines = "\n".join(f"  {name}: on screen {screen}, saved {saved}" for name, screen, saved in changes)
+        if self.app.dialogs.yes_no("Folder settings not saved",
+                                   f"The settings on screen for '{src.label}' are not saved:\n{lines}\n\n"
+                                   "Yes: save them, then scan with them.\n"
+                                   "No: scan with the saved settings (the screen is put back to them)."):
+            try:
+                ss.update_source(settings, sid, **self._source_options())
+            except (ss.SourceError, ValueError) as exc:
+                self.app.dialogs.error("Q-MAP", ss.plain(exc))
+                return False
+            self.log.append("Folder settings saved before the scan: " +
+                            "; ".join(f"{name} {screen}" for name, screen, _ in changes))
+        else:
+            self.on_source_select()  # the screen shows the settings the scan uses
+            self.log.append("Scanning with the saved folder settings: " +
+                            "; ".join(f"{name} {saved}" for name, _, saved in changes))
+        return True
+
     def scan(self) -> None:
         sid, settings = self.selected_source(), self.app.core_settings
         if sid is None or settings is None or self.running:
+            return
+        if not self._settings_ready_for_scan(sid, settings):
             return
         job = ss.ScanJob(settings, sid)
         self._job = job
@@ -571,11 +612,18 @@ class SourcesFrame(tk.Frame):
             self.report_var.set(str(summary.report_path))
         self.counts_var.set(summary.summary or "-")
         if getattr(summary, "stopped", False):
+            incomplete = getattr(summary, "incomplete", None)  # a stopped scan can also be incomplete: say both
             self.final_label.configure(
                 text=f"Stopped by you after {sum(summary.counts.values())} file(s); {len(summary.not_processed)} file(s) "
-                     "not processed (listed in the scan report). Work already done is kept.", fg=WARN_COLOR)
+                     "not processed (listed in the scan report). Work already done is kept." +
+                     (f" Scan INCOMPLETE: {incomplete}" if incomplete else ""),
+                fg=ERROR_COLOR if incomplete else WARN_COLOR)
         elif summary.error:
             self.final_label.configure(text=f"Stopped: {summary.error}", fg=ERROR_COLOR)
+        elif getattr(summary, "incomplete", None):
+            self.final_label.configure(
+                text=f"Scan INCOMPLETE: {summary.incomplete} The files that could be read were processed. Fix the "
+                     f"folder's access and scan again. Run {summary.run_id}.", fg=ERROR_COLOR)
         else:
             attention = sum(n for k, n in summary.counts.items() if k in ss.ATTENTION)
             self.final_label.configure(
