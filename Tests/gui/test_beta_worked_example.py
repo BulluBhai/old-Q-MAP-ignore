@@ -83,6 +83,19 @@ def test_the_worked_example_runs_end_to_end_and_matches_the_committed_evidence(g
     parse = lambda t: datetime.strptime(t, "%d-%b-%y")  # noqa: E731
     assert parse(details["split"]["is_last"]) < parse(details["split"]["oos_first"])
     findings = next(run.run_dir.glob("MA_Affinity_Findings_*.txt")).read_text(encoding="utf-8")
+    # what the acceptance guide (A5) tells the owner to look at in the Excel workbook and the PDF
+    import openpyxl
+    from pypdf import PdfReader
+
+    sheet = openpyxl.load_workbook(next(run.run_dir.glob("QLOPB_MA_Affinity_*.xlsx")), read_only=True)["Data_Quality"]
+    col_b = [r[1] for r in sheet.iter_rows(min_row=1, max_row=4, values_only=True)]
+    assert col_b[0] == "Research question:" and "moving averages" in col_b[1]
+    assert col_b[2] == "Q-MAP run and data record" and col_b[3] == f"Run ID: {run.run_id}"
+    page1 = PdfReader(str(next(run.run_dir.glob("QLOPB_MA_Affinity_Report_*.pdf")))).pages[0].extract_text()
+    page1 = " ".join(page1.split())
+    for text in ("NSE:BETADEMO Daily (dataset 2)", run.run_id, "Q-MAP build:", "Dataset checksum (SHA-256):",
+                 "Data and sample sizes"):
+        assert text in page1, text
     assert all(label in findings for label in details["frozen_top"])
 
     # 4. reproduce from the Run ID
