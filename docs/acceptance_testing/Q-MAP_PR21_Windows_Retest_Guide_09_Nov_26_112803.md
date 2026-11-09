@@ -1,27 +1,29 @@
-# Q-MAP PR #21: Windows retest guide (R1 to R4)
+# Q-MAP PR #21: Windows retest guide (W08 and W14-W18 only)
 
 **09-Nov-26 | Program to test: PR #21, branch `claude/laughing-lamport-tqy0vr`, commit `181b4ba` or later |
 Tracker: `Q-MAP_PR21_Retest_Tracker_09_Nov_26_112803.md` (same folder)**
 
 **Written to `docs/standards/Q-MAP_User_Documentation_Standard.md`.**
 
-This guide rechecks only the three things corrected after your run of 09-Nov-26:
+This guide rechecks only the two checks that did not give the expected result in your run of 09-Nov-26. Do not
+repeat any other check.
 
 | Check | What it rechecks | Your earlier result |
 |---|---|---|
-| R1 | Where **Add folder...** opens (new behaviour) | - |
-| R2 | **Include sub-folders** when it is ticked but not saved (W8) | No files found; the box went back to unticked |
-| R3 | The whole-file warnings in the file details (W14 to W18) | Expected warnings missing |
-| R4 | The scan report records the sub-folder setting | - |
+| W08R | **Include sub-folders** ticked but not saved, both choices of the new question, and the scan report | No files found; the box went back to unticked |
+| W14R-W18R | The whole-file warnings in the file details of the six pattern files | Expected warnings missing |
 
 It reuses your `D:\Q-MAP_V01\PR10_Test` folders and the test data already in them. **Nothing in your round 2c
-folders is used or changed.** About 30 minutes.
+folders is used or changed.** About 25 minutes.
 
 **Status: OUTSTANDING.** To be carried out by the Project Owner.
 
-**One point is still your decision (D-4 in the delivery plan).** R1 checks that **Add folder...** first opens at the
-folder the program runs from. In this retest that is `D:\Q-MAP_V01\PR10_Test\Q-MAP_APP_PR21`. If you want a
-different first folder, say so in the tracker; it does not make R1 a FAIL.
+**Not part of this retest: where Add folder... opens.** As you approved, it first opens at the folder the program runs
+from (the folder holding `database_manager.py`), then at the folder you chose last, also after a restart. This is
+covered by automated tests (`test_add_folder_opens_at_the_application_folder_then_at_the_last_folder_also_after_restart`).
+You may notice it while testing; nothing needs to be recorded. The remembered folder is kept in
+`%APPDATA%\Q-MAP\gui_settings.json`, which every Q-MAP copy on this computer shares: after this test, your round 2c
+copy will also open its folder window at the last folder chosen. No data is affected.
 
 ---
 
@@ -78,7 +80,7 @@ step 3. The new folder must be empty before step 4.
 7. **You should see** `Both folders are ready and remembered.`
 
 **If different:** if a window titled **Q-MAP Database Manager cannot start yet** appears, click **No** if it offers
-to install anything. Take a picture `R0_Start_Problem.png` and **STOP** (go to section 5).
+to install anything. Take a picture `W00R_Start_Problem.png` and **STOP** (go to section 5).
 
 ---
 
@@ -86,33 +88,7 @@ to install anything. Take a picture `R0_Start_Problem.png` and **STOP** (go to s
 
 In every check, **Sources** means: on the Database Manager window, click **Sources** (top right).
 
-### R1: Add folder... opens at a sensible place (PIC)
-
-R1 must be done **before** R2. It changes nothing: every folder chosen here is already a source, so Q-MAP refuses to
-add it again.
-
-1. **Do:** click **Sources**.
-2. **Do:** in section **1. Input - folders Q-MAP reads market files from**, click **Add folder...**.
-3. **You should see** a folder window titled **Choose the folder with your market-data files**, open at
-   `D:\Q-MAP_V01\PR10_Test\Q-MAP_APP_PR21` (the folder you started the program from).
-4. **Save:** PIC `R1a_First_Open.png` of the folder window, with its address bar.
-5. **Do:** in that window go to `D:\Q-MAP_V01\PR10_Test`, click `W_Pattern` once, and click **Select Folder**.
-   *(Windows wording; it may differ slightly.)*
-6. **You should see** a message window **Q-MAP** saying `This folder is already a source ('W_Pattern').` Click **OK**.
-   Nothing is added.
-7. **Do:** click **Add folder...** again.
-8. **You should see** the folder window open at `D:\Q-MAP_V01\PR10_Test\W_Pattern` (the folder chosen last).
-9. **Save:** PIC `R1b_Second_Open.png` of the folder window, with its address bar.
-10. **Do:** click **Cancel**.
-11. **Do:** close the Database Manager with the **X** at the top right. In IDLE, press **F5** again.
-12. **Do:** click **Sources**, then **Add folder...**.
-13. **You should see** the folder window open at `D:\Q-MAP_V01\PR10_Test\W_Pattern` again (remembered after a
-    restart). Click **Cancel**.
-
-**PASS** if steps 3, 8 and 13 show the folders named. **If different:** write in the tracker which folder each one
-showed, and continue with R2.
-
-### R2: Include sub-folders ticked but not saved (W8) (PIC)
+### W08R: Include sub-folders ticked but not saved (PIC + FILE)
 
 This scan reads the 33 files in `W_Stop` (three sub-folders). It adds data to the **test** registry only. It does not
 change the files.
@@ -124,13 +100,13 @@ change the files.
 4. **Do:** in section **3. Options - scan, review and correct**, click **SCAN SELECTED FOLDER NOW**.
 5. **You should see** a window **Folder settings not saved** with the line
    `Include sub-folders: on screen on, saved off`.
-6. **Save:** PIC `R2a_Not_Saved_Question.png` of that window.
+6. **Save:** PIC `W08R_a_Not_Saved_Question.png` of that window.
 7. **Do:** click **No**.
 8. **You should see**:
    - the box **Include sub-folders** unticked again (the screen shows the setting the scan used);
    - under **Progress / Status** a line starting `Scan finished (no supported files found (3 sub-folder(s) not
      scanned: Include sub-folders is off for this folder))`.
-9. **Save:** PIC `R2b_Scan_With_Saved.png` of section 1 and **Progress / Status**.
+9. **Save:** PIC `W08R_b_Scan_With_Saved.png` of section 1 and **Progress / Status**.
 10. **Do:** tick **Include sub-folders** again. Click **SCAN SELECTED FOLDER NOW**.
 11. **You should see** the same window **Folder settings not saved**. Click **Yes**.
 12. **You should see**:
@@ -139,13 +115,18 @@ change the files.
     - in the folder list, `yes` under **Sub-folders** for **W_Stop**;
     - section 2 listing files such as `Copy_1/...`, `Copy_2/...` and `Copy_3/...`;
     - in **Live Log**, the line `Folder settings saved before the scan: Include sub-folders on`.
-13. **Save:** PIC `R2c_Scan_With_Subfolders.png` of section 1, section 2 and **Progress / Status**.
+13. **Save:** PIC `W08R_c_Scan_With_Subfolders.png` of section 1, section 2 and **Progress / Status**.
+14. **Do:** look at **Last scan report:** in section 2, then click **Open run folder**.
+15. **You should see** a File Explorer window with a file whose name starts with `Scan_Report_`.
+16. **Do:** copy that file to `Evidence_PR21` (FILE, guide v2 section 3.6). Open the copy in Excel.
+17. **You should see** on the first line, after `Scan` and `complete`, the cells `Sub-folders`, `included`,
+    `Skip patterns` and `none`. Close Excel with **Don't Save**.
 
-**PASS** if steps 5, 8, 11 and 12 are as described. **If different:** write what you saw. If the **Folder settings
+**PASS** if steps 5, 8, 11, 12 and 17 are as described. **If different:** write what you saw. If the **Folder settings
 not saved** window does not appear at step 5, write that, click **Stop scan** if a scan is running, and continue
-with R3.
+with W14R-W18R.
 
-### R3: whole-file warnings in the file details (W14 to W18) (TXT)
+### W14R-W18R: whole-file warnings in the file details (TXT)
 
 No new scan is needed: the six pattern files were scanned on 09-Nov-26, and their checks are already recorded.
 
@@ -153,17 +134,17 @@ No new scan is needed: the six pattern files were scanned on 09-Nov-26, and thei
 2. **Do:** in section **2. Output - files found in the selected folder**, click `NSE_RANDOMGAPS.csv`.
 3. **You should see**, in the details box below the file list, a line starting `Quality warnings recorded for
    dataset` (followed by the dataset number and a colon), and under it the lines in the table below.
-4. **Save:** TXT of the details box, as `R3_RandomGaps.txt`.
+4. **Save:** TXT of the details box, as `W14R_RandomGaps.txt`.
 5. **Do:** repeat steps 2 to 4 for each file in the table, using its TXT name.
 
-| File | You should see | You should NOT see | TXT |
-|---|---|---|---|
-| `NSE_RANDOMGAPS.csv` | `WARNING: Some days have fewer bars than usual` | any line containing `bar interval` | `R3_RandomGaps.txt` |
-| `NSE_EVERYOTHER.csv` | `WARNING: Part of the file may have another bar interval`; the words `cannot show whether`; `Detected timeframe: 5 minutes` | `has another bar interval` | `R3_EveryOther.txt` |
-| `NSE_GENUINE3M.csv` | `WARNING: Part of the file has another bar interval`; `3 minute(s)` | `may have another bar interval` | `R3_Genuine3M.txt` |
-| `NSE_DAILY0000.csv` | `WARNING: Part of the file has another bar interval`; `outside the times of the intraday bars` | `fewer bars than usual` | `R3_Daily0000.txt` |
-| `NSE_DAILY0915.csv` | `WARNING: Part of the file may have another bar interval`; `a time the intraday bars also use` | `fewer bars than usual` | `R3_Daily0915.txt` |
-| `NSE_SPARSE.csv` | `WARNING: Some days have fewer bars than usual` | any line containing `bar interval` | `R3_Sparse.txt` |
+| Check | File | You should see | You should NOT see | TXT |
+|---|---|---|---|---|
+| W14R | `NSE_RANDOMGAPS.csv` | `WARNING: Some days have fewer bars than usual` | any line containing `bar interval` | `W14R_RandomGaps.txt` |
+| W15R | `NSE_EVERYOTHER.csv` | `WARNING: Part of the file may have another bar interval`; the words `cannot show whether`; `Detected timeframe: 5 minutes` | `has another bar interval` | `W15R_EveryOther.txt` |
+| W16aR | `NSE_GENUINE3M.csv` | `WARNING: Part of the file has another bar interval`; `3 minute(s)` | `may have another bar interval` | `W16aR_Genuine3M.txt` |
+| W16bR | `NSE_DAILY0000.csv` | `WARNING: Part of the file has another bar interval`; `outside the times of the intraday bars` | `fewer bars than usual` | `W16bR_Daily0000.txt` |
+| W17R | `NSE_DAILY0915.csv` | `WARNING: Part of the file may have another bar interval`; `a time the intraday bars also use` | `fewer bars than usual` | `W17R_Daily0915.txt` |
+| W18R | `NSE_SPARSE.csv` | `WARNING: Some days have fewer bars than usual` | any line containing `bar interval` | `W18R_Sparse.txt` |
 
 Also expected, and not a failure:
 
@@ -173,18 +154,6 @@ Also expected, and not a failure:
   check only; the whole-file warnings follow it.
 
 **PASS** if every file shows its "You should see" text and none of its "You should NOT see" text.
-
-### R4: the scan report records the sub-folder setting (FILE)
-
-1. **Do:** with **W_Stop** selected in section 1, look at **Last scan report:** in section 2. Click **Open run
-   folder**.
-2. **You should see** a File Explorer window with a file whose name starts with `Scan_Report_`.
-3. **Do:** copy that file to `Evidence_PR21` (FILE, guide v2 section 3.6). Then open the copy in Excel.
-4. **You should see** on the first line, after `Scan` and `complete`, the cells `Sub-folders`, `included`,
-   `Skip patterns` and `none`.
-
-**PASS** if step 4 is as described. This report is from the R2 scan with **Yes**. *(The report from the **No** scan,
-one run earlier, shows `not included (3 not scanned)` instead.)*
 
 ---
 
@@ -200,7 +169,7 @@ one run earlier, shows `not included (3 not scanned)` instead.)*
 
 ## 5. What to do next
 
-1. Fill in the tracker's section 1 (date as dd-mmm-yy, Python version, commit tested) and the R1 to R4 rows.
+1. Fill in the tracker's section 1 (date as dd-mmm-yy, Python version, commit tested) and the W08R and W14R-W18R rows.
 2. Right-click `D:\Q-MAP_V01\PR10_Test\Evidence_PR21` → **Send to** → **Compressed (zipped) folder**. Rename the ZIP to
    `PR21_Evidence_<dd_Mmm_yy>.zip`, for example `PR21_Evidence_10_Nov_26.zip`.
 3. Send the tracker and the ZIP for review (to ChatGPT).
