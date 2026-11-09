@@ -18,7 +18,7 @@ when data are missing it says what to prepare in Database Manager.
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Callable
@@ -252,7 +252,12 @@ def run_analysis(settings: Settings, db: Database, spec: AnalysisSpec, dataset_i
     compared with the new ones and a Reproducibility_Report is written into the new run folder."""
     say = log or (lambda _m: None)
     say(f"Checking readiness of {len(dataset_ids)} dataset(s) for {spec.name}...")
-    readiness = check_analysis(settings, db, spec, dataset_ids, raw_params)
+    # A reproduction is tied to the exact historical dataset recorded by the earlier run. It may therefore
+    # use a preserved superseded dataset, but only after reproduce.py has verified the original run's SHA-256.
+    # Keep the ordinary AnalysisSpec unchanged: new research runs must continue to reject superseded datasets.
+    readiness_spec = (replace(spec, requirement=replace(spec.requirement, allow_superseded=True))
+                      if reproduce_of is not None else spec)
+    readiness = check_analysis(settings, db, readiness_spec, dataset_ids, raw_params)
     if not readiness.ready:
         reasons = readiness.problems + [f"{r.label}: {f.detail}" for r in readiness.reports for f in r.failures]
         lead = {INVALID_INPUT: "The parameters entered are not valid, so nothing was run:" if readiness.parameter_problems
