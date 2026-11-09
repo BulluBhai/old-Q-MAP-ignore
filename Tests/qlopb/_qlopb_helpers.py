@@ -7,9 +7,9 @@ import pandas as pd
 
 ROOT = Path(__file__).resolve().parent.parent  # Tests/
 
-SBIN_FILE = ROOT / "fixtures" / "qlopb_data" / "NSE_SBIN, 60.csv"
-NIFTY_FILE = ROOT / "fixtures" / "qlopb_data" / "Nifty500 Healthcare.txt"
-SBIN_SHA256 = "9bb9d8ccaf1c603c1f89ca3e35a6ae6c3b343dbfc37b8399eb0fc437965ad4d3"
+SBIN_FILE = ROOT / "fixtures" / "qlopb_data" / "NSE_SYNTHHOURLY, 60.csv"  # synthetic (09-Nov-26)
+NIFTY_FILE = ROOT / "fixtures" / "qlopb_data" / "Synth500 Sector.txt"  # synthetic (09-Nov-26)
+SBIN_SHA256 = "fb47e30767bdba83f9d0620f1492e36e790d975590b519a4475b291e4eb3f623"
 
 
 def synthetic_ohlc(n=600, seed=7, start="2020-01-01", freq="B", drift=0.0003, vol=0.012):

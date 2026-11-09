@@ -4,7 +4,7 @@ that they are suitable for the existing MA Affinity methodology, i.e. that they 
 
 Compared for each daily dataset and each of 1W/1M/1Q (Q-MAP derive) vs W/M/Q (QLOPB):
   bar dates, open/high/low/close, and the FULL MA Affinity result (every candidate row and every interaction).
-Data: the real daily file shipped with QLOPB (Nifty500 Healthcare, 228 bars) and a 16-year synthetic daily series built
+Data: the synthetic headerless daily sample file (Synth500 Sector, 228 bars; it replaced a QLOPB sample on 09-Nov-26) and a 16-year synthetic daily series built
 to contain the edge periods: start and end inside a week, month and quarter; ISO week 53 (2020); weeks across year
 ends; a leap day; random holidays; a week with no session; a week with one session; Saturday and Sunday special
 sessions; and sessions with empty volume.
@@ -73,7 +73,7 @@ def registered(tmp_path_factory):
     roots = {k: base / k for k in ("code", "data", "output", "src")}
     for p in roots.values():
         p.mkdir()
-    shutil.copy2(FIXTURES / "Nifty500 Healthcare.txt", roots["src"] / "Nifty500 Healthcare.txt")
+    shutil.copy2(FIXTURES / "Synth500 Sector.txt", roots["src"] / "Synth500 Sector.txt")
     _synthetic_daily(roots["src"] / "NSE_SYNTHEDGE, 1D.csv")
     settings = load_settings(None, env={"QMAP_DATA_ROOT": str(roots["data"]), "QMAP_OUTPUT_ROOT": str(roots["output"])},
                              code_root=roots["code"])
@@ -100,7 +100,7 @@ def _frame(settings, db, dataset_id) -> pd.DataFrame:
                         index=pd.DatetimeIndex(pd.to_datetime(t["session_date"]), name="datetime"))
 
 
-CASES = [(inst, tf) for inst in ("NSE:NIFTY500_HEALTHCARE", "NSE:SYNTHEDGE") for tf in PAIRS]
+CASES = [(inst, tf) for inst in ("NSE:SYNTH500_SECTOR", "NSE:SYNTHEDGE") for tf in PAIRS]
 
 
 @pytest.mark.parametrize("instrument,timeframe", CASES)
