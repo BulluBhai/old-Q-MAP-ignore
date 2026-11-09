@@ -192,6 +192,32 @@ def readable(detail: str) -> str:
     return _CODE_PREFIX.sub("", detail or "").replace(" Action: ", "  What to do: ")
 
 
+_RECORDED_WARNING = re.compile(r"^([a-z][a-z0-9_]*): (.*)$", re.S)
+
+
+def describe_warning(recorded: str) -> tuple[str, str, str]:
+    """(plain-English title, recorded detail, check name) of one warning as the registry records it
+    ("check_name: detail", see catalog._warnings_for). Wording only: the recorded detail is shown unchanged, nothing is
+    recalculated. Used by Sources and by Datasets and Storage, so the two screens describe a warning the same way
+    (UAT 06-Nov-26, finding O1)."""
+    text = recorded or ""
+    m = _RECORDED_WARNING.match(text)
+    if m:
+        return explain(m.group(1))[0], readable(m.group(2)), m.group(1)
+    if text in CHECKS:  # recorded without a detail
+        return explain(text)[0], "", text
+    return text, "", ""
+
+
+def warning_lines(recorded: list[str]) -> list[str]:
+    """One line per recorded warning: 'Title (check_name): detail'."""
+    out = []
+    for w in recorded:
+        title, detail, name = describe_warning(w)
+        out.append(f"{title} ({name}): {detail}" if name and detail else f"{title} ({name})" if name else title)
+    return out
+
+
 def findings_from_checks(checks) -> list[Finding]:
     """Failed errors and warnings (and informative info lines) as readable findings. Passed checks are omitted."""
     out = []

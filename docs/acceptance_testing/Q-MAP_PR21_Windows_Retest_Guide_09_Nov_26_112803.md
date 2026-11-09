@@ -151,8 +151,8 @@ No new scan is needed: the six pattern files were scanned on 09-Nov-26, and thei
 
 1. **Do:** click **Sources**. In section 1, click the line **W_Pattern**.
 2. **Do:** in section **2. Output - files found in the selected folder**, click `NSE_RANDOMGAPS.csv`.
-3. **You should see**, in the details box below the file list, a line `Checks of the whole file: 1 warning(s)`
-   followed by the lines in the table below.
+3. **You should see**, in the details box below the file list, a line starting `Quality warnings recorded for
+   dataset` (followed by the dataset number and a colon), and under it the lines in the table below.
 4. **Save:** TXT of the details box, as `R3_RandomGaps.txt`.
 5. **Do:** repeat steps 2 to 4 for each file in the table, using its TXT name.
 

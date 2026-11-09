@@ -24,6 +24,7 @@ from qmap.data_engine.profiles import ALLOWED_TIMEFRAMES
 from qmap.storage.db import open_database
 
 from .common import EmitHandler as _EmitHandler
+from .messages import describe_warning
 from .services import plain  # also used by the Sources screen (errors without their technical code)
 
 ATTENTION = ("needs_answer", "rejected", "blocked", "unsupported", "failed", "missing")
@@ -151,37 +152,11 @@ def file_row(s: D.FileState, decisions: dict | None = None) -> tuple:
             (s.detail or "")[:160])
 
 
-def dataset_warnings(settings: Settings, dataset_ids) -> dict:
-    """{dataset id: [warning, ...]} as the Data Registry records them for each dataset ('check_name: detail'). These
-    are the checks of the WHOLE file made when it was loaded (for example the full-file interval check), which the
-    Workbench readiness check also shows."""
-    def build(db):
-        out = {}
-        for i in dataset_ids:
-            info = get_dataset(db, i)
-            out[i] = list(info.warnings) if info is not None else []
-        return out
-    return _with_db(settings, build)
-
-
-def check_findings(warnings) -> list[tuple[str, str]]:
-    """[(plain title, detail)] for recorded warnings 'check_name: detail', worded as on the Load files screen."""
-    from .messages import explain, readable
-    out, seen = [], set()
-    for w in warnings:
-        name, _, detail = str(w).partition(": ")
-        if (name, detail) in seen:
-            continue
-        seen.add((name, detail))
-        out.append((explain(name)[0], readable(detail)))
-    return out
-
-
 def file_details(s: D.FileState, decisions: dict | None = None,
                  warnings: dict | None = None) -> list[tuple[str, str | None]]:
-    """Plain-English description of one file's current state, as (text, tag) parts. `warnings` ({dataset id:
-    [recorded warning]}, from dataset_warnings) adds the whole-file checks of the file's datasets: before 09-Nov-26
-    they were recorded but never shown here (owner acceptance W14-W18)."""
+    """Plain-English description of one file's current state, as (text, tag) parts. `warnings` (dataset id -> the
+    quality warnings recorded for that dataset, see dataset_warnings) adds them in plain English (UAT finding O1;
+    brought into PR #10's line on 09-Nov-26 after owner acceptance W14-W18, with "none" when a dataset has none)."""
     tag = {"imported": "ok", "reused": "ok", "needs_answer": "warning", "missing": "warning"}.get(s.outcome, "error")
     if s.outcome == "ignored":
         tag = "muted"
@@ -204,18 +179,19 @@ def file_details(s: D.FileState, decisions: dict | None = None,
     for w in s.interpretation.get("warnings", []):
         if "file name says" not in w:
             parts.append((f"WARNING: {w}\n", "warning"))
-    if warnings is not None and s.dataset_ids:
-        findings = check_findings([w for i in s.dataset_ids for w in warnings.get(i, [])])
-        if findings:
-            parts.append((f"Checks of the whole file: {len(findings)} warning(s)\n", "bold"))
-            for title, detail in findings:
-                parts.append((f"WARNING: {title}\n", "warning"))
-                if detail:
-                    parts.append((f"  {detail}\n", "muted"))
-        else:
-            parts.append(("Checks of the whole file: no warnings\n", None))
     if s.detail:
         parts.append((f"{s.detail}\n", None))
+    for ds in s.dataset_ids:  # recorded at load time; shown as recorded, never recalculated here
+        recorded = (warnings or {}).get(ds) or []
+        if recorded:
+            parts.append((f"Quality warnings recorded for dataset {ds}:\n", "bold"))
+            for w in recorded:
+                title, detail, _name = describe_warning(w)
+                parts.append((f"WARNING: {title}\n", "warning"))
+                if detail:
+                    parts.append((f"    {detail}\n", "muted"))
+        elif warnings is not None and ds in warnings:  # read, and none recorded: say so (owner acceptance 09-Nov-26)
+            parts.append((f"Quality warnings recorded for dataset {ds}: none\n", None))
     if s.dataset_ids:
         parts.append((f"Dataset(s): {', '.join(map(str, s.dataset_ids))} - see Datasets and Storage.\n", None))
     for q in s.questions:
@@ -429,6 +405,17 @@ def exceptions_text(groups: list[dict]) -> list[tuple[str, str | None]]:
 
 def dataset_decisions(settings: Settings, dataset_ids) -> dict:
     return _with_db(settings, lambda db: {i: UD.current_decision(db, i) for i in dataset_ids})
+
+
+def dataset_warnings(settings: Settings, dataset_ids) -> dict:
+    """dataset id -> the quality warnings recorded for it (the same list Datasets and Storage shows)."""
+    def build(db):
+        out = {}
+        for i in dict.fromkeys(dataset_ids):
+            info = get_dataset(db, i)
+            out[i] = list(info.warnings) if info is not None else []
+        return out
+    return _with_db(settings, build)
 
 
 def reject_files(settings: Settings, states: list, reason: str = "") -> UD.DecisionResult:

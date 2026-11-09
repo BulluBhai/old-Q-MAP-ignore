@@ -3,7 +3,8 @@
 W08: with Include sub-folders off, a folder whose files are all in sub-folders scanned as "no supported files found"
      with nothing saying why, and the scan report did not record the setting. With it on, every file is found.
 W14-W18: the whole-file checks (partial_session, interval_change_*) were recorded on each dataset but never shown in
-     the Sources file details. The details now carry them, worded as on the Load files screen. Detection itself is
+     the Sources file details on PR #10's line. The details now carry them with PR #12's round-1 wording (finding O1),
+     plus a "none" line when a dataset has no recorded warning. Detection itself is
      unchanged and is checked here against the same six synthetic files the owner scanned.
 Also the folder-setting comparison behind the "settings not saved" question and the Add folder start location."""
 
@@ -126,7 +127,7 @@ def test_w14_to_w18_the_file_details_show_the_whole_file_checks(settings, db, tm
     warnings = ss.dataset_warnings(settings, [i for s in states.values() for i in s.dataset_ids])
     for name, (present, absent) in EXPECT.items():
         text = "".join(t for t, _ in ss.file_details(states[name], {}, warnings))
-        assert "Detected timeframe: 5 minutes" in text and "Checks of the whole file:" in text, name
+        assert "Detected timeframe: 5 minutes" in text and f"Quality warnings recorded for dataset {states[name].dataset_ids[0]}:\n" in text, name
         for p in present:
             assert p in text, (name, p, text)
         for a in absent:
@@ -134,7 +135,7 @@ def test_w14_to_w18_the_file_details_show_the_whole_file_checks(settings, db, tm
         assert "interval_change" not in text and "partial_session" not in text, name  # no technical codes shown
     # without the recorded checks (older callers) the details are as before: nothing is invented
     plain = "".join(t for t, _ in ss.file_details(states["NSE_SPARSE.csv"]))
-    assert "fewer bars" not in plain and "Checks of the whole file" not in plain
+    assert "fewer bars" not in plain and "Quality warnings recorded" not in plain
     assert {p.name: p.read_bytes() for p in folder.iterdir()} == before  # source files only read
 
 
@@ -148,5 +149,5 @@ def test_a_file_with_no_warnings_says_so(settings, db, tmp_path):
     w = ss.dataset_warnings(settings, st.dataset_ids)
     text = "".join(t for t, _ in ss.file_details(st, {}, w))
     assert w == {st.dataset_ids[0]: []}
-    assert "Checks of the whole file: no warnings" in text and "WARNING:" not in text
+    assert f"Quality warnings recorded for dataset {st.dataset_ids[0]}: none" in text and "WARNING:" not in text
 

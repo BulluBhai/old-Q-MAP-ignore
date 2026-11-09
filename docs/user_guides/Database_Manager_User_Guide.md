@@ -45,10 +45,10 @@ material is listed once, grouped, in **Exceptions**, where you can reject, resto
        Validation: Consistent across 15 sampled blocks (470 of 20000 rows examined)
        Status: Accepted by default
 
-   followed by every warning. Under **Checks of the whole file** are the warnings found when every row of the file
-   was checked, for example `WARNING: Some days have fewer bars than usual` or `WARNING: Part of the file may have
-   another bar interval`, each with its detail (shown here since 09-Nov-26; the Analytical Workbench readiness check
-   shows the same warnings). Below the list, **Exceptions found** groups everything that needs your attention:
+   followed by every warning. Under **Quality warnings recorded for dataset ...** are the warnings found when every
+   row of the file was checked, for example `WARNING: Some days have fewer bars than usual` or `WARNING: Part of the
+   file may have another bar interval`, each with its detail, or `none` when there are none (09-Nov-26; the
+   Analytical Workbench readiness check shows the same warnings). Below the list, **Exceptions found** groups everything that needs your attention:
    files not loaded (data errors), mixed bar intervals, a file name whose timeframe differs from the data, conflicting
    observations, bars that differ from another dataset, names not in the alias registry, ambiguous names, file name
    and file columns that disagree, crypto venue unknown, assumed day-first dates, assumed time zone, and files you
