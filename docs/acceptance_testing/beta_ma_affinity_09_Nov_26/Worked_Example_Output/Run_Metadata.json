@@ -33,13 +33,13 @@
   "analysis_version": 1,
   "build": {
     "cleaning_code_version": "c2",
-    "git_commit": "0ec515171a03f17bfc76777e4436815b8bea63ba",
+    "git_commit": "6280c7304e50a871fb98db04ee16734319fa7f55",
     "git_modified": false,
-    "source_fingerprint": "af53244ffaae65e41f0621104cec48e2bb7ad624fd2749532df7029e4b6751f8",
+    "source_fingerprint": "50f8289bd4b63a003b4f065b427072277fa374c83b6b7c96169813381c39fe2d",
     "version": "0.1.0rc1"
   },
   "cleaning_code_version": "c2",
-  "created_utc": "2026-11-09T16:07:53Z",
+  "created_utc": "2026-11-09T16:44:21Z",
   "input_datasets": [
     {
       "canonical_schema_version": 1,
@@ -50,14 +50,14 @@
       "instrument": "NSE:BETADEMO",
       "layer": "cleaned",
       "lineage": [
-        "Standardised Daily dataset 2: auto_ee0bc735274c@1+c2, settings vs2:7d8e2f3b9e747e4c, run SCAN_20261109_160745, from original file dataset 1",
+        "Standardised Daily dataset 2: auto_ee0bc735274c@1+c2, settings vs2:7d8e2f3b9e747e4c, run SCAN_20261109_164412, from original file dataset 1",
         "Original file (dataset 1), preserved unchanged, SHA-256 0cfd1d999e32b6f2...: NSE_BETADEMO.csv"
       ],
       "processing_version": "auto_ee0bc735274c@1+c2",
-      "relative_path": "Cleaned_Data/NSE/BETADEMO/1D/0cfd1d999e32_54090d02_SCAN_20261109_160745.parquet",
+      "relative_path": "Cleaned_Data/NSE/BETADEMO/1D/0cfd1d999e32_54090d02_SCAN_20261109_164412.parquet",
       "row_count": 1500,
       "rows_in_window": 1500,
-      "sha256": "9a06777d093f2c85798fcd10b00a729b05cf754c0cc7d7dbe05924511cc097ce",
+      "sha256": "938ceb27aaf752df4f44a6891ecc02b176407a86380337fb7b4add12acf6dc74",
       "source_files": [
         "NSE_BETADEMO.csv"
       ],
@@ -70,16 +70,16 @@
   ],
   "method_source": "MA Affinity Scanner V2, BulluBhai/QLOPB commit 6cbadc7 (safeguards S-1..S-3); calculations unchanged",
   "outputs": [
-    "QLOPB_MA_Affinity_09_Nov_26_160745.xlsx",
-    "QLOPB_MA_Affinity_Report_09_Nov_26_160745.pdf",
-    "chart_price_top_mas_09_Nov_26_160745.png",
-    "chart_is_vs_oos_09_Nov_26_160745.png",
-    "chart_forward_returns_09_Nov_26_160745.png",
-    "chart_score_by_period_09_Nov_26_160745.png",
-    "chart_interactions_sr_09_Nov_26_160745.png",
-    "MA_Affinity_Candidates_09_Nov_26_160745.csv",
-    "MA_Affinity_Interactions_09_Nov_26_160745.csv",
-    "MA_Affinity_Findings_09_Nov_26_160745.txt"
+    "QLOPB_MA_Affinity_09_Nov_26_164413.xlsx",
+    "QLOPB_MA_Affinity_Report_09_Nov_26_164413.pdf",
+    "chart_price_top_mas_09_Nov_26_164413.png",
+    "chart_is_vs_oos_09_Nov_26_164413.png",
+    "chart_forward_returns_09_Nov_26_164413.png",
+    "chart_score_by_period_09_Nov_26_164413.png",
+    "chart_interactions_sr_09_Nov_26_164413.png",
+    "MA_Affinity_Candidates_09_Nov_26_164413.csv",
+    "MA_Affinity_Interactions_09_Nov_26_164413.csv",
+    "MA_Affinity_Findings_09_Nov_26_164413.txt"
   ],
   "parameters": {
     "date_from": null,
@@ -135,5 +135,5 @@
   },
   "readiness_warnings": [],
   "result_kind": "exploratory historical research - not a trading signal; Directed IR and the weight scheme are pending owner review; p-values are not corrected for the many candidates tested",
-  "run_id": "MAAF_20261109_160745"
+  "run_id": "MAAF_20261109_164413"
 }

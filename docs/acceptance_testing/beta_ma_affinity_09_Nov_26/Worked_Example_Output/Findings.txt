@@ -1,4 +1,4 @@
-MA Affinity findings - NSE:BETADEMO Daily (dataset 2) - Run MAAF_20261109_160745
+MA Affinity findings - NSE:BETADEMO Daily (dataset 2) - Run MAAF_20261109_164413
 
 Research question
   For this instrument, which moving averages (type and period) has price historically interacted with most reliably - coming within the proximity zone and then moving in the expected direction over the following bars - and do the leaders chosen on the earlier (in-sample) part of the history keep that behaviour on the later (out-of-sample) part?
