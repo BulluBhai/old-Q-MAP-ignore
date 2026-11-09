@@ -12,7 +12,8 @@ Project Owner on 3 November 2026 and superseding v1.3, v1.2, v1.1 and v1.0 where
 level for history; v1.2 is in PR #5; v1.0 is in the repository history; no v1.1 file was ever committed (see the
 [v0.1 release documents](docs/release/)). How the code meets v1.35 is in the
 [v0.1 release-readiness audit](docs/release/Q-MAP_v0.1_Release_Readiness_Audit_03_Nov_26_165501.md) (earlier:
-[Blueprint v1.3 implementation audit](docs/architecture/Blueprint_v1.3_Implementation_Audit.md)).
+[Blueprint v1.3 implementation audit](docs/architecture/Blueprint_v1.3_Implementation_Audit.md)). PR #9's reconciliation with v1.35 is in
+[Blueprint v1.35 reconciliation (PR #9)](docs/architecture/Blueprint_v1.35_Reconciliation_PR9.md).
 Material decisions are recorded in [docs/decision_log.md](docs/decision_log.md).
 
 ## Two applications, one platform
@@ -51,6 +52,11 @@ Documentation:
 **Not implemented yet:** MIQP Market Intelligence (outside v0.1), provider API adapters (Blueprint v1.35 §8.5.2),
 DuckDB queries, QLOPB pivot/CPR/other references, other research modules, backtesting, portfolio and risk. They are
 shown as COMING SOON. Full list: the known-limitations document above.
+
+**PR #9's known defects:** the five automatic-interpretation defects found in the Project Owner's test session of
+02-Nov-26 (F-01b, F-02a, F-02c, F-03, F-04) are fixed on this branch (PR #10), which now also contains PR #9's final
+state (merged 08-Nov-26). Details: [v1.35 reconciliation](docs/architecture/Blueprint_v1.35_Reconciliation_PR9.md),
+sections 5 and 11 (integration of PR #9 into PR #10).
 
 ![Database Manager: Datasets and Storage](docs/acceptance_testing/evidence_01_Nov_26/screenshots/04_datasets_and_storage_01_Nov_26.png)
 ![Analytical Workbench after a run](docs/acceptance_testing/evidence_01_Nov_26/screenshots/06_workbench_completed_01_Nov_26.png)
