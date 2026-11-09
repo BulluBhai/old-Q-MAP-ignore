@@ -48,6 +48,12 @@ Affinity, see the next section.
 QLOPB's **MA Affinity Scanner V2**, brought into Q-MAP with its calculations unchanged (Project Owner approval
 03-Nov-26). It describes how price behaved around moving averages in the past. It is **not** a trading signal.
 
+**Research question.** For this instrument, which moving averages (type and period) has price historically
+interacted with most reliably? Here "interacted" means price came within the proximity zone, then moved in the
+expected direction over the following bars. Do the leaders chosen on the earlier (in-sample) part of the history keep
+that behaviour on the later (out-of-sample) part? The ranking uses the in-sample part only; the out-of-sample part
+never changes a rank.
+
 - **Data:** one registered **daily, weekly or monthly** dataset per run. Weekly and monthly datasets are the ones made
   in Database Manager (Datasets and Storage, Derive). The Workbench never builds weekly or monthly bars itself, and
   never uses another timeframe instead. Intraday and quarterly datasets are not offered in v0.1.
@@ -67,8 +73,23 @@ QLOPB's **MA Affinity Scanner V2**, brought into Q-MAP with its calculations unc
   were already removed when the data were loaded and never stop the analysis.
 - **Results** (in the run folder): `QLOPB_MA_Affinity_<date>.xlsx` (all tables and the limitations),
   `QLOPB_MA_Affinity_Report_<date>.pdf`, PNG charts, `MA_Affinity_Candidates_<date>.csv` and
-  `MA_Affinity_Interactions_<date>.csv` (for independent checking), the run log and `Run_Metadata_<date>.json` (input
-  dataset and its checksum, every setting, the code build and the QLOPB source commit).
+  `MA_Affinity_Interactions_<date>.csv` (for independent checking), `MA_Affinity_Findings_<date>.txt` (the research
+  question and the frozen Top-N in plain sentences, with how to read them), the run log and `Run_Metadata_<date>.json`.
+  The metadata holds the input dataset and its checksum, every setting exactly as you typed it, the bars used, the
+  in-sample/out-of-sample dates, the code build and the QLOPB source commit.
+- **Reproduce a run** (section **2. Output - where results are saved**): after a run, its Run ID is filled in next to
+  **Reproduce Run ID:**. You can also type any earlier Run ID there. Click **Reproduce run (runs it again and
+  compares)**.
+  - What happens: Q-MAP runs the same analysis again as a NEW run, with the same data and settings. The earlier run is
+    never changed. It then compares the result tables.
+  - When it works: the result line says `REPRODUCED: every result table is identical to run ...`, and the new run
+    folder holds `Reproducibility_Report_<date>.csv`.
+  - When it is refused (no new run is made): the data have changed since the earlier run (checksum differs), the
+    analysis version has changed, or the run is older than 09-Nov-26.
+  - A different program build is stated in the report.
+- **Accuracy evidence:** the calculations are checked automatically against a separate, independently written
+  calculation of the same method, on every candidate and every interaction. Further tests prove that later bars
+  can never change in-sample results (no look-ahead).
 - **Read with care:** rankings describe the past; many candidates are tested, so some look good by chance (p-values
   are not corrected); Directed IR and the weight scheme are **pending owner review**; small out-of-sample samples are
   weak evidence. These limitations are printed in every report.
