@@ -84,6 +84,40 @@ def test_dataset_summary_is_reproducible_too(settings, db, dataset):
     assert again.ok and again.reproduction["identical"], again.message
 
 
+def test_reproduction_can_use_preserved_superseded_dataset_but_new_runs_cannot(settings, db, dataset):
+    first = run_analysis(settings, db, MA_AFFINITY, [dataset], PARAMS)
+    assert first.ok, first.message
+    original_hashes = _folder_hashes(first.run_dir)
+
+    # Simulate a later processing run superseding this dataset while preserving its file and registry checksum.
+    with db.transaction() as conn:
+        conn.execute("UPDATE datasets SET status = 'superseded' WHERE dataset_id = ?", (dataset,))
+
+    reproduced = R.reproduce_run(settings, db, first.run_id)
+    assert reproduced.ok, reproduced.message
+    assert reproduced.reproduction["identical"] is True
+    assert any("SUPERSEDED" in warning for warning in reproduced.readiness.warnings)
+    assert _folder_hashes(first.run_dir) == original_hashes
+
+    # The exception is limited to reproduction; an ordinary new analysis must still be blocked.
+    fresh = run_analysis(settings, db, MA_AFFINITY, [dataset], PARAMS)
+    assert fresh.outcome == "blocked"
+    assert "SUPERSEDED" in fresh.message
+
+
+def test_missing_historical_dataset_file_is_refused_before_anything_runs(settings, db, dataset):
+    first = run_analysis(settings, db, MA_AFFINITY, [dataset], PARAMS)
+    assert first.ok, first.message
+    path = settings.data_path(get_dataset(db, dataset).relative_path)
+    path.unlink()
+    runs_before = db.one("SELECT COUNT(*) AS n FROM runs")["n"]
+
+    again = R.reproduce_run(settings, db, first.run_id)
+    assert again.outcome == "blocked"
+    assert f"Dataset {dataset}" in again.message and "missing" in again.message
+    assert db.one("SELECT COUNT(*) AS n FROM runs")["n"] == runs_before
+
+
 def test_changed_data_are_refused_before_anything_runs(settings, db, dataset):
     first = run_analysis(settings, db, MA_AFFINITY, [dataset], PARAMS)
     path = settings.data_path(get_dataset(db, dataset).relative_path)
