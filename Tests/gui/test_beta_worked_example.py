@@ -127,6 +127,7 @@ def test_the_worked_example_runs_end_to_end_and_matches_the_committed_evidence(g
     for name, data in tables.items():
         assert (OUT / name.replace("_.csv", ".csv")).read_bytes() == data, name
     committed_meta = json.loads((OUT / "Run_Metadata.json").read_text(encoding="utf-8"))
+    _check_evidence_provenance(committed_meta)
     assert committed_meta["analysis_details"] == {**details, "engine": committed_meta["analysis_details"]["engine"]}
     # the registered file's checksum changes with each registration (it records when it was made), so the dataset is
     # compared by what it holds: the same source file (checked above), rows and date range
@@ -138,3 +139,22 @@ def test_the_worked_example_runs_end_to_end_and_matches_the_committed_evidence(g
     assert rows[-1][-1].startswith("REPRODUCED")
     # the committed report records the interactions table's checksum; a fresh run gives the same table
     assert any(r[0].startswith("Result table MA_Affinity_Interactions_") and r[1].endswith(interactions_sha) for r in rows)
+
+
+def _check_evidence_provenance(meta: dict) -> None:
+    """The committed evidence must come from a CLEAN checkout of exactly the program code under test: no uncommitted
+    program change when it was made (git_modified False, a real commit recorded), and the same source fingerprint as
+    the code running this test (SHA-256 over every program file; line endings do not matter). Any later change to the
+    program code fails this until the evidence is regenerated (QMAP_WRITE_BETA_EVIDENCE=1 from a clean checkout)."""
+    from qmap.core.build import current_build
+
+    build = meta["build"]
+    assert build["git_modified"] is False, "the evidence was generated from a working tree with uncommitted changes"
+    assert re.fullmatch(r"[0-9a-f]{40}", build["git_commit"] or ""), "the evidence does not name its source commit"
+    assert build["source_fingerprint"] == current_build()["source_fingerprint"], (
+        "the program code changed since the evidence was generated; regenerate it from a clean checkout")
+
+
+def test_the_committed_evidence_names_a_clean_build_of_this_code():
+    """Runs without a window: the provenance condition on its own (also checked inside the worked example)."""
+    _check_evidence_provenance(json.loads((OUT / "Run_Metadata.json").read_text(encoding="utf-8")))

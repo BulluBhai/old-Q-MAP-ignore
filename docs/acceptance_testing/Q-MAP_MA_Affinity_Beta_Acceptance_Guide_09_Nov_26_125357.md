@@ -30,8 +30,15 @@ behaviour on the later (out-of-sample) part?*
 
 - Your laptop with IDLE for Python 3.11 (3.12 also works). **Do not install or update anything.**
 - Notepad, Excel and a PDF viewer.
-- Pictures (PIC), text copies (TXT) and file copies (FILE) are made as in the PR #10 guide v2, sections 3.4 to 3.6.
-  Save everything in `D:\Q-MAP_V01\Beta_Test\Evidence`.
+- Evidence goes into `D:\Q-MAP_V01\Beta_Test\Evidence`. Two kinds are used:
+  - **PIC** (a picture): press **Windows key + Shift + S**, drag a box around what the step names, click the pop-up
+    at the bottom right, press **Ctrl+S**, open the `Evidence` folder, type the exact file name and click **Save**.
+  - **FILE** (a copy of a file Q-MAP made): in File Explorer click the file once, press **Ctrl+C**, open the
+    `Evidence` folder and press **Ctrl+V**. Never use **Ctrl+X** (cut).
+
+  These are the same steps as sections **3.4 How to take a picture (PIC)** and **3.6 How to copy a file Q-MAP made
+  (FILE)** of the PR #10 guide v2, file `Q-MAP_Windows_IDLE_Acceptance_Guide_v2_08_Nov_26_151819.md`. After step 2.1.7
+  below you also have it at `D:\Q-MAP_V01\Beta_Test\Q-MAP_APP\docs\acceptance_testing\` (it opens in Notepad).
 
 ---
 
@@ -39,20 +46,33 @@ behaviour on the later (out-of-sample) part?*
 
 ### 2.1 Make the folders and get the program
 
-1. **Do:** in File Explorer open `D:\Q-MAP_V01`. Make a new folder `Beta_Test` and open it.
-2. **Do:** inside `Beta_Test` make these empty folders: `Q-MAP_APP`, `Q-MAP_DATA`, `Q-MAP_OUTPUT`, `Beta_Files`,
-   `Evidence`.
-3. **Do:** in your browser open `https://github.com/BulluBhai/Q-MAP/tree/claude/beta-ma-affinity`, click the green
+1. **Do:** press **Windows key + E**, click **This PC**, then double-click **D:**.
+2. **Look:** is there a folder `Q-MAP_V01`?
+   - **Yes:** double-click it.
+   - **No:** right-click an empty area → **New** → **Folder**, type `Q-MAP_V01`, press **Enter**, then double-click
+     it.
+   - **If there is no D: drive:** **STOP** and ask for help (go to section 5). Do not use another drive on your own.
+3. **Look:** inside `Q-MAP_V01`, is there already a folder `Beta_Test` (for example from an earlier attempt)?
+   - **No:** right-click an empty area → **New** → **Folder**, type `Beta_Test` and press **Enter**.
+   - **Yes:** do **not** open, change, delete or replace it. Make a new folder `Beta_Test_2` instead (or
+     `Beta_Test_3` if that exists too). Write its name in the tracker, section 1. **Wherever this guide says
+     `Beta_Test`, use that new name.**
+4. **Do:** double-click your new folder. It must be empty. Inside it make these new folders: `Q-MAP_APP`,
+   `Q-MAP_DATA`, `Q-MAP_OUTPUT`, `Beta_Files`, `Evidence`.
+5. **Do:** in your browser open `https://github.com/BulluBhai/Q-MAP/tree/claude/beta-ma-affinity`, click the green
    **Code** button, then **Download ZIP**. *(GitHub wording; it may differ slightly.)*
-4. **Do:** in **Downloads**, right-click the ZIP → **Extract All...** → **Extract**.
-5. **Do:** open the extracted folder until you see `database_manager.py`. Press **Ctrl+A**, **Ctrl+C**, open
+6. **Do:** in **Downloads**, right-click the ZIP → **Extract All...** → **Extract**.
+7. **Do:** open the extracted folder until you see `database_manager.py`. Press **Ctrl+A**, **Ctrl+C**, open
    `D:\Q-MAP_V01\Beta_Test\Q-MAP_APP` and press **Ctrl+V**.
-6. **Do:** in `Q-MAP_APP`, open `docs` → `acceptance_testing` → `beta_ma_affinity_09_Nov_26`. Click
+8. **Do:** in `Q-MAP_APP`, open `docs` → `acceptance_testing` → `beta_ma_affinity_09_Nov_26`. Click
    `NSE_BETADEMO.csv` once, press **Ctrl+C**, open `D:\Q-MAP_V01\Beta_Test\Beta_Files` and press **Ctrl+V**.
-7. **Do:** on `https://github.com/BulluBhai/Q-MAP/pull/23` click **Commits** and write the 7-character code on the
+9. **Do:** on `https://github.com/BulluBhai/Q-MAP/pull/23` click **Commits** and write the 7-character code on the
    last line in the tracker, section 1 (**Commit tested**).
 
 **You should see** `Beta_Files` holding exactly one file, `NSE_BETADEMO.csv`.
+
+**If different:** if Windows asks **Replace or Skip Files** at any point, click **Cancel**: you are in a folder that is
+not empty. Go back to step 3 and make a new folder. Nothing is ever overwritten in this test.
 
 ### 2.2 Start the Database Manager with the new folders
 
@@ -66,7 +86,7 @@ behaviour on the later (out-of-sample) part?*
 5. **You should see** `Both folders are ready and remembered.`
 
 **If different:** if a window **Q-MAP Database Manager cannot start yet** appears, click **No** if it offers to
-install anything, take a picture `A0_Start_Problem.png` and **STOP** (go to section 4).
+install anything, take a picture `A0_Start_Problem.png` and **STOP** (go to section 5).
 
 ---
 

@@ -10,6 +10,7 @@ Guide: `Q-MAP_MA_Affinity_Beta_Acceptance_Guide_09_Nov_26_125357.md` (same folde
 | Date (dd-mmm-yy) | |
 | Python version (IDLE first line) | |
 | Commit tested (7 characters) | |
+| Test folder used (`Beta_Test`, or the new name from step 2.1.3) | |
 
 ## 2. Results
 
