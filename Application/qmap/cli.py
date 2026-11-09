@@ -116,7 +116,9 @@ def main(argv: list[str] | None = None) -> int:
                     if path:
                         print(f"{label}: {path}")
                 print(f"Run {run.run_id}  outputs: {run.dir}")
-            return 0
+                if not res.complete:  # an incomplete scan is never reported as success (PR #9 review, 08-Nov-26)
+                    print(f"Scan INCOMPLETE: {res.incomplete_text()}")
+            return 0 if res.complete else 1
         if args.command in ("recover", "verify"):
             report = (recover_incomplete if args.command == "recover" else verify_registry)(settings, db)
             summary = report.summary()
