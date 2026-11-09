@@ -40,7 +40,8 @@ main
 PR #20  docs only, to main: User Documentation Standard
 ```
 
-PR #12 is based on an older PR #10 (`78323b4`). It does not yet contain the final PR #9/#10 work or PR #21.
+PR #12 was based on an older PR #10 (`78323b4`). **Updated on Day 1:** final PR #10 and PR #21 were merged into PR #12
+(`cb090db`, normal merge), PR #12's base was changed to PR #21's branch, and PRs #15/#16 were updated from it.
 
 ### 1.2 Status of each area
 
@@ -72,6 +73,15 @@ PR #12 is based on an older PR #10 (`78323b4`). It does not yet contain the fina
 | 10. Limitations and interpretation guidance | Partial | Write them |
 | Accuracy against an independent reference | Hand-calculated unit cases; identity with the original QLOPB code (same code, so not independent) | **An independent end-to-end reference calculation** |
 | No look-ahead or leakage | MA "the future never changes the past" unit test; IS/OOS split | **An end-to-end test that later data cannot change in-sample ranking** |
+
+### 1.4 Day 1 progress (09-Nov-26)
+
+| Task | Status |
+|---|---|
+| T1 PR #21 guide corrections + retest guide (W08R, W14R-W18R only) | Done (`f2c9905`) |
+| T2 PR #12 integration | Done (`cb090db`); local 1425 passed / 0 failed / 7 skipped (220 GUI); CI on the PR |
+| T3 PRs #15/#16 updated | Done (`6e53fca`, `43121d1`) |
+| Finding | PR #12 had already fixed the W14-W18 display gap in UAT round 1 (`56a72f4`, finding O1), but it never reached PR #10. PR #21 now uses that same implementation (`e5c9e69`), so the stack has one |
 
 ---
 
@@ -164,7 +174,7 @@ The responsible person is Claude unless stated otherwise.
 | D-1 | Approve MA Affinity (single NSE instrument, daily, plus registered weekly/monthly) as the beta workflow | Scope of T4-T12 | MA Affinity, as proposed |
 | D-2 | The forward-return weight uses "Directed IR", marked "pending owner review" since 03-Nov-26. Accept it for the beta, or change it | Results and guide wording | Keep as is, labelled pending in reports |
 | D-3 | Approve the stack integration: PR #21 and final PR #10 merged into PR #12 by normal merges; beta PR stacked on PR #12 | T2 | Proceed (no merge to main, no rebase) |
-| D-4 | Where Add folder first opens: the application folder (implemented) or another folder (your note named `PR10_Test\W_Market`) | PR #21 retest wording | Application folder |
+| D-4 | Where Add folder first opens | - | **Decided 09-Nov-26 (PR #21 comment): the application folder, then the last folder chosen** |
 | D-5 | Your available days for the PR #21 retest (about 30 minutes) and the beta acceptance (about 1-2 hours) | Acceptance dates | 10-11-Nov-26 retest, 15-16-Nov-26 beta |
 | D-6 | Python version on your laptop: open IDLE and read the first line (records say 3.12.10; you said 3.11) | Launch instructions | Both supported; guide says "3.11 or newer" |
 | D-7 | PR #12 contains two QLOPB fixture files (`NSE_SBIN, 60.csv`, `Nifty500 Healthcare.txt`) that appear to be real market data. The working rule is "no real market data". Confirm they may stay, or they will be replaced with synthetic data | Validation uses synthetic data only either way | Use synthetic data for all new evidence |
