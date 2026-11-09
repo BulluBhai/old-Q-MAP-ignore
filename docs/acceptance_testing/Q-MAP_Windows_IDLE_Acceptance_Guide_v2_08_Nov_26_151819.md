@@ -14,7 +14,11 @@ an unreadable folder on purpose would mean changing Windows folder permissions, 
 covered by automated tests only (section 5, Part C). **Do not change any Windows permission or security setting for
 this test.**
 
-**Status: OUTSTANDING.** To be carried out by the Project Owner.
+**Status: CARRIED OUT 09-Nov-26** by the Project Owner. W8 and W14 to W18 did not give the expected results. They
+were corrected in PR #21 and are rechecked with `Q-MAP_PR21_Windows_Retest_Guide_09_Nov_26_112803.md` (same folder);
+do not repeat them from this guide. Known wording problem, corrected in the retest guide: W8 step 1 says to tick
+**Include sub-folders**, but section 4.4 step 2 says to untick it "unless the check says to tick it", which can be
+read either way. In this program a scan always uses the folder's **saved** settings.
 
 ---
 
