@@ -69,7 +69,7 @@ def load_earlier_run(settings: Settings, db: Database, run_id: str, analyses: di
             raise ReproduceError(f"Dataset {d['dataset_id']} used by run {run_id} is no longer in the registry.")
         path = settings.data_path(info["relative_path"])
         if not path.is_file():
-            raise ReproduceError(f"The stored file of dataset {d['dataset_id']} ({d.get('instrument')}) is missing.")
+            raise ReproduceError(f"Dataset {d['dataset_id']} ({d.get('instrument')}): its stored file is missing.")
         if sha256_file(path) != d["sha256"]:
             raise ReproduceError(f"Dataset {d['dataset_id']} ({d.get('instrument')}) is no longer the data run {run_id} "
                                  "used (its checksum differs from the one recorded), so the result cannot be "
