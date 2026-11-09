@@ -130,3 +130,17 @@ def test_runs_that_cannot_be_reproduced_say_why(settings, db, dataset, case, mon
     else:
         monkeypatch.setattr(MA_AFFINITY, "version", 2)
         assert "changed method" in R.reproduce_run(settings, db, first.run_id).message
+
+
+def test_the_findings_file_states_the_question_and_the_frozen_top_n_from_the_engine_numbers(settings, db, dataset):
+    res = run_analysis(settings, db, MA_AFFINITY, [dataset], PARAMS)
+    text = next(res.run_dir.glob("MA_Affinity_Findings_*.txt")).read_text(encoding="utf-8")
+    meta = _meta(res)
+    assert "Research question" in text and meta["analysis_details"]["research_question"] in text
+    rows = list(csv.DictReader(next(res.run_dir.glob("MA_Affinity_Candidates_*.csv")).open(encoding="utf-8")))
+    top = sorted((r for r in rows if r["rank"]), key=lambda r: int(r["rank"]))[:5]
+    assert [f"{r['ma_type']}-{r['ma_period']}" for r in top] == meta["analysis_details"]["frozen_top"]
+    for r in top:  # each line quotes the engine's own figures for that candidate
+        assert f"{r['rank']}. {r['ma_type']}-{r['ma_period']}: affinity {float(r['is_affinity_score']):.2f}" in text
+        assert f"in-sample {float(r['is_overall_sr']):.2f}% success over {r['is_n_outcomes']} outcome(s)" in text
+    assert "not corrected" in text and "not a trading signal" in text

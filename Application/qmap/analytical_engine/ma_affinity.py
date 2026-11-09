@@ -39,6 +39,10 @@ from ..data_engine import canonical as C
 from .base import AnalysisSpec, Parameter, RunContext
 
 TIMEFRAMES = ("1D", "1W", "1M")
+RESEARCH_QUESTION = ("For this instrument, which moving averages (type and period) has price historically interacted with "
+                     "most reliably - coming within the proximity zone and then moving in the expected direction over "
+                     "the following bars - and do the leaders chosen on the earlier (in-sample) part of the history keep "
+                     "that behaviour on the later (out-of-sample) part?")
 _D = qcfg.MAResearchSettings()
 METHOD_SOURCE = (f"{qlopb.METHOD_NAME}, {qlopb.SOURCE_REPOSITORY} commit {qlopb.SOURCE_COMMIT[:7]} "
                  "(safeguards S-1..S-3); calculations unchanged")
@@ -169,6 +173,8 @@ class QmapDataNote:
         period = (f"{fmt_date(ctx.params.get('date_from')) if ctx.params.get('date_from') else 'first bar'} to "
                   f"{fmt_date(ctx.params.get('date_to')) if ctx.params.get('date_to') else 'last bar'}")
         self.lines = [
+            "Research question:",
+            f"  {RESEARCH_QUESTION}",
             "Q-MAP run and data record",
             f"Run ID: {ctx.run_id}",
             f"Code build: {build_label(b)}",
@@ -201,6 +207,45 @@ def _pdf_view(ctx: RunContext, info, res):
     label = (f"{dataset_label(info)}, Run {ctx.run_id} | Q-MAP build: {build_label(b)} | Source fingerprint (SHA-256): "
              f"{b['source_fingerprint']} | Dataset checksum (SHA-256): {info.sha256}")
     return replace(res, label=escape(label), warnings=[escape(w) for w in res.warnings])
+
+
+def _num(v, fmt="{:.2f}"):
+    return "-" if v is None or (isinstance(v, float) and np.isnan(v)) else fmt.format(v)
+
+
+def _findings(ctx: RunContext, info, res) -> Path:
+    """MA_Affinity_Findings_<stamp>.txt: the research question and the frozen Top-N in plain sentences, worded from the
+    engine's own numbers (nothing is recalculated), with how to read them. For reading, not for further processing."""
+    s, di = res.settings, res.data_info
+    pk = s.fwd_windows[0]
+    lines = [f"MA Affinity findings - {dataset_label(info)} - Run {ctx.run_id}", "",
+             "Research question", f"  {RESEARCH_QUESTION}", "",
+             "Data", f"  {di['n_bars']} bars from {di['first']} to {di['last']}. Ranking used the in-sample part only: "
+             f"{di['is_bars']} bars ({di['is_first']} to {di['is_last']}). The out-of-sample check used the remaining "
+             f"{di['oos_bars']} bars ({di['oos_first']} to {di['oos_last']}).", "",
+             f"Method (unchanged QLOPB MA Affinity V2): {len(res.results)} candidates ({', '.join(s.ma_types)}, periods "
+             f"{s.ma_start}-{s.ma_end}); an interaction is a bar entering the zone within {s.proximity_pct}% of the MA; "
+             f"success is a move in the expected direction after {pk} bars (support: up, resistance: down).", ""]
+    top = res.frozen_top_results()
+    if not top:
+        lines += ["Result", "  No candidate had enough in-sample interactions to be ranked. This means insufficient "
+                            "data for these settings, not poor results."]
+    else:
+        lines.append(f"Frozen Top-{len(top)} (chosen on in-sample data only, then checked out-of-sample)")
+        for r in top:
+            oos = ("not evaluated" if r["oos_status"] == "NOT_EVALUATED" else
+                   f"out-of-sample {_num(r['oos_overall_sr'])}% success over {int(r['oos_n_outcomes'] or 0)} outcome(s)"
+                   f" (consistency {_num(r['is_oos_consistency_score'])}, {r['is_oos_consistency_status']})")
+            lines.append(f"  {r['rank']}. {r['ma_label']}: affinity {_num(r['is_affinity_score'])}; in-sample "
+                         f"{_num(r['is_overall_sr'])}% success over {r['is_n_outcomes']} outcome(s) "
+                         f"(p {_num(r['is_p_value'], '{:.4f}')}, not corrected); {oos}.")
+    lines += ["", "How to read this",
+              *[f"  - {t}" for t in qcfg.LIMITATIONS],
+              f"  - {qcfg.DISCLAIMER_TEXT}",
+              "  - Full tables: MA_Affinity_Candidates and MA_Affinity_Interactions (CSV), the Excel workbook and the PDF."]
+    path = ctx.output(f"MA_Affinity_Findings_{ctx.stamp}.txt")
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return path
 
 
 def dataset_label(info) -> str:
@@ -238,7 +283,7 @@ def execute(ctx: RunContext) -> list[Path]:
                         "split": {k: res.data_info[k] for k in ("is_bars", "is_first", "is_last", "oos_bars",
                                                                  "oos_first", "oos_last")},
                         "frozen_top": [f"{t}-{p}" for t, p in res.frozen_top], "status_counts": res.counts(),
-                        "engine": METHOD_SOURCE})
+                        "engine": METHOD_SOURCE, "research_question": RESEARCH_QUESTION})
     # The reports print res.warnings; the Q-MAP data notes shown before the run are added so that the Excel and PDF
     # carry them too (Blueprint v1.35 8.5.5 / 8.5.11 E). Nothing in the calculation reads this list.
     res.warnings.extend(f"Q-MAP data: {w}" for w in ctx.readiness_warnings)
@@ -248,6 +293,7 @@ def execute(ctx: RunContext) -> list[Path]:
     outputs += list(charts.values())
     outputs.append(_csv(ctx.output(f"MA_Affinity_Candidates_{ctx.stamp}.csv"), res.results))
     outputs.append(_csv(ctx.output(f"MA_Affinity_Interactions_{ctx.stamp}.csv"), res.interactions.to_dict("records")))
+    outputs.append(_findings(ctx, info, res))
     ctx.log(f"Frozen Top-{len(res.frozen_top)}: " + (", ".join(f"{t}-{p}" for t, p in res.frozen_top) or "none")
             + f". Status counts: {res.counts()}.")
     return [Path(p) for p in outputs]
