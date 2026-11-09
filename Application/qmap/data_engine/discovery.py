@@ -117,6 +117,10 @@ class ScanResult:
     registry_problems: list = field(default_factory=list)  # alias-registry problems (conflicting aliases ...)
     unreadable_folders: list = field(default_factory=list)  # (relative folder, reason): the scan is INCOMPLETE
     links_skipped: list = field(default_factory=list)  # relative paths of links and junctions, never followed
+    # sub-folders of the selected folder left out because Include sub-folders is off (owner acceptance W08, 09-Nov-26):
+    # counted so a scan that finds nothing can say why, never inspected
+    subfolders_not_scanned: int = 0
+    include_subfolders: bool = False
 
     @property
     def complete(self) -> bool:
@@ -137,6 +141,9 @@ class ScanResult:
         if self.stopped:
             parts.append(f"STOPPED by you: {len(self.not_processed)} file(s) not processed")
         text = ", ".join(parts) or "no supported files found"
+        if self.subfolders_not_scanned and not self.include_subfolders:
+            text += (f" ({self.subfolders_not_scanned} sub-folder(s) not scanned: Include sub-folders is off for this "
+                     "folder)")
         return text if self.complete else f"INCOMPLETE SCAN: {text}"
 
 
@@ -354,6 +361,14 @@ def _entry_kind(entry: Path, parent_real: Path, root_real: Path) -> tuple[str | 
     return None, ""
 
 
+def scan_settings_text(src: FolderSource) -> str:
+    """The folder settings a scan used, in words (run log and scan report; owner acceptance W08, 09-Nov-26)."""
+    return (f"sub-folders {'included' if src.include_subfolders else 'not included'}; skip patterns: "
+            f"{', '.join(src.exclude_patterns) or 'none'}; market time zone {src.market_timezone or '(ask)'}; "
+            f"default exchange {src.default_exchange or '-'}; symbol from file name "
+            f"{'yes' if src.symbol_from_filename else 'no'}")
+
+
 def _rel(path, root: Path) -> str:
     try:
         rel = Path(path).relative_to(root).as_posix()
@@ -363,11 +378,13 @@ def _rel(path, root: Path) -> str:
 
 
 def list_candidate_files(settings: Settings, src: FolderSource, *, unreadable: list | None = None,
-                         links: list | None = None) -> tuple[list[Path], int]:
+                         links: list | None = None, skipped_subfolders: list | None = None) -> tuple[list[Path], int]:
     """(files to look at, number excluded by the source's patterns). Never follows links out of the folder:
     symbolic links, Windows junctions and anything whose real location is not inside the folder are skipped (and
     listed in `links`). Every folder or entry that cannot be read is listed in `unreadable` as (relative path, reason),
-    so a caller can never mistake an incomplete listing for a complete one (os.walk ignores such errors by default)."""
+    so a caller can never mistake an incomplete listing for a complete one (os.walk ignores such errors by default).
+    With Include sub-folders off, the names of the selected folder's visible sub-folders are put in
+    `skipped_subfolders` (they are not opened or inspected)."""
     unreadable = [] if unreadable is None else unreadable
     links = [] if links is None else links
     root = Path(src.location)
@@ -391,6 +408,8 @@ def list_candidate_files(settings: Settings, src: FolderSource, *, unreadable: l
             dirnames[:] = []
             continue
         keep = []
+        if not src.include_subfolders and skipped_subfolders is not None and here == root:
+            skipped_subfolders.extend(d for d in sorted(dirnames) if not _hidden(d))
         # Sub-folders are outside the scan when the user did not include them: they are not inspected or classified
         # at all, so a problem inside one can never make the scan incomplete (re-review of b3b3379, 08-Nov-26).
         for d in sorted(dirnames) if src.include_subfolders else ():
@@ -476,7 +495,8 @@ def scan_source(run: Run, source_id: int, *, today: date | None = None, progress
         raise SourceError(f"The folder {src.location} is not available (moved, renamed, disconnected or not "
                           "synchronised).", action="Reconnect the drive or check the folder, then scan again.")
     scan_id = _start_scan(run, src)
-    result = ScanResult(scan_id, run.run_id, source_id)
+    result = ScanResult(scan_id, run.run_id, source_id, include_subfolders=src.include_subfolders)
+    log.info("Scan settings of '%s' (%s): %s", src.label, src.location, scan_settings_text(src))
     ensure_registry_template(settings)
     registry = load_registry(settings)  # once per scan: every file is matched against the same registry
     result.registry_problems = [p.text for p in registry.problems]
@@ -484,8 +504,13 @@ def scan_source(run: Run, source_id: int, *, today: date | None = None, progress
         log.warning("Alias registry: %s", text)
     today = today or datetime.now(timezone.utc).date()
     try:
+        skipped_dirs: list = []
         files, result.excluded = list_candidate_files(settings, src, unreadable=result.unreadable_folders,
-                                                      links=result.links_skipped)
+                                                      links=result.links_skipped, skipped_subfolders=skipped_dirs)
+        result.subfolders_not_scanned = len(skipped_dirs)
+        if skipped_dirs:
+            log.info("Include sub-folders is off: %d sub-folder(s) of '%s' not scanned (%s)", len(skipped_dirs),
+                     src.label, ", ".join(skipped_dirs[:5]) + (" ..." if len(skipped_dirs) > 5 else ""))
         for d, why in result.unreadable_folders:
             log.warning("Scan of '%s' is incomplete: %s could not be read (%s)", src.label, d, why)
         latest = _latest_rows(db, source_id)
@@ -550,7 +575,8 @@ def scan_source(run: Run, source_id: int, *, today: date | None = None, progress
                                                            "not_processed": result.not_processed,
                                                            "complete": result.complete,
                                                            "unreadable_folders": result.unreadable_folders,
-                                                           "links_skipped": result.links_skipped},
+                                                           "links_skipped": result.links_skipped,
+                                                           "subfolders_not_scanned": result.subfolders_not_scanned},
                                                           sort_keys=True), err, scan_id))
     log.info("Scan %s of '%s': %s", scan_id, src.label, result.summary())
     return result
@@ -726,7 +752,10 @@ def _write_report(run: Run, src: FolderSource, result: ScanResult) -> Path:
     with open(path, "x", newline="", encoding="utf-8") as fh:
         w = csv.writer(fh)
         w.writerow(("Source", src.label, "Folder", src.location, "Scan",
-                    "complete" if result.complete else "INCOMPLETE: " + result.incomplete_text()))
+                    "complete" if result.complete else "INCOMPLETE: " + result.incomplete_text(),
+                    "Sub-folders", "included" if src.include_subfolders else
+                    f"not included ({result.subfolders_not_scanned} not scanned)",
+                    "Skip patterns", "; ".join(src.exclude_patterns) or "none"))
         w.writerow(REPORT_COLUMNS)
         for rel, change, action, outcome, detail in result.files:
             w.writerow((rel, change, action, OUTCOME_LABELS.get(outcome, outcome), detail))

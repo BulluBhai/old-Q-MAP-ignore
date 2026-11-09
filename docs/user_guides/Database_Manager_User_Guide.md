@@ -20,7 +20,9 @@ not choose profiles, type layouts or confirm files one by one. Routine files are
 material is listed once, grouped, in **Exceptions**, where you can reject, restore or correct many files at once.
 
 1. **Input - folders.** Press **Add folder...** and choose the folder with your files (any folder on this computer,
-   including a synchronised OneDrive or Google Drive folder; files must be downloaded, not "online only"). Settings:
+   including a synchronised OneDrive or Google Drive folder; files must be downloaded, not "online only"). The first
+   time, the folder window opens at the folder Q-MAP is running from (the folder that holds `database_manager.py`);
+   after that it opens at the folder you chose last, also after Q-MAP is restarted (added 09-Nov-26). Settings:
    - **Market time zone**: leave empty for Indian data. Timestamps without a time zone are then read as Asia/Kolkata
      (the default), and the files are listed under "Time zone assumed" so you can see it. Timestamps with their own
      offset (`+05:30`) and Unix times are read as they are.
@@ -30,6 +32,12 @@ material is listed once, grouped, in **Exceptions**, where you can reject, resto
      `RELIANCE (1).csv`, `RELIANCE - Copy.csv` and `RELIANCE_Copy.csv` are all RELIANCE. Switch it off only if a
      folder's file names say nothing about the instrument; Q-MAP then asks for the symbol.
    - **Include sub-folders** and **Skip files matching** (for example `*backup*`).
+   - A scan always uses the folder's **saved** settings (the ones shown in the folder list). If you change a setting
+     and press **SCAN SELECTED FOLDER NOW** without **Save settings of selected folder**, Q-MAP shows the window
+     **Folder settings not saved** with each difference. **Yes** saves your changes and scans with them; **No** scans
+     with the saved settings and puts the boxes back to them (added 09-Nov-26). When **Include sub-folders** is off
+     and the folder has sub-folders, the scan result says how many were not scanned. The first line of
+     `Scan_Report_...csv` records whether sub-folders were included and the skip patterns used.
 2. **Output - files.** Each file is listed with its result, **detected timeframe**, **instrument** (and how it was
    found: registry, alias, file name, provisional), change and datasets. Select a file to see, for example:
 
@@ -37,7 +45,10 @@ material is listed once, grouped, in **Exceptions**, where you can reject, resto
        Validation: Consistent across 15 sampled blocks (470 of 20000 rows examined)
        Status: Accepted by default
 
-   followed by every warning. Below the list, **Exceptions found** groups everything that needs your attention:
+   followed by every warning. Under **Checks of the whole file** are the warnings found when every row of the file
+   was checked, for example `WARNING: Some days have fewer bars than usual` or `WARNING: Part of the file may have
+   another bar interval`, each with its detail (shown here since 09-Nov-26; the Analytical Workbench readiness check
+   shows the same warnings). Below the list, **Exceptions found** groups everything that needs your attention:
    files not loaded (data errors), mixed bar intervals, a file name whose timeframe differs from the data, conflicting
    observations, bars that differ from another dataset, names not in the alias registry, ambiguous names, file name
    and file columns that disagree, crypto venue unknown, assumed day-first dates, assumed time zone, and files you

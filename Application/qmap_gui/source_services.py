@@ -66,6 +66,52 @@ def parse_patterns(text: str) -> list[str]:
     return [p.strip() for p in text.replace(";", ",").split(",") if p.strip()]
 
 
+_SETTING_NAMES = (("include_subfolders", "Include sub-folders"), ("exclude_patterns", "Skip files matching"),
+                  ("market_timezone", "Market time zone"), ("default_exchange", "Default exchange"),
+                  ("symbol_from_filename", "Identify the instrument from the file name"))
+
+
+def _shown(key: str, value) -> str:
+    if key in ("include_subfolders", "symbol_from_filename"):
+        return "on" if value else "off"
+    if key == "exclude_patterns":
+        return ", ".join(value) or "(none)"
+    return str(value or "(none)")
+
+
+def unsaved_changes(src: D.FolderSource, options: dict) -> list[tuple[str, str, str]]:
+    """[(setting, on screen, saved)] where the folder settings shown on screen differ from the saved ones. A scan
+    always uses the SAVED settings, so the screen must never silently show something else (owner acceptance W08,
+    09-Nov-26: Include sub-folders ticked but not saved, the scan found nothing and the box went back to off)."""
+    saved = {"include_subfolders": bool(src.include_subfolders), "exclude_patterns": tuple(src.exclude_patterns),
+             "market_timezone": (src.market_timezone or "").strip(),
+             "default_exchange": (src.default_exchange or "").strip().upper(),
+             "symbol_from_filename": bool(src.symbol_from_filename)}
+    screen = {"include_subfolders": bool(options.get("include_subfolders")),
+              "exclude_patterns": tuple(options.get("exclude_patterns") or ()),
+              "market_timezone": (options.get("market_timezone") or "").strip(),
+              "default_exchange": (options.get("default_exchange") or "").strip().upper(),
+              "symbol_from_filename": bool(options.get("symbol_from_filename"))}
+    return [(name, _shown(k, screen[k]), _shown(k, saved[k])) for k, name in _SETTING_NAMES if screen[k] != saved[k]]
+
+
+def first_existing_folder(*candidates) -> str:
+    """The first candidate that is an existing folder (a remembered folder that was moved or deleted falls back to
+    its nearest existing parent folder), else the user's home folder. Used for where Add folder... opens."""
+    for c in candidates:
+        if not c:
+            continue
+        p = Path(c).expanduser()
+        try:
+            while not p.is_dir() and p.parent != p:
+                p = p.parent
+            if p.is_dir():
+                return str(p)
+        except OSError:
+            continue
+    return str(Path.home())
+
+
 # ---- files ----------------------------------------------------------------------------------------------------------
 def files(settings: Settings, source_id: int, *, attention_only: bool = False) -> list[D.FileState]:
     states = _with_db(settings, lambda db: D.file_states(db, source_id))
@@ -105,8 +151,37 @@ def file_row(s: D.FileState, decisions: dict | None = None) -> tuple:
             (s.detail or "")[:160])
 
 
-def file_details(s: D.FileState, decisions: dict | None = None) -> list[tuple[str, str | None]]:
-    """Plain-English description of one file's current state, as (text, tag) parts."""
+def dataset_warnings(settings: Settings, dataset_ids) -> dict:
+    """{dataset id: [warning, ...]} as the Data Registry records them for each dataset ('check_name: detail'). These
+    are the checks of the WHOLE file made when it was loaded (for example the full-file interval check), which the
+    Workbench readiness check also shows."""
+    def build(db):
+        out = {}
+        for i in dataset_ids:
+            info = get_dataset(db, i)
+            out[i] = list(info.warnings) if info is not None else []
+        return out
+    return _with_db(settings, build)
+
+
+def check_findings(warnings) -> list[tuple[str, str]]:
+    """[(plain title, detail)] for recorded warnings 'check_name: detail', worded as on the Load files screen."""
+    from .messages import explain, readable
+    out, seen = [], set()
+    for w in warnings:
+        name, _, detail = str(w).partition(": ")
+        if (name, detail) in seen:
+            continue
+        seen.add((name, detail))
+        out.append((explain(name)[0], readable(detail)))
+    return out
+
+
+def file_details(s: D.FileState, decisions: dict | None = None,
+                 warnings: dict | None = None) -> list[tuple[str, str | None]]:
+    """Plain-English description of one file's current state, as (text, tag) parts. `warnings` ({dataset id:
+    [recorded warning]}, from dataset_warnings) adds the whole-file checks of the file's datasets: before 09-Nov-26
+    they were recorded but never shown here (owner acceptance W14-W18)."""
     tag = {"imported": "ok", "reused": "ok", "needs_answer": "warning", "missing": "warning"}.get(s.outcome, "error")
     if s.outcome == "ignored":
         tag = "muted"
@@ -129,6 +204,16 @@ def file_details(s: D.FileState, decisions: dict | None = None) -> list[tuple[st
     for w in s.interpretation.get("warnings", []):
         if "file name says" not in w:
             parts.append((f"WARNING: {w}\n", "warning"))
+    if warnings is not None and s.dataset_ids:
+        findings = check_findings([w for i in s.dataset_ids for w in warnings.get(i, [])])
+        if findings:
+            parts.append((f"Checks of the whole file: {len(findings)} warning(s)\n", "bold"))
+            for title, detail in findings:
+                parts.append((f"WARNING: {title}\n", "warning"))
+                if detail:
+                    parts.append((f"  {detail}\n", "muted"))
+        else:
+            parts.append(("Checks of the whole file: no warnings\n", None))
     if s.detail:
         parts.append((f"{s.detail}\n", None))
     if s.dataset_ids:
