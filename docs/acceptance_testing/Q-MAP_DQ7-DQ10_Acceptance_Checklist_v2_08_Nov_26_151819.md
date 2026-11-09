@@ -1,6 +1,6 @@
 # Q-MAP PR #10: acceptance tracker W1 to W18, version 2
 
-**08-Nov-26 | Guide: `Q-MAP_Windows_IDLE_Acceptance_Guide_v2_08_Nov_26_151819.md` (same folder)**
+**08-Nov-26, W8 row and retest note 09-Nov-26 | Guide: `Q-MAP_Windows_IDLE_Acceptance_Guide_v2_08_Nov_26_151819.md` (same folder)**
 
 **Written to `docs/standards/Q-MAP_User_Documentation_Standard.md`.**
 
@@ -37,7 +37,7 @@ How to fill it in:
 | W5 | Alias registry: RELIANCE_EQ becomes NSE:RELIANCE | PIC `W05_Reliance.png` | | |
 | W6 | Reject two files; Workbench does not offer them | PIC `W06_Rejected.png`; PIC `W06_Workbench.png` | | |
 | W7 | Restore them; Workbench offers them again | PIC `W07_Workbench.png` | | |
-| W8 | Stop a scan | PIC `W08_Stopped.png` | | `finished before Stop` if it was too quick (not a failure) |
+| W8 | Stop a scan (sub-folders ticked and **saved** first, guide W8 steps 2-3) | PIC `W08_Stopped.png` | | `finished before Stop` if it was too quick (not a failure) |
 | W9 | Dataset Summary of OLAELEC: READY with notes; Conflicting timestamps = 183 | PIC `W09_Readiness.png`; FILE `Dataset_Summary_....csv` | | value seen: `...` |
 | W10 | Reject and Restore in Datasets and Storage | PIC `W10_Rejected.png`; PIC `W10_Restored.png` | | |
 | W11 | Files in `W_Market` unchanged | PIC `W11_Market_After.png` (compare with `W00_Market_Before.png`) | | file that differs: `...` |
@@ -53,6 +53,9 @@ How to fill it in:
 
 The two FILE copies named `Scan_Report_....csv` (W4, W18) have different times in their names, so they do not
 replace each other. If Windows offers to replace one, click **Skip these files** (guide section 3.2).
+
+**Retest of 09-Nov-26 results:** W8 and W14-W18 are rechecked with
+`Q-MAP_PR21_Windows_Retest_Guide_09_Nov_26_112803.md` and its tracker; the rows above keep the 09-Nov-26 results.
 
 ## 3. Overall
 

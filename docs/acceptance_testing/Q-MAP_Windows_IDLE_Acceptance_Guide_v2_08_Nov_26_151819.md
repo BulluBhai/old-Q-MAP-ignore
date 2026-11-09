@@ -1,6 +1,6 @@
 # Q-MAP PR #10: Windows and IDLE acceptance guide (W1 to W18), version 2
 
-**08-Nov-26 | Program to test: PR #10, commit `33871b5` or later | Tracker:
+**08-Nov-26, W8 and W14-W18 corrected 09-Nov-26 | Program to test: PR #10, commit `33871b5` or later | Tracker:
 `Q-MAP_DQ7-DQ10_Acceptance_Checklist_v2_08_Nov_26_151819.md` (same folder)**
 
 **Written to `docs/standards/Q-MAP_User_Documentation_Standard.md`.**
@@ -16,9 +16,9 @@ this test.**
 
 **Status: CARRIED OUT 09-Nov-26** by the Project Owner. W8 and W14 to W18 did not give the expected results. They
 were corrected in PR #21 and are rechecked with `Q-MAP_PR21_Windows_Retest_Guide_09_Nov_26_112803.md` (same folder);
-do not repeat them from this guide. Known wording problem, corrected in the retest guide: W8 step 1 says to tick
-**Include sub-folders**, but section 4.4 step 2 says to untick it "unless the check says to tick it", which can be
-read either way. In this program a scan always uses the folder's **saved** settings.
+do not repeat them from this guide. On 09-Nov-26 (owner-approved correction) section 4.4 step 2 and W8 were
+rewritten: they used to say both "tick" and "untick" **Include sub-folders**. A scan always uses the folder's
+**saved** settings, so W8 now ticks the box and saves it before scanning.
 
 ---
 
@@ -243,7 +243,7 @@ That gives 33 files. Windows never asks to replace anything, because each copy g
 1. **Do:** Database Manager → click **Sources** (top right).
 2. **Do:** in section **1. Input - folders Q-MAP reads market files from**, leave **Market time zone:** and **Default
    exchange:** empty. Make sure **Identify the instrument from the file name (RELIANCE (1).csv -> RELIANCE)** is
-   ticked. Untick **Include sub-folders**, unless the check says to tick it.
+   ticked. Untick **Include sub-folders**. (W8 switches it on later, for its own folder only.)
 3. **Do:** click **Add folder...**.
 4. **You should see** a window titled **Choose the folder with your market-data files**. **Do not click Select Folder
    yet.**
@@ -371,14 +371,19 @@ Reversible: W7 undoes it.
 
 #### W8: Stop a scan (PIC) (round 2c test 19)
 
-1. **Do:** tick **Include sub-folders** in section 1, then add `W_Stop` as a folder source (section 4.4).
-2. **Do:** click **SCAN SELECTED FOLDER NOW**. Watch **Files done:** under **Progress / Status**. As soon as it starts
+1. **Do:** add `W_Stop` as a folder source (section 4.4). It is added with **Include sub-folders** off.
+2. **Do:** with the line **W_Stop** selected in section 1, tick **Include sub-folders**, then click **Save settings of
+   selected folder**.
+3. **You should see** the Live Log line `Folder settings saved. Files that were waiting are read again by the next
+   scan.` and `yes` under **Sub-folders** in the **W_Stop** line. (A scan always uses the saved settings. If you
+   forget to save, a window **Folder settings not saved** appears when you scan; click **Yes** to save and scan.)
+4. **Do:** click **SCAN SELECTED FOLDER NOW**. Watch **Files done:** under **Progress / Status**. As soon as it starts
    counting (for example `2 / 33`), click **Stop scan**.
-3. **You should see** the window stay usable, the stage line `Stopping after the current file...`, and then a message
+5. **You should see** the window stay usable, the stage line `Stopping after the current file...`, and then a message
    starting `Stopped by you after ... file(s); ... file(s) not processed (listed in the scan report). Work already
    done is kept.`
-4. **Save:** PIC `W08_Stopped.png` of **Progress / Status**.
-5. **Do:** untick **Include sub-folders** again.
+6. **Save:** PIC `W08_Stopped.png` of **Progress / Status**.
+7. **Do:** untick **Include sub-folders** again and click **Save settings of selected folder**.
 
 **If different:** if the scan finishes before you can click **Stop scan**, write `finished before Stop` in the tracker;
 this is not a failure.
@@ -439,8 +444,10 @@ In every case the detected timeframe stays **5 minutes**. These warnings are rep
 For each file in the table:
 
 1. **Do:** click the file's line once.
-2. **Save:** TXT of the box below the list, with the file name in the table.
-3. **Check:** the box contains the words in the "Must contain" column, and not those in the "Must not contain" column.
+2. **You should see**, in the box below the list, a line starting `Quality warnings recorded for dataset`, followed
+   by the warnings.
+3. **Save:** TXT of the box below the list, with the file name in the table.
+4. **Check:** the box contains the words in the "Must contain" column, and not those in the "Must not contain" column.
 
 | Check | File | Must contain | Must not contain | Save as |
 |---|---|---|---|---|
