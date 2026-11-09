@@ -1,7 +1,7 @@
 # Q-MAP MA Affinity beta acceptance tracker (A1 to A8)
 
 Guide: `Q-MAP_MA_Affinity_Beta_Acceptance_Guide_09_Nov_26_125357.md` (same folder). Program: PR #23 commit
-`215d8ebe9c2cbb8ce3975e1f48d22711457790c3`. To be filled in by the Project Owner; nothing below has been tested by the owner yet. Evidence folder:
+`2c81d3a67526f9319992d9e39d9a75fede5e3a18`. To be filled in by the Project Owner; nothing below has been tested by the owner yet. Evidence folder:
 `D:\Q-MAP_V01\Beta_Test\Evidence`.
 
 ## 1. Test details
@@ -10,7 +10,7 @@ Guide: `Q-MAP_MA_Affinity_Beta_Acceptance_Guide_09_Nov_26_125357.md` (same folde
 |---|---|
 | Date (dd-mmm-yy) | |
 | Python version (IDLE first line) | |
-| Commit to test (filled in; must match the downloaded folder name) | `215d8ebe9c2cbb8ce3975e1f48d22711457790c3` |
+| Commit to test (filled in; must match the downloaded folder name) | `2c81d3a67526f9319992d9e39d9a75fede5e3a18` |
 | Downloaded folder name ends with that commit (yes / no) | |
 | Test folder used (`Beta_Test`, or the new name from step 2.1.3) | |
 
