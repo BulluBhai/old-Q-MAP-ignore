@@ -8,7 +8,9 @@ import sys
 
 MIN_PYTHON = (3, 11)
 # (import name, pip name)
-REQUIRED_PACKAGES = (("numpy", "numpy"), ("pyarrow", "pyarrow"), ("openpyxl", "openpyxl"), ("tzdata", "tzdata"))
+REQUIRED_PACKAGES = (("numpy", "numpy"), ("pyarrow", "pyarrow"), ("openpyxl", "openpyxl"), ("tzdata", "tzdata"),
+                     # MA Affinity (the QLOPB engine in Application/qlopb) and its Excel/PNG/PDF reports
+                     ("pandas", "pandas"), ("scipy", "scipy"), ("matplotlib", "matplotlib"), ("reportlab", "reportlab"))
 
 
 def python_problem() -> str | None:

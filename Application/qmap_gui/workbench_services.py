@@ -99,6 +99,9 @@ def readiness_parts(res: AnalysisReadiness) -> list[tuple[str, str | None]]:
     if state == READY:
         parts.append(("READY - every requirement is met." + (" Read the warnings below." if res.warnings else "")
                       + "\n", "ok"))
+    elif state == INVALID_INPUT and res.parameter_problems and len(res.parameter_problems) == len(res.input_problems):
+        parts.append(("INVALID PARAMETERS - please correct the options in section 3; nothing was checked or run:\n", "error"))
+        parts += [(f"  - {p}\n", "error") for p in res.input_problems + res.selection_problems]
     elif state == INVALID_INPUT:
         parts.append(("INVALID DATE INPUT - please correct the dates; nothing was checked or run:\n", "error"))
         parts += [(f"  - {p}\n", "error") for p in res.input_problems + res.selection_problems]

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "qmap"
-version = "0.1.0"
+version = "0.1.0rc1"
 description = "Q-MAP (Quantitative Market Analytics Platform) - Stage 2 foundation"
 requires-python = ">=3.11"
 dependencies = [
@@ -12,11 +12,16 @@ dependencies = [
     "pyarrow>=14",
     "openpyxl>=3.1",
     "tzdata",
+    # MA Affinity (QLOPB engine, Application/qlopb): calculations, Excel/PNG/PDF reports
+    "pandas>=2.0",
+    "scipy>=1.10",
+    "matplotlib>=3.7",
+    "reportlab>=4.0",
 ]
 
 [project.optional-dependencies]
 xls = ["xlrd>=2.0.1"]
-dev = ["pytest>=7"]
+dev = ["pytest>=7", "pypdf>=4"]  # pypdf: tests read the text of generated PDF reports
 
 [tool.setuptools.packages.find]
 where = ["Application"]

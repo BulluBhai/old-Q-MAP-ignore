@@ -27,17 +27,18 @@ A dataset whose file the user deleted (Temporary data, `file_deleted_at`) is not
 
 from __future__ import annotations
 
+import os
 import time
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from ..core.config import Settings
+from ..core.config import Settings, UnsafeDataPath
 from ..core.logging_setup import get_logger
 from ..core.runs import mark_interrupted_runs, run_is_alive
 from ..data_engine.format_detect import DetectedFormat
 from .db import Database
-from .files import make_read_only, safe_remove, sha256_file
+from .files import is_link, make_read_only, safe_remove, sha256_file
 from .registry import EventAlreadyFinished, _commit_registration, _finish_event
 from .paths import cleaned_relative_path, derived_relative_path
 from .storage_class import is_open_destination, open_destinations, recover_storage_actions
@@ -84,15 +85,33 @@ class RecoveryReport:
 _SKIPPED_DIRS = {"_incoming", "_quarantine"}  # temp files and preserved corrupt copies are handled separately
 
 
+def checked_data_path(settings: Settings, rel: str, report) -> Path | None:
+    """settings.data_path(rel), or None (recorded in report.problems) when the path is unsafe, for example because a
+    symbolic link or junction leads outside Q-MAP_DATA. One unsafe record never stops recovery."""
+    try:
+        return settings.data_path(rel)
+    except UnsafeDataPath as exc:
+        if report is not None:
+            report.problems.append(f"{rel}: {exc}")
+        log.error("Unsafe registry path, not used: %s", exc)
+        return None
+
+
 def _files_under(root: Path):
-    if not root.exists():
+    """Regular files below `root`. Symbolic links and Windows junctions (to files or folders) are never followed or
+    returned, so recovery cannot reach, or delete, anything outside Q-MAP_DATA through them."""
+    if not root.exists() or is_link(root):
         return
-    for path in root.rglob("*"):
-        try:
-            if path.is_file() and not (_SKIPPED_DIRS & set(path.relative_to(root).parts)):
-                yield path
-        except OSError:  # vanished or unreadable while scanning
-            continue
+    for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
+        here = Path(dirpath)
+        dirnames[:] = sorted(d for d in dirnames if d not in _SKIPPED_DIRS and not is_link(here / d))
+        for name in sorted(filenames):
+            path = here / name
+            try:
+                if not is_link(path) and path.is_file():
+                    yield path
+            except OSError:  # vanished or unreadable while scanning
+                continue
 
 
 def _mtime(path: Path) -> float | None:
@@ -263,7 +282,10 @@ def recover_incomplete(settings: Settings, db: Database, *, stale_minutes: int |
 
     # --- registered files that are missing (a file the user deleted on purpose is not missing) ----------
     for row in db.query("SELECT relative_path FROM datasets WHERE file_deleted_at IS NULL"):
-        if not settings.data_path(row["relative_path"]).is_file():
+        path = checked_data_path(settings, row["relative_path"], report)
+        if path is None:
+            continue
+        if not path.is_file():
             report.missing_files.append(row["relative_path"])
             log.error("Registered file is missing: %s", row["relative_path"])
     return report
@@ -338,9 +360,9 @@ def verify_registry(settings: Settings, db: Database) -> RecoveryReport:
     """
     report = recover_incomplete(settings, db, delete_cleaned_orphans=False)
     for row in db.query("SELECT relative_path, sha256 FROM datasets WHERE file_deleted_at IS NULL"):
-        path = settings.data_path(row["relative_path"])
-        if not path.is_file():
-            continue  # already listed as missing
+        path = checked_data_path(settings, row["relative_path"], None)
+        if path is None or not path.is_file():
+            continue  # already listed as missing or as unsafe
         try:
             actual = sha256_file(path)
         except OSError as exc:

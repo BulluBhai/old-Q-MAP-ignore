@@ -96,7 +96,10 @@ def test_scan_discovers_imports_and_a_second_scan_changes_nothing(settings, db, 
     n_datasets = db.one("SELECT COUNT(*) FROM datasets")[0]
     n_events = db.one("SELECT COUNT(*) FROM ingest_events")[0]
     r2 = scan(settings, db, source)
-    assert outcome_of(r2, "NSE_ABC.csv")[1:4] == ("unchanged", "skipped", "imported")
+    # UAT 06-Nov-26 (O4): this scan imported nothing; the earlier import is shown as such and not counted again
+    assert outcome_of(r2, "NSE_ABC.csv")[1:4] == ("unchanged", "skipped", "unchanged_loaded")
+    assert r2.counts.get("imported", 0) == 0 and r2.counts["unchanged_loaded"] == 1
+    assert D.file_history(db, source.source_id, "NSE_ABC.csv")[-1]["outcome"] == "imported"  # registry unchanged
     assert db.one("SELECT COUNT(*) FROM datasets")[0] == n_datasets
     assert db.one("SELECT COUNT(*) FROM ingest_events")[0] == n_events  # unchanged files are not even re-registered
     daily(folder / "NSE_XYZ.csv", seed=3)
@@ -211,7 +214,8 @@ def test_invalid_data_is_rejected_and_never_registered(settings, db, source, fol
     attempt = D.file_history(db, source.source_id, "NSE_BAD.csv")[-1]["attempt_id"]
     assert db.one("SELECT COUNT(*) FROM quality_checks WHERE attempt_id = ? AND severity = 'error' AND passed = 0",
                   (attempt,))[0] >= 1  # 24: validation results are recorded
-    assert scan(settings, db, source).files[0][1:4] == ("unchanged", "skipped", "rejected")
+    assert scan(settings, db, source).files[0][1:4] == ("unchanged", "skipped", "unchanged_rejected")
+    assert D.file_history(db, source.source_id, "NSE_BAD.csv")[-1]["outcome"] == "rejected"  # registry unchanged
 
 
 def test_weekend_gaps_are_not_errors_and_long_gaps_are_warnings(settings, db, source, folder):

@@ -14,6 +14,7 @@ no volume, superseded, file deleted ...).
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from datetime import date
 
@@ -23,7 +24,7 @@ import pyarrow.parquet as pq
 from .core.config import Settings
 from .core.dates import format_for_entry
 from .data_engine import canonical as C
-from .core.timeframes import MIXED, timeframe_minutes
+from .core.timeframes import EARLIER_CHANGED, MIXED, classification_logic, timeframe_minutes
 from .storage.db import Database
 from .storage.files import sha256_file
 
@@ -92,7 +93,11 @@ class DatasetInfo:
     warnings: list[str] = field(default_factory=list)
     source_files: list[str] = field(default_factory=list)  # original file name(s) this data came from
     user_decision: str | None = None  # latest reversible user decision: rejected | restored | None
-    instrument_name: str | None = None  # canonical display name from the alias registry ("NIFTY 50"), if any
+    instrument_name: str | None = None
+    # which DQ-7 comparison classified the timeframe (04-Nov-26), judged read-only from the stored inference record:
+    # corrected | earlier_same | earlier_changed | None (see core.timeframes.classification_logic), with its note
+    timeframe_logic: str | None = None
+    timeframe_logic_note: str = ""  # canonical display name from the alias registry ("NIFTY 50"), if any
 
     @property
     def rejected_by_user(self) -> bool:
@@ -136,6 +141,19 @@ def _warnings_for(db: Database, row) -> list[str]:
     return [f"{c['check_name']}: {c['detail']}" if c["detail"] else c["check_name"] for c in checks]
 
 
+def _timeframe_logic(db: Database, row) -> tuple[str | None, str]:
+    """Read-only: the DQ-7 inference record of the attempt that created the dataset (derived datasets carry their
+    daily source's attempt, OW-09, so they inherit the source's classification)."""
+    if row["created_by_attempt_id"] is None:
+        return None, ""
+    a = db.one("SELECT datetime_rules_json FROM ingest_attempts WHERE attempt_id = ?", (row["created_by_attempt_id"],))
+    try:
+        record = (json.loads(a["datetime_rules_json"]) if a and a["datetime_rules_json"] else {}).get("timeframe_inference")
+    except (ValueError, TypeError, AttributeError):
+        return None, ""
+    return classification_logic(record)
+
+
 def _source_files(db: Database, row) -> list[str]:
     attempt = row["created_by_attempt_id"]
     if attempt is None:
@@ -161,6 +179,7 @@ def _info(db: Database, row, details: bool = True) -> DatasetInfo:
         info.warnings = _warnings_for(db, row)
         info.validation_status = "passed_with_warnings" if info.warnings else "passed"
         info.source_files = _source_files(db, row)
+        info.timeframe_logic, info.timeframe_logic_note = _timeframe_logic(db, row)
     return info
 
 
@@ -384,6 +403,10 @@ def check_readiness(settings: Settings, db: Database, dataset_id: int, req: Data
                                    "value (in this dataset, or compared with another dataset). Q-MAP has not chosen "
                                    "between them. Calculations that go bar by bar (such as returns) treat each stored "
                                    "row as a bar.")
+    if info.timeframe_logic == EARLIER_CHANGED:
+        # OW-41 (04-Nov-26): the registered timeframe is kept, but an analysis that needs one uniform bar interval
+        # treats the dataset as mixed, exactly as it treats a dataset registered MIXED (D6-05); others only show it
+        rep.add("timeframe_logic", WARN if req.allow_mixed else FAIL, info.timeframe_logic_note)
     if info.storage_class == "temporary":
         rep.add("storage", WARN, "Temporary dataset: results will reference it, but you may delete it later.")
 

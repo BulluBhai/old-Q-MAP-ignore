@@ -1,10 +1,19 @@
 # Q-MAP
 Quantitative Market Analytics Platform [Q-MAP]
 
-The governing document is **Q-MAP Master Blueprint v1.35** ([Q-MAP_Master_Blueprint_v1.35.md](Q-MAP_Master_Blueprint_v1.35.md), with an `.html` copy), approved and adopted by the Project Owner on 3 November 2026.
-How this branch's automatic discovery and interpretation work meets the Blueprint is in the
-[Blueprint v1.3 implementation audit](docs/architecture/Blueprint_v1.3_Implementation_Audit.md) (historical, written
-against v1.3) and its [v1.35 reconciliation](docs/architecture/Blueprint_v1.35_Reconciliation_PR9.md).
+**Release:** v0.1 release candidate `0.1.0rc1`, for **controlled analytical use after the Project Owner's Windows/IDLE
+acceptance** (not yet given). Start here:
+[Q-MAP v0.1 Windows operating and acceptance guide](docs/release/Q-MAP_v0.1_Windows_Operating_and_Acceptance_Guide_03_Nov_26_180000.md)
+and [v0.1 known limitations and release boundaries](docs/release/Q-MAP_v0.1_Known_Limitations_and_Release_Boundaries_03_Nov_26_180000.md).
+
+The governing document is **Q-MAP Master Blueprint v1.35**
+([Q-MAP_Master_Blueprint_v1.35.md](Q-MAP_Master_Blueprint_v1.35.md), with an `.html` copy), approved and adopted by the
+Project Owner on 3 November 2026 and superseding v1.3, v1.2, v1.1 and v1.0 where they differ. v1.3 is kept at the top
+level for history; v1.2 is in PR #5; v1.0 is in the repository history; no v1.1 file was ever committed (see the
+[v0.1 release documents](docs/release/)). How the code meets v1.35 is in the
+[v0.1 release-readiness audit](docs/release/Q-MAP_v0.1_Release_Readiness_Audit_03_Nov_26_165501.md) (earlier:
+[Blueprint v1.3 implementation audit](docs/architecture/Blueprint_v1.3_Implementation_Audit.md)). PR #9's reconciliation with v1.35 is in
+[Blueprint v1.35 reconciliation (PR #9)](docs/architecture/Blueprint_v1.35_Reconciliation_PR9.md).
 Material decisions are recorded in [docs/decision_log.md](docs/decision_log.md).
 
 ## Two applications, one platform
@@ -12,7 +21,7 @@ Material decisions are recorded in [docs/decision_log.md](docs/decision_log.md).
 | Open (Thonny or IDLE, press F5) | Application | For |
 |---|---|---|
 | **`database_manager.py`** | Q-MAP Database Manager | Add the folders where your market files are kept and scan them: new and changed files are read, checked and loaded automatically, and you are asked only when something is unclear. Also: load and check single files with a chosen profile, see every prepared dataset with its lineage, keep it Permanent or Temporary, delete Temporary data, derive weekly/monthly/quarterly/yearly data from daily data |
-| **`analytical_workbench.py`** | Q-MAP Analytical Workbench | Run analyses on prepared data: readiness checks first, a Run ID and a full record of inputs for every run. Never imports source files |
+| **`analytical_workbench.py`** | Q-MAP Analytical Workbench | Run analyses on prepared data: **MA Affinity (QLOPB)** and Dataset Summary. Readiness checks first, a Run ID and a full record of inputs and of the code build for every run. Never imports source files |
 | `Q-MAP.py` | (older launcher) | Opens Database Manager |
 
 Both use the same Data Registry, data definitions and remembered folders. They can be open at the same time, and
@@ -33,15 +42,16 @@ Documentation:
 - the Stage 2 foundation: configuration, Run IDs, the SQLite registry, raw-file preservation, readers for CSV, text,
   Excel and Parquet, source profiles, validation and recovery;
 - Sources: folder discovery with automatic interpretation, idempotent re-scans, questions only for real
-  ambiguities, overlap and conflict reports (Blueprint v1.35 §8.5);
-- Data Management;
-- Datasets and Storage;
-- derived timeframes;
-- the analytical run pipeline with Dataset Summary, a descriptive utility.
+  ambiguities, overlap and conflict reports (Blueprint v1.35 §8.5), timeframe inference, instrument identification
+  with an alias registry, exact-duplicate removal and conflict retention (DQ-7 to DQ-10);
+- Data Management; Datasets and Storage; derived weekly/monthly/quarterly/yearly timeframes;
+- the Analytical Workbench with **MA Affinity (QLOPB MA Affinity Scanner V2, calculations unchanged; daily, weekly and
+  monthly datasets)** and Dataset Summary, a descriptive utility;
+- a build identifier (version, source fingerprint, git commit) in every run record.
 
-**Not implemented yet:** provider API adapters (Blueprint v1.35 §8.5.2), DuckDB queries, MIQP Market Intelligence and
-QLOPB MA research (their code is not in this repository),
-other research modules, backtesting, portfolio and risk. They are shown as COMING SOON.
+**Not implemented yet:** MIQP Market Intelligence (outside v0.1), provider API adapters (Blueprint v1.35 §8.5.2),
+DuckDB queries, QLOPB pivot/CPR/other references, other research modules, backtesting, portfolio and risk. They are
+shown as COMING SOON. Full list: the known-limitations document above.
 
 **PR #9's known defects:** the five automatic-interpretation defects found in the Project Owner's test session of
 02-Nov-26 (F-01b, F-02a, F-02c, F-03, F-04) are fixed on this branch (PR #10), which now also contains PR #9's final
@@ -53,7 +63,8 @@ sections 5 and 11 (integration of PR #9 into PR #10).
 
 ## Database Manager: Data Management (loading files)
 
-1. Do the one-time setup below (the windows also need `tkinter`, which comes with Python from python.org).
+1. Install Python 3.11 or newer from python.org (keep "tcl/tk and IDLE" ticked). No other installation step is needed: on
+   first start Q-MAP lists any missing package and offers to install it for you (the developer setup below is optional).
 2. Open **`database_manager.py`** (in this folder) in **Thonny** or **IDLE** and press **F5**.
    - In Thonny, make sure the interpreter is the Python of your Q-MAP environment: Tools > Options > Interpreter,
      then choose the `python.exe` inside your `<ENV_FOLDER>\Scripts` folder.
@@ -98,7 +109,11 @@ the file is taken relative to the **configuration file's own folder**, never to 
 (IDLE, a shortcut and a terminal can each start somewhere else). The environment variables `QMAP_DATA_ROOT`,
 `QMAP_OUTPUT_ROOT` and `QMAP_CONFIG` override the file; the two root variables must be full paths.
 
-## One-time setup (Windows commands shown; on macOS/Linux use `bin/python` instead of `Scripts\python.exe`)
+## Developer setup (optional; NOT needed to use Q-MAP from IDLE)
+
+To *use* Q-MAP you only open `database_manager.py` or `analytical_workbench.py` in IDLE and press F5; missing packages
+are offered for installation (see the Windows guide above). The steps below are for developers and running the tests.
+Windows commands are shown; on macOS/Linux use `bin/python` instead of `Scripts\python.exe`.
 
 You need Python 3.11 or newer. Check with:
 
@@ -265,9 +280,10 @@ restore, run `recover`, then ingest the original again.
 - Both applications have been exercised on Linux (real windows on a virtual screen), **not yet on Windows**: Windows-only behaviour (opening folders, remembered-settings location, high-DPI
   text) is covered by simulation. The command line remains for `recover`, `verify` and `restore-raw`.
 - Selecting the "current" dataset across several raw files for one instrument is not defined yet.
-- A daily, weekly or monthly timeframe on data with several bars per day/week/month (for example 5-minute bars
-  declared `1D`) is reported as a warning (`one_bar_per_period`), not rejected; a 5-minute file declared `1m` is
-  likewise only a warning (`timeframe_spacing`). The timeframe you declare is always used as declared.
+- Timeframes are measured from the data (DQ-7, 03-Nov-26): a declared timeframe that contradicts the data is
+  reported (`timeframe_declared_differs`) and the measured interval is registered. A daily file in which a few dates
+  carry a second bar is measured as intraday (only same-date steps count); MA Affinity and weekly/monthly derivation
+  then refuse it (see the v0.1 known-limitations document).
 - **Incomplete trading days are not reliably detected.** The note "Some days have fewer bars than usual" compares each day with
   the most common day length in the same file; there is no trading calendar. In the owner's sample files 4 of 5
   incomplete intraday days were not flagged. Every bar is still stored exactly as in the source, but do not treat

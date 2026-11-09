@@ -6,9 +6,9 @@ decision OD-8 implemented as schema 7; gap review in section 8). Status: **imple
 Owner review and Windows/IDLE acceptance. Nothing has been merged.**
 
 **Governing reference (since 03-Nov-26):** Blueprint **v1.35** (`main`, PR #11), superseding v1.3, v1.2, v1.1 and
-v1.0; PR #9's reconciliation with it is in [architecture/Blueprint_v1.35_Reconciliation_PR9.md](architecture/Blueprint_v1.35_Reconciliation_PR9.md).
-Sections 1-10 are kept as written under the version in force then: Blueprint **v1.2**, approved and adopted by the
-Project Owner on 1 November 2026, superseding
+v1.0; the v0.1 release work is in section 11; PR #9's reconciliation with v1.35 is in
+[architecture/Blueprint_v1.35_Reconciliation_PR9.md](architecture/Blueprint_v1.35_Reconciliation_PR9.md). Sections 1-10 are kept as written under the version in force then:
+Blueprint **v1.2**, approved and adopted by the Project Owner on 1 November 2026, superseding
 v1.0 and v1.1. It is in PR #5 (branch `docs/blueprint-v1.2-and-handover`, not yet merged). Section 1 below records what
 was found on 01-Nov-26 before v1.2 was available; the conflict table shows how each finding stands now.
 
@@ -303,3 +303,24 @@ D5-01 to D5-15 are in the decision log. In short, on branch `claude/happy-brahma
 - **Analytical Workbench:** unchanged. It still never loads data-preparation code (architecture test extended to the
   new modules).
 - **Not done:** provider API adapters, DuckDB, scheduled scans, MIQP/QLOPB (OD-2).
+
+## 11. Q-MAP v0.1 release candidate (03-Nov-26, Blueprint v1.35)
+
+Release documents: `docs/release/` (readiness audit, step A table, Windows operating and acceptance guide, known
+limitations and release boundaries); decisions D6-01 to D6-11. Branch `claude/epic-darwin-33o518` (PR #10 head + `main`).
+
+- **QLOPB engine:** `Application/qlopb/` = `BulluBhai/QLOPB` `6cbadc7` (MA Affinity Scanner V2 + safeguards S-1..S-3),
+  only import lines changed (`Tests/qlopb/test_qlopb_migration_identity.py`). QLOPB's tests run in Q-MAP's suite
+  (`Tests/qlopb`, 101 of 107; the 6 tests of QLOPB's own window are not migrated). Sample files:
+  `Tests/fixtures/qlopb_data`.
+- **Analytical engine:** `analytical_engine/ma_affinity.py` (AnalysisSpec `ma_affinity`, Run ID prefix `MAAF`). It
+  reads the registered dataset, runs the engine with timeframe `as_loaded` and writes QLOPB's reports into the run
+  folder. Shared framework additions: `AnalysisSpec.check_params`, `dataset_checks`, `method_source`.
+- **Timeframes:** 1D, 1W, 1M registered datasets; equality of Q-MAP's derived bars with QLOPB's aggregation is a
+  permanent test (`Tests/integration/test_ma_affinity_timeframe_equivalence.py`).
+- **Build identification:** `qmap/core/build.py`; `runs.code_version`, `run_manifest.json` and Run_Metadata carry
+  version `0.1.0rc1`, the source fingerprint and the git commit/modified marker.
+- **Dependencies:** pandas, scipy, matplotlib, reportlab added for the analytical module (D6-07).
+- **Workbench architecture rule kept:** the Workbench never imports Q-MAP's data-preparation code. It imports QLOPB's
+  `core/data_engine.py` module only because QLOPB's timeframe module uses one helper from it; the QLOPB file loader
+  is never called by Q-MAP.

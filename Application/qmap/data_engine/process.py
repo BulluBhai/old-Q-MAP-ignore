@@ -21,7 +21,7 @@ from .instruments import instrument_key, normalise_exchange, normalise_symbol
 from .mapping import SourceTable, resolve_column, safe_extra_name
 from .numeric import INVALID, parse_number
 from .profiles import MIXED, SourceProfile, canonical_timeframe
-from .timeframe_infer import CONSISTENT, DEFAULT_SAMPLING, MIXED_STATUS, infer_from_parsed
+from .timeframe_infer import CONSISTENT, DEFAULT_SAMPLING, INSUFFICIENT, MIXED_STATUS, infer_from_parsed, infer_interval
 from .results import ERROR, INFO, WARNING, CheckResult, Collector, Issue, examples
 from .validation import GroupContext, merge_results, validate_group
 from .volume import apply_volume
@@ -145,6 +145,49 @@ def _settle_timeframe(declared: str | None, parsed, profile: SourceProfile, sett
                                   f"{source[:1].upper() + source[1:]} says {declared}, but the data are {tf} bars "
                                   f"({inf.summary.lower()}). The data are authoritative: registered as {tf}."))
     return tf, checks, record
+
+
+def _per_instrument_timeframes(parsed, members: dict, order: list, tf_record: dict, profile: SourceProfile,
+                               settings: Settings) -> list[CheckResult]:
+    """DQ-7 applied to each instrument's own rows (file order). The file-level result must hold for every instrument
+    that can be measured; otherwise one ERROR check (the file is rejected, with the per-instrument intervals). An
+    instrument with too few rows to measure is reported as not verified (warning)."""
+    zone = profile.datetime.exchange_timezone or profile.datetime.timezone or "UTC"
+    cfg = {**DEFAULT_SAMPLING, **(getattr(settings, "timeframe_sampling", None) or {})}
+    keys = list(parsed.ts_utc) if parsed.is_instant else list(parsed.session_dates)
+    file_tf = tf_record.get("registered")
+    per, differ, unmeasured = {}, [], []
+    for ex_sym in order:
+        label = instrument_key(*ex_sym)
+        inf = infer_interval([keys[i] for i in members[ex_sym]], zone=zone, config=cfg)
+        if inf.status == INSUFFICIENT:
+            per[label] = "not measurable"
+            unmeasured.append(label)
+            continue
+        tf = MIXED if inf.status == MIXED_STATUS else canonical_timeframe(inf.timeframe)
+        per[label] = tf
+        if tf != file_tf:
+            differ.append(label)
+    tf_record["per_instrument"] = per
+    listing = "; ".join(f"{k}: {v}" for k, v in per.items())
+    out = []
+    if differ:
+        out.append(CheckResult(
+            "instrument_timeframes_differ", ERROR, False, len(differ),
+            f"This file holds {len(order)} instruments. Measured on the whole file the bar interval is {file_tf}, but "
+            f"measured on each instrument's own rows it is: {listing}. Q-MAP does not give one instrument another "
+            "instrument's timeframe, so nothing from this file was registered. Action: split the file into one file "
+            "per instrument (or per timeframe) and load those."))
+    elif unmeasured:
+        out.append(CheckResult(
+            "instrument_timeframe_not_verified", WARNING, False, len(unmeasured),
+            f"The bar interval of {', '.join(unmeasured)} could not be measured on its own rows (too few); the file's "
+            f"interval {file_tf} is used for it. Per instrument: {listing}."))
+    else:
+        out.append(CheckResult("instrument_timeframes_agree", INFO, True, 0,
+                               f"Every instrument in the file measured on its own rows has the file's interval "
+                               f"{file_tf} ({listing})."))
+    return out
 
 
 def _scalar_instrument(kind: str, label: str, fixed, pattern: str | None, filename: str, override, normalise):
@@ -280,6 +323,14 @@ def process_table(table: SourceTable, profile: SourceProfile, settings: Settings
             members[key] = []
             order_of_groups.append(key)
         members[key].append(i)
+
+    # Review 04-Nov-26 (C4): the timeframe is measured on the whole file. With several instruments in one file each
+    # instrument is measured on its own as well; if any differs, nothing is registered (no instrument is given another
+    # instrument's timeframe, and instruments with one interval each are not labelled MIXED because of each other).
+    if len(order_of_groups) > 1:
+        checks_pre.extend(_per_instrument_timeframes(parsed, members, order_of_groups, tf_record, profile, settings))
+        if any(c.is_error for c in checks_pre):
+            return _build_failed(collector, checks_pre, table, n, mapping, profile)
 
     require_volume = bool(settings.requirement_sets[profile.requirement_set].get("require_volume"))
     extra_idx = [j for j in range(table.n_cols) if (j not in used) and (profile.keep_unmapped or j in vol.source_indices)]

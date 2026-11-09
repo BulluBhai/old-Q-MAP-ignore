@@ -1,4 +1,4 @@
-"""The planned Q-MAP modules (roadmap stages as in Blueprint v1.2 section 15), which application each belongs to, and their GENUINE readiness.
+"""The planned Q-MAP modules (roadmap stages as in Blueprint v1.35 section 15), which application each belongs to, and their GENUINE readiness.
 
 Only working functionality may be marked READY. Database Manager prepares data; Analytical Workbench analyses
 prepared data. A planned module stays COMING SOON until its rules, parameters, outputs and validation criteria are
@@ -66,7 +66,7 @@ MODULES: tuple[ModuleInfo, ...] = (
                "Available now", ANALYTICAL_WORKBENCH, "analysis"),
     # ---- Analytical Workbench: planned application windows ------------------------------------------------------
     ModuleInfo("dashboard", "Dashboard", "Daily starting point: market condition, sectors, saved screens.",
-               COMING_SOON, "Needs Market Intelligence first (Blueprint v1.2 roadmap Stage 5).", _W),
+               COMING_SOON, "Needs Market Intelligence first (Blueprint v1.35 roadmap Stage 5).", _W),
     ModuleInfo("market_overview", "Market Overview", "Index trend, breadth, volatility and market regime.",
                COMING_SOON, "Roadmap Stage 5 (Market Intelligence).", _W),
     ModuleInfo("sector_explorer", "Sector Explorer", "Sector strength, rotation and constituents.",
@@ -77,7 +77,8 @@ MODULES: tuple[ModuleInfo, ...] = (
                "Combine market, sector, stock and price-behaviour conditions to find candidates.",
                COMING_SOON, "Roadmap Stage 8 (historical Opportunity Scanner).", _W),
     ModuleInfo("price_behaviour_lab", "Price Behaviour Lab", "Test how price behaves around moving averages and other events.",
-               COMING_SOON, "Roadmap Stage 6 (Price Behaviour: QLOPB migration).", _W),
+               COMING_SOON, "Roadmap Stage 6. MA Affinity (QLOPB) already runs as a research module; this combined window is "
+               "not built.", _W),
     ModuleInfo("strategy_lab", "Strategy Backtesting Lab", "Test complete trading rules on history.",
                COMING_SOON, "Roadmap Stage 9.", _W),
     ModuleInfo("portfolio_risk", "Portfolio and Risk", "Position sizing, exposure and drawdown.",
@@ -86,11 +87,16 @@ MODULES: tuple[ModuleInfo, ...] = (
                COMING_SOON, "The database tables and run records exist, but there is no screen or workflow yet.", _W),
     # ---- Analytical Workbench: planned research modules ---------------------------------------------------------
     ModuleInfo("market_intelligence", "Market Intelligence (MIQP)", "Market regime, breadth, sector and stock intelligence.",
-               COMING_SOON, "Roadmap Stage 5. MIQP is specified in documents outside this repository; no MIQP code "
-               "exists yet.", _R),
-    ModuleInfo("ma_research", "MA Research (QLOPB)", "Moving-average interactions and affinity.",
-               COMING_SOON, "Roadmap Stage 6. The QLOPB source code is not in this repository yet, so nothing has been "
-               "migrated.", _R),
+               COMING_SOON, "Roadmap Stage 5. Outside Q-MAP v0.1: MIQP is specified in documents outside this repository "
+               "and no MIQP code exists yet.", _R),
+    ModuleInfo("ma_research", "MA Research: MA Affinity (QLOPB)",
+               "How price behaved around moving averages: interactions, forward returns and an affinity score, ranked "
+               "in-sample and checked out-of-sample.",
+               READY,
+               "Working now: QLOPB MA Affinity Scanner V2 (calculations unchanged) on daily, weekly or monthly datasets, "
+               "with Excel, PDF and chart reports. Pending owner review: Directed IR and the weight scheme. Not built "
+               "yet: pivots, CPR and other references.",
+               "Available now", ANALYTICAL_WORKBENCH, "analysis"),
     ModuleInfo("cpr_pivot", "CPR and Pivot Research", "Central Pivot Range and pivot-level behaviour.",
                COMING_SOON, "Roadmap Stage 6.", _R),
     ModuleInfo("stage_analysis", "Stage Analysis (Weinstein)", "Classify instruments into price stages.",

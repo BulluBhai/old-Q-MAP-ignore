@@ -1,0 +1,9 @@
+MA Affinity output comparison, 07-Nov-26
+Same synthetic daily file and script as uat_round2_06_Nov_26/MA_Affinity_output_unchanged.txt; Python 3.11.15.
+== r2 (56a72f4)
+MA_Affinity_Candidates 8efe7b82b52ff5abee5b6b0cd4cb6074fb1c8a69e4b9a218839d2d6afc86de1f
+MA_Affinity_Interactions 6e3cb4022c4a50450379b72d523f6e7b282fc2e0126c35e14879d20319427032
+== r2b (06d8659)
+MA_Affinity_Candidates 8efe7b82b52ff5abee5b6b0cd4cb6074fb1c8a69e4b9a218839d2d6afc86de1f
+MA_Affinity_Interactions 6e3cb4022c4a50450379b72d523f6e7b282fc2e0126c35e14879d20319427032
+Result: identical to each other and to efb4bd9 (round-2 record). The R2-O2 display correction does not change MA Affinity results.

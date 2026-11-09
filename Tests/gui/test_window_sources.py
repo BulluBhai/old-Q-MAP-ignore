@@ -183,7 +183,10 @@ def test_reject_and_restore_selected_files_in_bulk(gui, world, tmp_path):
     assert len(wb.screens["analysis"].rows) == 1  # only CCC is offered to analyses
     _select(frame, "AAA.csv", "BBB.csv")
     frame.restore_button.invoke()
-    assert all(frame.files_tree.item(i, "values")[1] == "Imported" for i in frame.file_rows)
+    # UAT 06-Nov-26 (O3): Restore re-offers the data; it does not import anything again, so the row says so
+    results = {s.relative_path: frame.files_tree.item(i, "values")[1] for i, s in frame.file_rows.items()}
+    assert results == {"AAA.csv": "Available again (restored by you)", "BBB.csv": "Available again (restored by you)",
+                       "CCC.csv": "Imported"}
 
 
 def test_bulk_correction_and_alias_registry_update(gui, world, tmp_path):
@@ -252,3 +255,46 @@ def test_datasets_screen_reject_and_restore(gui, world, tmp_path):
     ds.on_select()
     ds.restore_button.invoke()
     assert ds.tree.item(next(iter(ds.rows)), "values")[-1] == "Active"
+
+
+def test_the_detail_pane_shows_recorded_quality_warnings_and_a_rescan_shows_unchanged(gui, world, tmp_path):
+    """UAT 06-Nov-26, O1 and O4, on the real window: a pattern file's recorded warning appears in plain English in the
+    detail pane, and after a second scan the file is listed as unchanged, not imported again."""
+    import shutil
+    from pathlib import Path
+
+    patterns = Path(__file__).resolve().parents[2] / "docs" / "acceptance_testing" / "dq7_pattern_files_03_Nov_26"
+    market = tmp_path / "patterns"
+    market.mkdir()
+    shutil.copy2(patterns / "NSE_EVERYOTHER.csv", market / "NSE_EVERYOTHER.csv")
+    app = gui.start()
+    gui.choose_folders(app)
+    frame = app.screens["sources"]
+    gui.dialogs.directories.append(str(market))
+    frame.add_button.invoke()
+    frame.scan_button.invoke()
+    gui.wait(lambda: not frame.running)
+    _select(frame, "NSE_EVERYOTHER.csv")
+    text = frame.details.get()
+    assert "WARNING: Part of the file may have another bar interval" in text and "cannot show whether" in text
+    frame.scan_button.invoke()
+    gui.wait(lambda: not frame.running)
+    row = next(frame.files_tree.item(i, "values") for i, s in frame.file_rows.items())
+    assert row[1] == "Unchanged (imported earlier)"
+    assert "1 unchanged (imported earlier)" in frame.files_count.cget("text")
+
+
+def test_a_restored_file_shows_the_next_scans_result_on_the_window(gui, world, tmp_path):
+    """UAT round 2 (R2-O2): "Available again (restored by you)" right after Restore; after the next scan the row shows
+    that scan's result ("Unchanged (imported earlier)"). Display only."""
+    app, frame, _ = _scanned_frame(gui, tmp_path, ["AAA.csv", "BBB.csv"])
+    _select(frame, "AAA.csv")
+    frame.reject_button.invoke()
+    _select(frame, "AAA.csv")
+    frame.restore_button.invoke()
+    rows = {s.relative_path: frame.files_tree.item(i, "values")[1] for i, s in frame.file_rows.items()}
+    assert rows == {"AAA.csv": "Available again (restored by you)", "BBB.csv": "Imported"}
+    frame.scan_button.invoke()
+    gui.wait(lambda: not frame.running)
+    rows = {s.relative_path: frame.files_tree.item(i, "values")[1] for i, s in frame.file_rows.items()}
+    assert rows == {"AAA.csv": "Unchanged (imported earlier)", "BBB.csv": "Unchanged (imported earlier)"}

@@ -167,8 +167,8 @@ class AnalysisFrame(tk.Frame):
         self.about.configure(text=f"{c.description}\nResult type: {c.kind_note}.")
         self.date_entries.clear()
         for r, p in enumerate(c.parameters):
-            tk.Label(self.params_frame, text=p.label + ":", width=14, anchor="w").grid(row=r * 2, column=0, sticky="w")
-            var = tk.StringVar(self)
+            tk.Label(self.params_frame, text=p.label + ":", width=17, anchor="w").grid(row=r * 2, column=0, sticky="w")
+            var = tk.StringVar(self, value="" if p.default is None or p.kind == "date" else str(p.default))
             var.trace_add("write", lambda *_a: self._invalidate())
             if p.kind == "date":
                 empty = p.help.split("Empty = ", 1)[1].rstrip(".") if "Empty = " in p.help else "not used"
@@ -281,7 +281,8 @@ class AnalysisFrame(tk.Frame):
             return
         self.check()  # always show the current readiness; the engine checks again itself before it starts
         if self.last_readiness is not None and not self.last_readiness.ready:
-            why = {ws.INVALID_INPUT: "the dates are not valid", ws.NO_ELIGIBLE_DATA: "there are no bars in the chosen period"
+            why = {ws.INVALID_INPUT: "the parameters are not valid" if self.last_readiness.parameter_problems
+                   else "the dates are not valid", ws.NO_ELIGIBLE_DATA: "there are no bars in the chosen period"
                    }.get(self.last_readiness.state, "some selected datasets have no bars in the chosen period"
                          if self.last_readiness.partial_period_note else "the data are not ready")
             self.final_label.configure(text=f"Not started: {why} (see the readiness box).", fg=ERROR_COLOR)

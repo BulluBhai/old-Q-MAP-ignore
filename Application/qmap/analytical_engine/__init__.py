@@ -1,15 +1,17 @@
 """Analytical engine: analyses that READ prepared, registered datasets. It never imports source files.
 
-`ANALYSES` lists only analyses that genuinely run. Planned research modules (MIQP Market Intelligence, QLOPB MA
-Research, CPR/pivots, Ichimoku, Stage Analysis ...) are listed by the Analytical Workbench as planned and are added
-here only once their rules, parameters, outputs and validation criteria are approved.
+`ANALYSES` lists only analyses that genuinely run: Dataset Summary (a utility) and MA Affinity (QLOPB MA Affinity
+Scanner V2, migrated unchanged; owner approval 03-Nov-26). Planned research modules (MIQP Market Intelligence,
+CPR/pivots, Ichimoku, Stage Analysis ...) are listed by the Analytical Workbench as planned and are added here only
+once their rules, parameters, outputs and validation criteria are approved.
 """
 
 from .base import (AVAILABLE, INVALID_INPUT, NO_ELIGIBLE_DATA, NOT_READY, OUTPUT_AREA, PLANNED, READY,
                    AnalysisReadiness, AnalysisRunResult, AnalysisSpec, Parameter, check_analysis, run_analysis)
 from .dataset_summary import SPEC as DATASET_SUMMARY
+from .ma_affinity import SPEC as MA_AFFINITY
 
-ANALYSES = {spec.analysis_id: spec for spec in (DATASET_SUMMARY,)}
+ANALYSES = {spec.analysis_id: spec for spec in (DATASET_SUMMARY, MA_AFFINITY)}
 
 
 def latest_completed_run(settings, db):
@@ -25,6 +27,6 @@ def latest_completed_run(settings, db):
     return row["run_id"], settings.output_root.joinpath(*row["output_path"].split("/"))
 
 
-__all__ = ["ANALYSES", "AVAILABLE", "DATASET_SUMMARY", "INVALID_INPUT", "NO_ELIGIBLE_DATA", "NOT_READY", "OUTPUT_AREA",
+__all__ = ["ANALYSES", "AVAILABLE", "DATASET_SUMMARY", "INVALID_INPUT", "MA_AFFINITY", "NO_ELIGIBLE_DATA", "NOT_READY", "OUTPUT_AREA",
            "PLANNED", "READY", "AnalysisReadiness", "AnalysisRunResult", "AnalysisSpec", "Parameter", "check_analysis",
            "latest_completed_run", "run_analysis"]

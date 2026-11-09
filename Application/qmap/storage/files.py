@@ -100,8 +100,29 @@ def place_without_overwrite(tmp: Path, final: Path) -> None:
     os.unlink(tmp)
 
 
+# Windows reparse tags of a symbolic link and of a junction (mount point). Other reparse points, such as OneDrive
+# cloud placeholders, are ordinary files for Q-MAP's purposes.
+_IO_REPARSE_TAG_SYMLINK = 0xA000000C
+_IO_REPARSE_TAG_MOUNT_POINT = 0xA0000003
+
+
+def is_link(path: str | Path) -> bool:
+    """True if `path` itself is a symbolic link or a Windows junction (never follows it)."""
+    try:
+        st = os.lstat(path)
+    except OSError:
+        return False
+    return stat.S_ISLNK(st.st_mode) or getattr(st, "st_reparse_tag", 0) in (_IO_REPARSE_TAG_SYMLINK,
+                                                                           _IO_REPARSE_TAG_MOUNT_POINT)
+
+
 def safe_remove(path: Path) -> bool:
-    """Remove a file if present, clearing the read-only flag first (needed on Windows)."""
+    """Remove a file if present, clearing the read-only flag first (needed on Windows).
+
+    A symbolic link or junction is never removed or changed (clearing the read-only flag would follow it and change
+    the file it points to): False is returned and the link is left for the user to investigate."""
+    if is_link(path):
+        return False
     try:
         if path.exists():
             os.chmod(path, os.stat(path).st_mode | stat.S_IWUSR)

@@ -41,6 +41,7 @@ from .timeframe_infer import CONSISTENT, DEFAULT_SAMPLING, MIXED_STATUS, infer_f
 from .readers import read_source
 from .results import Collector
 
+AUTO_REQUIREMENT_SET = "price_only"  # the requirement set of every automatically generated profile
 RULES_VERSION = 6  # bump when any rule below changes how the same file would be interpreted
 # 6 (03-Nov-26, section 8): ambiguous day/month order -> day-first default (warned); missing market time zone ->
 #   Asia/Kolkata default (warned). Both correctable; a question remains only for other genuine ambiguities.
@@ -752,7 +753,7 @@ def _build_profile(kind, delimiter, header, mapping, cand: _Cand, zone, instrume
         lines += ['rule = "use_column"', f"column = {{ position = {mapping['volume']} }}"]
     else:
         lines.append('rule = "none"')
-    lines.append('requirement_set = "price_only"')
+    lines.append(f'requirement_set = "{AUTO_REQUIREMENT_SET}"')
     body = "\n".join(lines) + "\n"
     digest = hashlib.sha256(f"auto-rules-{PROFILE_RULES_SEED}\n{body}".encode("utf-8")).hexdigest()[:12]
     pid = f"auto_{digest}"

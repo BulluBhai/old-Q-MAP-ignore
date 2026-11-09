@@ -21,11 +21,13 @@ REPO = Path(__file__).resolve().parents[2]
 def test_only_genuinely_working_modules_are_ready():
     # Requirement changed 01-Nov-26 (two applications): Database Manager has Data Management and Datasets and
     # Storage; Analytical Workbench has Dataset Summary. Changed 02-Nov-26 (Blueprint v1.3 §8.5): Database Manager
-    # also has Sources (automatic loading). Everything else must stay COMING SOON.
+    # also has Sources (automatic loading). Changed 03-Nov-26 (owner approval, v0.1 release): the Workbench also has
+    # MA Research = QLOPB MA Affinity, migrated unchanged. Everything else must stay COMING SOON.
     assert [(m.key, m.app) for m in ready_modules()] == [("sources", DATABASE_MANAGER),
                                                          ("data_management", DATABASE_MANAGER),
                                                          ("datasets", DATABASE_MANAGER),
-                                                         ("dataset_summary", ANALYTICAL_WORKBENCH)]
+                                                         ("dataset_summary", ANALYTICAL_WORKBENCH),
+                                                         ("ma_research", ANALYTICAL_WORKBENCH)]
     assert all(m.status in (READY, COMING_SOON) for m in MODULES)
     assert len({m.key for m in MODULES}) == len(MODULES)
     assert all(m.screen for m in ready_modules()) and not any(m.screen for m in MODULES if not m.is_ready)

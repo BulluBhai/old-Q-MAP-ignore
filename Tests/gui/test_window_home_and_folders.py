@@ -19,7 +19,7 @@ def test_everything_lives_inside_the_scroll_frame(gui):
 
 @pytest.mark.parametrize("app_key, expected_ready", [
     ("database_manager", ["sources", "data_management", "datasets"]),  # Sources added 02-Nov-26 (Blueprint v1.3)
-    ("analytical_workbench", ["dataset_summary"]),
+    ("analytical_workbench", ["dataset_summary", "ma_research"]),  # MA Research (QLOPB) added 03-Nov-26 (owner approval)
 ])
 def test_home_lists_its_own_modules_with_genuine_readiness(gui, app_key, expected_ready):
     home = gui.start(app_key=app_key).screens["home"]

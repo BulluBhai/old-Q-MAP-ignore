@@ -15,7 +15,7 @@ Database Manager prepares the data every analysis depends on. It **never changes
 
 ## Sources: automatic loading (the normal way to load data)
 
-Added 02-Nov-26 (Blueprint v1.3 §8.5); made automatic by default on 03-Nov-26 (owner instruction DQ-7 to DQ-10). You do
+Added 02-Nov-26 (Blueprint v1.3 §8.5, unchanged in v1.35); made automatic by default on 03-Nov-26 (owner instruction DQ-7 to DQ-10). You do
 not choose profiles, type layouts or confirm files one by one. Routine files are **accepted automatically**; anything
 material is listed once, grouped, in **Exceptions**, where you can reject, restore or correct many files at once.
 

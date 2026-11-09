@@ -15,8 +15,10 @@ Method (reproducible and explainable):
    days. Repeated timestamps (zero steps) are ignored. The block's interval is its most common step.
 4. The dominant interval is the most common block interval. A block agrees with it when at least `consistency_share`
    of its steps are whole multiples of it (gaps of 2, 3 ... intervals are missing bars, not another timeframe) AND the
-   interval itself occurs in the block, or is the block's own most common step. If every block agrees: CONSISTENT. If
-   blocks show materially different intervals: MIXED (reported; never forced into one timeframe).
+   interval itself occurs in the block, or is the block's own most common step. Steps are only compared in the same
+   unit: a block measured in minutes, days, weeks, months, quarters or years never agrees with an interval measured in
+   another of these units (review 04-Nov-26). If every block agrees: CONSISTENT. If blocks show materially different
+   intervals: MIXED (reported; never forced into one timeframe).
 5. No exchange or session calendar is used anywhere: a gap is never explained or filled, only measured.
 
 Only the sampled observations are examined for the timeframe; every row is still parsed and validated elsewhere,
@@ -38,7 +40,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from ..core.timeframes import MIXED, minutes_label
+from ..core.timeframes import INFERENCE_LOGIC, MIXED, is_minutes_label, measuring_unit, minutes_label
 
 DEFAULT_SAMPLING = {
     "initial_rows": 20,      # observations used for the candidate interval
@@ -97,7 +99,9 @@ class Inference:
         return {"status": self.status, "timeframe": self.timeframe, "candidate": self.candidate,
                 "summary": self.summary, "rows_total": self.rows_total, "rows_examined": self.rows_examined,
                 "seed": self.seed, "patterns": self.patterns, "blocks": [b.as_dict() for b in self.blocks],
-                "method": "sampled successive-row blocks; same-day steps for intraday; no exchange calendar"}
+                "method": "sampled successive-row blocks; same-day steps for intraday; no exchange calendar",
+                # marks results of the corrected comparison (04-Nov-26); records without it are identifiable as earlier
+                "logic": INFERENCE_LOGIC}
 
 
 # ---- step measurement -------------------------------------------------------------------------------------------
@@ -188,8 +192,8 @@ def _base_unit(label: str) -> int:
     return 1
 
 
-def _is_minutes(label: str | None) -> bool:
-    return bool(label) and (label.endswith("m") or label.endswith("h")) and label not in ("1M",)
+_is_minutes = is_minutes_label
+_measuring_unit = measuring_unit  # the one implementation lives in core.timeframes (also used to judge stored records)
 
 
 def _blocks_for(candidate: str | None, intraday: bool, cfg: dict) -> int:
@@ -287,8 +291,12 @@ def infer_interval(keys: list, *, zone: str | None, config: dict | None = None) 
         # the dominant interval itself must occur in the block: a block of only 5-minute steps is not "1-minute data
         # with missing bars", but a block of mostly 2-minute steps with some 1-minute steps is
         has_base = b.interval == dominant or steps.count(unit) >= max(1, len(steps) // 10)
-        # minutes and days are different units: a daily block never agrees with an intraday interval, or the reverse
-        same_kind = _is_minutes(b.interval) == _is_minutes(dominant)
+        # Steps are counted in the block's own unit (minutes, days, weeks, months, quarters, years). A block measured in
+        # another unit never agrees: a daily block never agrees with an intraday interval, or the reverse, and
+        # (independent review 04-Nov-26) a weekly, monthly, quarterly or yearly block never agrees with a daily
+        # interval, or with each other. Before this, every daily-or-longer label had base unit 1, so a weekly block's
+        # steps (1, 1, 1 weeks) looked like whole multiples of a daily interval that also "occurred" in the block.
+        same_kind = _measuring_unit(b.interval) == _measuring_unit(dominant)
         b.agrees = same_kind and b.agreeing_share >= cfg["consistency_share"] and has_base
     inf.patterns = dict(counts)
     if all(b.agrees for b in measured):
