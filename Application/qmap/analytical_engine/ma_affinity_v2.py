@@ -463,7 +463,7 @@ def executive_interpretation(dataset_label: str, res) -> list[tuple[str, str]]:
         chance_text = (f"No candidate qualified for ranking, so the chance test was NOT RUN. "
                        f"{ch['requested_shuffles']} shuffles were requested, but zero were attempted; "
                        f"zero were valid and zero were invalid. The {ch['requested_shuffles']} shuffles are "
-                       "unattempted, not failed. No empirical p-value or chance verdict is available.")
+                       "unattempted, not failed. The chance-test verdict is CHANCE TEST SKIPPED; no empirical p-value is available.")
     elif ch.get("status") == "not_run":
         chance_text = "The chance test was disabled (Chance shuffles = 0); no shuffles were requested or run."
     elif ch["verdict"] in (STANDS_OUT, NOT_DISTINGUISHABLE):
