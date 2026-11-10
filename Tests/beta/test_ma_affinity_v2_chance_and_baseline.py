@@ -133,14 +133,20 @@ def test_block_shuffle_keeps_bar_shapes_endpoints_and_blocks():
 def test_chance_summary_follows_the_documented_formula():
     tops = [50.0, 55.0, 60.0, 65.0, 70.0, 75.0, 80.0, 85.0, 90.0, np.nan]
     ch = V.chance_summary(80.0, tops, 10, 15, 1)
-    assert ch["p_value"] == round((1 + 3) / 11, 4) and ch["percentile"] == 70.0  # the empty shuffle counts below
-    assert ch["verdict"] == V.NOT_DISTINGUISHABLE and ch["null_max"] == 90.0
+    assert ch["requested_shuffles"] == ch["attempted_shuffles"] == 10
+    assert ch["valid_shuffles"] == 9 and ch["invalid_shuffles"] == 1
+    assert np.isnan(ch["p_value"]) and np.isnan(ch["percentile"])
+    assert ch["status"] == "inconclusive" and ch["verdict"] != V.STANDS_OUT
+    assert ch["null_max"] == 90.0
     many = [50.0] * 199
-    assert V.chance_summary(80.0, many, 199, 15, 1)["p_value"] == 0.005
-    assert V.chance_summary(80.0, many, 199, 15, 1)["verdict"] == V.STANDS_OUT
+    complete = V.chance_summary(80.0, many, 199, 15, 1)
+    assert complete["p_value"] == 0.005
+    assert complete["verdict"] == V.STANDS_OUT
     assert V.chance_summary(80.0, [], 0, 15, 1)["verdict"] == V.NOT_RUN
-    assert V.chance_summary(np.nan, many, 199, 15, 1)["verdict"].startswith("NO RANKED CANDIDATE")
-    assert V.chance_p_for(60.0, tops, 10) == round((1 + 7) / 11, 4)
+    no_candidate = V.chance_summary(np.nan, many, 199, 15, 1)
+    assert no_candidate["verdict"].startswith("NO RANKED CANDIDATE")
+    assert no_candidate["status"] == "no_candidate"
+    assert np.isnan(V.chance_p_for(60.0, tops, 10))
 
 
 def test_a_planted_ma_bounce_stands_out_and_a_random_walk_does_not():
