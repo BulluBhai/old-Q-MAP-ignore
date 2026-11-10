@@ -130,3 +130,51 @@ def test_v2_progress_counts_every_shuffle_and_ends_at_the_total(settings, db, da
     dones = [d for d, _, _ in seen]
     assert dones == sorted(dones) and [d for d in dones if d == total] == [total]
     assert any(m.startswith("Chance test: shuffle 7 of 7") for _, _, m in seen)
+
+
+def test_progress_completion_follows_successful_run_finalisation(settings, db, dataset, monkeypatch):
+    import qmap.core.runs as runs
+    actual_finish = runs.finish_run
+    events = []
+    state = {"finished": False}
+
+    def observed_finish(run, status="completed", error=None):
+        path = actual_finish(run, status, error)
+        state["finished"] = run.finished
+        return path
+
+    monkeypatch.setattr(runs, "finish_run", observed_finish)
+
+    def progress(done, total, message):
+        if done == total:
+            events.append((message, state["finished"]))
+
+    result = run_analysis(settings, db, MA_AFFINITY, [dataset], SMALL, progress=progress)
+    assert result.ok, result.message
+    assert events == [("Reports and run record written", True)]
+    assert _status(db, result.run_id)["status"] == "completed"
+
+
+def test_finalisation_failure_never_emits_success_completion(settings, db, dataset, monkeypatch):
+    import qmap.core.runs as runs
+    actual_finish = runs.finish_run
+
+    def fail_finish(run, status="completed", error=None):
+        if status == "completed":
+            raise OSError("simulated finalisation failure")
+        return actual_finish(run, status, error)
+
+    monkeypatch.setattr(runs, "finish_run", fail_finish)
+    events = []
+    result = run_analysis(settings, db, MA_AFFINITY, [dataset], SMALL,
+                          progress=lambda done, total, message: events.append((done, total, message)))
+    assert result.outcome == "failed"
+    assert not any(done == total for done, total, _ in events)
+
+
+def test_cancelled_run_never_emits_success_completion(settings, db, dataset):
+    events = []
+    result = run_analysis(settings, db, MA_AFFINITY, [dataset], SMALL, cancel=lambda: True,
+                          progress=lambda done, total, message: events.append((done, total, message)))
+    assert result.outcome == "cancelled"
+    assert not any(done == total for done, total, _ in events)
