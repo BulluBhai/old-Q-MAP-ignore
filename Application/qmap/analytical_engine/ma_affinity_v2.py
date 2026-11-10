@@ -288,8 +288,19 @@ def write_excel(res, folder: Path, stamp: str, charts: dict) -> Path:
     ws.auto_filter.ref = f"A1:{get_column_letter(len(df.columns))}{len(df) + 1}"
 
     ws = wb.create_sheet("Chance_Test")
-    _write_df(ws, pd.DataFrame({"Shuffle": range(1, len(ch["null_top_scores"]) + 1),
-                                "#1 score": ch["null_top_scores"], "#1 candidate": ch.get("null_top_labels", [])}))
+    chance_rows = [{"Shuffle": i + 1, "#1 score": sc, "#1 candidate": lab}
+                   for i, (sc, lab) in enumerate(zip(ch["null_top_scores"], ch.get("null_top_labels", [])))]
+    if not chance_rows:
+        chance_rows = [{"Status": ch.get("status"), "Test run": ch.get("test_run"),
+                        "Requested shuffles": ch.get("requested_shuffles"),
+                        "Attempted shuffles": ch.get("attempted_shuffles"),
+                        "Valid shuffles": ch.get("valid_shuffles"),
+                        "Invalid shuffles": ch.get("invalid_shuffles"),
+                        "Unattempted shuffles": ch.get("unattempted_shuffles"),
+                        "Explanation": ("No candidate qualified; chance test was not run."
+                                        if ch.get("status") == "no_candidate"
+                                        else "No shuffle results recorded.")}]
+    _write_df(ws, pd.DataFrame(chance_rows))
 
     ws = wb.create_sheet("Interactions")
     if res.interactions.empty:
@@ -373,11 +384,11 @@ def write_pdf(res, folder: Path, stamp: str, charts: dict, heading: str) -> Path
     st.append(PageBreak())
     st.append(Paragraph(f"Frozen Top-{s.top_n} distinct findings (ranked on in-sample data only)", h))
     hdr = ["#", "Rank", "MA", "Group", "IS aff.", "Chance p", "Chance status", "Chance verdict",
-           "IS n", "IS succ %", "IS base %", "Edge pts", "OOS outc.",
+           "Chance test run", "IS n", "IS succ %", "IS base %", "Edge pts", "OOS outc.",
            "OOS succ %", "OOS base %", "Consistency"]
     data = [hdr] + [[r["finding"], r["rank"], r["ma_label"], r["group_size"], _num(r["is_affinity_score"]),
                      _num(r["chance_p"], "{:.4f}"), r.get("chance_status", "NOT_RUN"),
-                     r.get("chance_verdict", "NOT_RUN"), r["is_n"],
+                     r.get("chance_verdict", "NOT_RUN"), "yes" if r.get("chance_test_run") else "no", r["is_n"],
                      _num(r["is_overall_sr"]), _num(r["is_baseline_sr"]), _num(r["is_edge_vs_baseline"]),
                      _num(r.get("oos_n_outcomes"), "{:.0f}"), _num(r["oos_overall_sr"]), _num(r["oos_baseline_sr"]),
                      _num(r["is_oos_consistency_score"])] for r in res.frozen_top_results()]
