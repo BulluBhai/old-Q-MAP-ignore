@@ -485,14 +485,16 @@ def chance_summary(real_top: float, null_tops: list, shuffles: int, block: int, 
              "null_max": round(float(arr.max()), 2) if len(arr) else NAN}
     if requested == 0:
         return {**base, **stats, "real_top_score": real_top, "p_value": NAN, "percentile": NAN,
-                "verdict": NOT_RUN, "status": "not_run"}
+                "verdict": NOT_RUN, "status": "not_run", "test_run": False}
     real_is_valid = real_top is not None and math.isfinite(float(real_top))
     if not real_is_valid and attempted == 0:
         return {**base, **stats, "real_top_score": real_top, "p_value": NAN, "percentile": NAN,
-                "verdict": "NO RANKED CANDIDATE - nothing to test", "status": "no_candidate"}
+                "verdict": "NO RANKED CANDIDATE - CHANCE TEST SKIPPED", "status": "no_candidate",
+                "test_run": False}
     if invalid or unattempted:
         return {**base, **stats, "real_top_score": real_top, "p_value": NAN, "percentile": NAN,
-                "verdict": "INCONCLUSIVE - INCOMPLETE NULL DISTRIBUTION", "status": "inconclusive"}
+                "verdict": "INCONCLUSIVE - INCOMPLETE NULL DISTRIBUTION", "status": "inconclusive",
+                "test_run": attempted > 0}
     if not real_is_valid:
         return {**base, **stats, "real_top_score": real_top, "p_value": NAN, "percentile": NAN,
                 "verdict": "NO RANKED CANDIDATE - nothing to test", "status": "no_candidate"}
@@ -500,7 +502,8 @@ def chance_summary(real_top: float, null_tops: list, shuffles: int, block: int, 
     p = (1 + at_least) / (requested + 1)
     return {**base, **stats, "real_top_score": real_top, "p_value": round(p, 4),
             "percentile": round((requested - at_least) / requested * 100, 1),
-            "verdict": STANDS_OUT if p <= CHANCE_ALPHA else NOT_DISTINGUISHABLE, "status": "complete"}
+            "verdict": STANDS_OUT if p <= CHANCE_ALPHA else NOT_DISTINGUISHABLE, "status": "complete",
+            "test_run": True}
 
 
 def chance_p_for(score: float, null_tops: list, shuffles: int) -> float:
@@ -668,8 +671,8 @@ def run_ma_affinity_v2(df: pd.DataFrame, s: MAAffinityV2Settings, *, label: str 
             if (k + 1) % 20 == 0 or k + 1 == s.chance_shuffles:
                 say(f"  chance test: {k + 1} of {s.chance_shuffles} shuffles done")
     elif s.chance_shuffles > 0:
-        done += s.chance_shuffles * n_c
-        say("Phase 3/4: chance test skipped - no candidate was ranked.")
+        say(f"Chance test NOT RUN: {s.chance_shuffles} shuffles requested, but no candidate qualified for ranking. "
+            "No shuffle was attempted.")
     else:
         say("Phase 3/4: chance test not run (Chance shuffles = 0).")
     real_top = lookup[frozen[0]]["is_affinity_score"] if frozen else NAN
@@ -683,6 +686,11 @@ def run_ma_affinity_v2(df: pd.DataFrame, s: MAAffinityV2Settings, *, label: str 
             else STANDS_OUT if lookup[key]["chance_p"] <= CHANCE_ALPHA
             else NOT_DISTINGUISHABLE if math.isfinite(lookup[key]["chance_p"]) else NOT_RUN
         )
+    for row in results:
+        row.setdefault("chance_p", NAN)
+        row.setdefault("chance_status", chance["status"])
+        row.setdefault("chance_verdict", chance["verdict"] if chance["status"] in ("no_candidate", "inconclusive")
+                       else NOT_RUN if chance["status"] == "not_run" else "NOT_EVALUATED - NOT IN FROZEN TOP-N")
     if chance["verdict"] in (STANDS_OUT, NOT_DISTINGUISHABLE):
         say(f"Chance test: real #1 score {real_top:.2f}; luck-only #1 scores average {chance['null_mean']:.2f}, 95th "
             f"percentile {chance['null_p95']:.2f}; chance p-value {chance['p_value']:.4f} -> {chance['verdict']}.")
@@ -691,6 +699,9 @@ def run_ma_affinity_v2(df: pd.DataFrame, s: MAAffinityV2Settings, *, label: str 
                         f"p-value {chance['p_value']:.4f}; block-shuffled prices reached a #1 score at least this high "
                         f"in {int(round(chance['p_value'] * (s.chance_shuffles + 1))) - 1} of {s.chance_shuffles} "
                         "shuffles). Treat the ranking as unproven.")
+    elif chance.get("status") == "no_candidate":
+        warnings.append(f"Chance test NOT RUN: no candidate qualified. {chance['requested_shuffles']} shuffle(s) "
+                        "were requested, but 0 were attempted; 0 were invalid.")
     elif chance.get("status") == "inconclusive":
         warnings.append(f"Chance test INCONCLUSIVE: {chance['invalid_shuffles']} of "
                         f"{chance['attempted_shuffles']} attempted shuffles were invalid and "
