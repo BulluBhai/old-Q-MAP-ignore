@@ -206,7 +206,7 @@ def test_v2_no_ranked_candidate_skips_chance_test_in_production_outputs(settings
     assert math.isnan(chance["p_value"]) if isinstance(chance["p_value"], float) else chance["p_value"] is None
 
     findings = next(res.run_dir.glob("MA_Affinity_V2_Findings_*.txt")).read_text(encoding="utf-8")
-    assert "Chance test was NOT RUN" in findings
+    assert "chance test was NOT RUN" in findings
     assert "7 shuffles were requested, but zero were attempted" in findings
     assert "VERDICT: NO RANKED CANDIDATE" in findings
     assert "STATUS: no_candidate" in findings
