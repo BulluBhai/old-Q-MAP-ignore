@@ -1,0 +1,479 @@
+"""MA Affinity V2 - the calculation (no files, no GUI, no registry). Approved by the Project Owner on 10-Nov-26.
+
+V2 keeps every V1 definition (QLOPB MA Affinity Scanner V2, Application/qlopb, which is NOT changed and is reused here):
+the five MA formulas, zone entry and cooldown, the forward-window rule, Support/Resistance, the four score
+components and their weights, in-sample (IS) ranking, freezing the Top-N, and the independent out-of-sample (OOS)
+check. V2 ADDS:
+
+  1. Chance test (block shuffle). The IS part of the price history is cut into blocks of `chance_block_bars`
+     consecutive bars, the blocks are put in a random order and a new price series is rebuilt from them. Every bar
+     keeps its own shape (gap, body, wicks) and the series keeps the same overall move and volatility, but any real
+     link between price and a moving average is destroyed. The full IS scan is run on `chance_shuffles` such series
+     (fixed `chance_seed`, so a run can be repeated exactly) and the best (#1) score of each is recorded. The real #1
+     score is then compared with these luck-only #1 scores:
+        chance p-value = (1 + number of shuffles whose #1 score >= the real score) / (shuffles + 1)
+        verdict        = "STANDS OUT FROM CHANCE" if chance p <= 0.05, otherwise "NOT DISTINGUISHABLE FROM CHANCE".
+     Each frozen Top-N candidate gets its own chance p-value against the same luck-only #1 scores. Because it is
+     compared with the BEST of all candidates on each shuffled series, it already allows for the many candidates
+     tested (unlike V1's uncorrected binomial p-values, which are still shown for reference).
+  2. Drift baseline. For each candidate the success rate is shown next to what the stock did anyway over the same
+     bars: the share of all bars (from the first bar with an MA value to the last bar whose primary forward window
+     fits) after which price was higher (the Support baseline) or lower (the Resistance baseline), weighted by the
+     candidate's own Support and Resistance outcomes. `edge` = success rate - baseline (percentage points), with a
+     one-sided binomial p-value against the baseline. The baseline is REPORTED ONLY: the affinity score still
+     compares the success rate with 50%, as in V1 (owner decision 10-Nov-26).
+"""
+
+from __future__ import annotations
+
+import math
+import time
+from dataclasses import dataclass, field
+
+import numpy as np
+import pandas as pd
+
+from qlopb.analysis.affinity_engine import score_window
+from qlopb.analysis.interaction_engine import build_interaction_records, detect_interaction_episodes
+from qlopb.config import settings as qcfg
+from qlopb.config.settings import MAResearchSettings
+from qlopb.core.research_engine import ResearchError, ResearchResult, RunCancelled, horizon_label
+from qlopb.core.validation import check_data_for_settings, validate_ohlc_frame
+from qlopb.references.moving_average import compute_ma
+from qlopb.validation.is_oos import compute_split, consistency, freeze_top_n, rank_candidates
+from qlopb.validation.robustness import near_duplicate_pairs, neighbour_summary
+
+METHOD_NAME = "MA Affinity V2"
+CHANCE_ALPHA = 0.05
+STANDS_OUT, NOT_DISTINGUISHABLE, NOT_RUN = ("STANDS OUT FROM CHANCE", "NOT DISTINGUISHABLE FROM CHANCE",
+                                            "CHANCE TEST NOT RUN")
+NAN = float("nan")
+
+LIMITATIONS_V2 = (
+    "A historical rank is a description of the past, not evidence that a moving average will work in future.",
+    "The chance test compares the real #1 score with the #1 scores found on block-shuffled copies of the same "
+    "in-sample prices. It allows for the many candidates tested, but it is still a test on one history: a result that "
+    "stands out from chance on one instrument should be confirmed on others before it is relied on.",
+    "The binomial p-values in the tables are NOT corrected for the many candidates tested; they are kept for "
+    "reference only. Use the chance p-value to judge a finding.",
+    "Success is scored against 50% (as in V1). The drift baseline (what price did anyway over the same bars) is "
+    "reported alongside; a success rate close to its baseline mostly reflects the stock's own trend.",
+    "Neighbouring MA periods are almost identical, so the Top-N list may show one finding several times.",
+    "Forward windows longer than the primary window overlap each other, so those statistics are not independent "
+    "observations.",
+    "Forward Return (Directed IR) methodology is PENDING OWNER REVIEW. The V1 formula is kept unchanged.",
+    "The official affinity weight scheme is still undecided. The four V1 weights are kept in their original "
+    "proportions and normalised.",
+    "Out-of-sample samples can be small. Where the OOS sample is below the minimum, consistency is reported as "
+    "insufficient evidence.",
+)
+
+
+@dataclass
+class MAAffinityV2Settings(MAResearchSettings):
+    """V1 settings (unchanged meaning and defaults) plus the V2 chance-test options."""
+
+    chance_shuffles: int = 200  # 0 = do not run the chance test (the report then says it was not run)
+    chance_block_bars: int = 15
+    chance_seed: int = 1
+
+    def problems(self) -> list:
+        out = super().problems()
+
+        def is_int(v):
+            return isinstance(v, int) and not isinstance(v, bool)
+
+        if not is_int(self.chance_shuffles) or not 0 <= self.chance_shuffles <= 5000:
+            out.append("Chance shuffles must be a whole number from 0 to 5000 (0 = chance test not run).")
+        if not is_int(self.chance_block_bars) or not 2 <= self.chance_block_bars <= 500:
+            out.append("Chance block bars must be a whole number from 2 to 500.")
+        if not is_int(self.chance_seed) or self.chance_seed < 0:
+            out.append("Chance seed must be a whole number of 0 or more.")
+        if self.timeframe != "as_loaded":
+            out.append("MA Affinity V2 always runs on the dataset's own timeframe (as_loaded).")
+        return out
+
+
+@dataclass
+class V2Result(ResearchResult):
+    """QLOPB's ResearchResult (so QLOPB's chart writer can draw it) plus the V2 chance test."""
+
+    chance: dict = field(default_factory=dict)
+
+
+# ---- helpers ------------------------------------------------------------------------------------------------------
+def _fast_records(events, ma_vals, close, fwd_end_bar, fwd_windows) -> list:
+    """Only the fields `score_window` reads (side, outcome_<w>, fwd_<w>), built exactly as QLOPB's
+    build_interaction_records builds them. Used for the shuffled series, where dates and labels are not needed."""
+    n = len(close)
+    recs = []
+    for i in events:
+        ma = float(ma_vals[i])
+        cl = float(close[i])
+        prev = float(close[i - 1]) if i > 0 else cl
+        side = "Support" if prev > ma else "Resistance" if prev < ma else "Neutral"
+        r = {"side": side}
+        for w in fwd_windows:
+            fi = i + w
+            if fi <= fwd_end_bar and fi < n:
+                fr = (float(close[fi]) - cl) / cl * 100
+                r[f"fwd_{w}"] = fr
+                if side == "Support":
+                    r[f"outcome_{w}"] = "Success" if fr > 0 else "Failure"
+                elif side == "Resistance":
+                    r[f"outcome_{w}"] = "Success" if fr < 0 else "Failure"
+                else:
+                    r[f"outcome_{w}"] = "Neutral"
+            else:
+                r[f"fwd_{w}"] = np.nan
+                r[f"outcome_{w}"] = "NoData"
+        recs.append(r)
+    return recs
+
+
+def affinity_only(records: list, s) -> tuple:
+    """(status, affinity score rounded to 2 decimals) exactly as QLOPB's `score_window` computes them, without the
+    descriptive statistics, reliability and p-values that a shuffled series does not need (about 4x faster).
+    A test checks that both give the same status and score."""
+    n = len(records)
+    if n == 0:
+        return "NO_INTERACTIONS", NAN
+    status = "OK" if n >= s.min_interactions else "INSUFFICIENT_DATA"
+    pk = f"outcome_{s.fwd_windows[0]}"
+
+    def sr(recs):
+        outs = [r[pk] for r in recs if r.get(pk) in ("Success", "Failure")]
+        return (sum(1 for x in outs if x == "Success") / len(outs), len(outs)) if outs else (NAN, 0)
+
+    all_sr, all_n = sr(records)
+    chunk_n = n // 4
+    stability = NAN
+    if chunk_n >= 3:
+        srs = [sr(records[k * chunk_n:(k + 1) * chunk_n])[0] for k in range(4)]
+        srs = [x for x in srs if not np.isnan(x)]
+        if len(srs) >= 2:
+            stability = float(max(0.0, min(1.0, 1.0 - 2 * np.std(srs))))
+    s_inter = min(1.0, n / max(s.min_interactions * 3, 20))
+    s_success = float(max(0.0, min(1.0, (all_sr - 0.5) / 0.5))) if all_n > 0 else 0.0
+    dir_scores = []
+    for w in s.fwd_windows:
+        vs = [r[f"fwd_{w}"] for r in records if r["side"] == "Support" and not np.isnan(r[f"fwd_{w}"])]
+        vr = [r[f"fwd_{w}"] for r in records if r["side"] == "Resistance" and not np.isnan(r[f"fwd_{w}"])]
+        directed = np.array(vs + [-x for x in vr], dtype=float)
+        if len(directed) >= 3:
+            m, sd = directed.mean(), directed.std()
+            sd = sd if sd > 0 else 1.0
+            dir_scores.append(float(max(0.0, min(1.0, m / sd + 0.5))))
+    s_fwd = float(np.mean(dir_scores)) if dir_scores else 0.0
+    s_stab = stability if not np.isnan(stability) else 0.0
+    weights = s.weights
+    wsum = sum(weights.values())
+    affinity = sum((weights[k] / wsum) * v for k, v in (
+        ("interaction_strength", s_inter), ("success_rate", s_success),
+        ("forward_return", s_fwd), ("stability", s_stab))) * 100
+    return status, round(affinity, 2)
+
+
+class _Baseline:
+    """Share of bars after which price was higher / lower `pw` bars later, over any bar range (cumulative sums)."""
+
+    def __init__(self, close: np.ndarray, pw: int):
+        n = len(close)
+        up = np.zeros(n, dtype=np.int64)
+        down = np.zeros(n, dtype=np.int64)
+        if n > pw:
+            fwd = close[pw:] - close[:-pw]
+            up[: n - pw] = fwd > 0
+            down[: n - pw] = fwd < 0
+        self.cs_up = np.concatenate([[0], np.cumsum(up)])
+        self.cs_down = np.concatenate([[0], np.cumsum(down)])
+
+    def rates(self, first: int, last: int) -> tuple:
+        if last < first:
+            return NAN, NAN, 0
+        k = last - first + 1
+        return ((self.cs_up[last + 1] - self.cs_up[first]) / k, (self.cs_down[last + 1] - self.cs_down[first]) / k, k)
+
+
+def _baseline_fields(prefix: str, recs: list, ma, baseline: _Baseline, start: int, record_end: int, pk: str) -> dict:
+    """Drift baseline for one candidate in one period (IS or OOS). Reporting only - the score does not use it."""
+    from scipy import stats as sci_stats
+
+    valid = np.flatnonzero(~np.isnan(ma[start: record_end + 1])) if record_end >= start else np.array([], int)
+    out = {f"{prefix}_baseline_sr": NAN, f"{prefix}_edge_vs_baseline": NAN, f"{prefix}_p_vs_baseline": NAN,
+           f"{prefix}_baseline_bars": 0}
+    if len(valid) == 0:
+        return out
+    p_up, p_down, k = baseline.rates(start + int(valid[0]), record_end)
+    out[f"{prefix}_baseline_bars"] = int(k)
+    sup = [r for r in recs if r["side"] == "Support" and r.get(pk) in ("Success", "Failure")]
+    res = [r for r in recs if r["side"] == "Resistance" and r.get(pk) in ("Success", "Failure")]
+    n_out = len(sup) + len(res)
+    if n_out == 0 or k == 0:
+        return out
+    expected = (len(sup) * p_up + len(res) * p_down) / n_out
+    wins = sum(1 for r in sup + res if r[pk] == "Success")
+    out[f"{prefix}_baseline_sr"] = round(expected * 100, 2)
+    out[f"{prefix}_edge_vs_baseline"] = round((wins / n_out - expected) * 100, 2)
+    if n_out >= 5 and 0 < expected < 1:
+        out[f"{prefix}_p_vs_baseline"] = round(float(sci_stats.binomtest(wins, n_out, p=expected,
+                                                                         alternative="greater").pvalue), 4)
+    return out
+
+
+def block_shuffle_ohlc(o, h, l, c, block: int, rng: np.random.Generator) -> tuple:
+    """A price series with the same bars in a different order of `block`-bar blocks.
+
+    Each bar is described relative to the previous close (gap = open / previous close, body = close / open, upper and
+    lower wick ratios), so every rebuilt bar is internally consistent (low <= open, close <= high). The first bar is
+    kept; the product of all bar moves, so the overall move from the first to the last close, is unchanged. The block
+    grid starts at a random offset so that block edges differ between shuffles."""
+    o, h, l, c = (np.asarray(x, dtype=np.float64) for x in (o, h, l, c))
+    n = len(c)
+    if n < 3:
+        return o.copy(), h.copy(), l.copy(), c.copy()
+    gap = o[1:] / c[:-1]
+    body = c[1:] / o[1:]
+    upper = h[1:] / np.maximum(o[1:], c[1:])
+    lower = l[1:] / np.minimum(o[1:], c[1:])
+    m = n - 1
+    offset = int(rng.integers(0, block))
+    edges = sorted({0, m, *range(offset, m, block)})
+    blocks = [np.arange(a, b) for a, b in zip(edges[:-1], edges[1:]) if b > a]
+    order = rng.permutation(len(blocks))
+    idx = np.concatenate([blocks[k] for k in order])
+    g, b, up, dn = gap[idx], body[idx], upper[idx], lower[idx]
+    c2 = np.empty(n)
+    o2 = np.empty(n)
+    c2[0], o2[0] = c[0], o[0]
+    c2[1:] = c[0] * np.cumprod(g * b)
+    o2[1:] = c2[:-1] * g
+    h2 = np.empty(n)
+    l2 = np.empty(n)
+    h2[0], l2[0] = h[0], l[0]
+    h2[1:] = np.maximum(o2[1:], c2[1:]) * up
+    l2[1:] = np.minimum(o2[1:], c2[1:]) * dn
+    return o2, h2, l2, c2
+
+
+def _is_top_score(o, h, l, c, s: MAAffinityV2Settings, candidates: list, is_end: int) -> tuple:
+    """Run the IS scan on one (shuffled) series; return (#1 IS affinity among ranked candidates, its label)."""
+    best, best_label = -math.inf, ""
+    fwd = list(s.fwd_windows)
+    pw = s.primary_window
+    for mt, period in candidates:
+        ma = compute_ma(c, mt, period)
+        events, _, _ = detect_interaction_episodes(h, l, ma, 0, is_end, is_end, pw, s.proximity_pct, s.cooldown_bars,
+                                                   initial_in_zone=False, last_event_bar=-(period + 1))
+        status, score = affinity_only(_fast_records(events, ma, c, is_end, fwd), s)
+        if status == "OK" and score > best:
+            best, best_label = score, f"{mt}-{period}"
+    return (best if best > -math.inf else NAN), best_label
+
+
+def chance_summary(real_top: float, null_tops: list, shuffles: int, block: int, seed: int) -> dict:
+    """Compare the real #1 IS score with the #1 scores of the shuffled series."""
+    base = {"shuffles": shuffles, "block_bars": block, "seed": seed, "null_top_scores": list(null_tops)}
+    if shuffles == 0:
+        return {**base, "real_top_score": real_top, "p_value": NAN, "percentile": NAN, "verdict": NOT_RUN,
+                "null_mean": NAN, "null_p95": NAN, "null_max": NAN}
+    arr = np.array([x for x in null_tops if not np.isnan(x)], dtype=float)
+    if np.isnan(real_top):
+        return {**base, "real_top_score": real_top, "p_value": NAN, "percentile": NAN,
+                "verdict": "NO RANKED CANDIDATE - nothing to test", "null_mean": NAN, "null_p95": NAN, "null_max": NAN}
+    at_least = int((arr >= real_top).sum())  # a shuffle with no ranked candidate counts as below the real score
+    p = (1 + at_least) / (shuffles + 1)
+    return {**base, "real_top_score": real_top, "p_value": round(p, 4),
+            "percentile": round((shuffles - at_least) / shuffles * 100, 1),
+            "verdict": STANDS_OUT if p <= CHANCE_ALPHA else NOT_DISTINGUISHABLE,
+            "null_mean": round(float(arr.mean()), 2) if len(arr) else NAN,
+            "null_p95": round(float(np.percentile(arr, 95)), 2) if len(arr) else NAN,
+            "null_max": round(float(arr.max()), 2) if len(arr) else NAN}
+
+
+def chance_p_for(score: float, null_tops: list, shuffles: int) -> float:
+    if shuffles == 0 or score is None or np.isnan(score):
+        return NAN
+    arr = np.array([x for x in null_tops if not np.isnan(x)], dtype=float)
+    return round((1 + int((arr >= score).sum())) / (shuffles + 1), 4)
+
+
+def _stamp(ts) -> str:
+    ts = pd.Timestamp(ts)
+    return ts.strftime(qcfg.DATE_FMT if (ts.hour == 0 and ts.minute == 0) else qcfg.DATETIME_FMT)
+
+
+# ---- the run ------------------------------------------------------------------------------------------------------
+def run_ma_affinity_v2(df: pd.DataFrame, s: MAAffinityV2Settings, *, label: str = "instrument", log=None,
+                       progress=None, cancel=None, quality=None) -> V2Result:
+    """progress(done, total, text); log(text); cancel() -> True to stop (raises RunCancelled)."""
+    t0 = time.time()
+    say = log or (lambda m: None)
+    tick = progress or (lambda d, t, m: None)
+    s.check()
+    problems = validate_ohlc_frame(df)
+    if problems:
+        raise ResearchError("The price table is not usable:\n- " + "\n- ".join(problems))
+    errors, warns = check_data_for_settings(df, s)
+    if errors:
+        raise ResearchError("\n".join(errors))
+    warnings = list(warns)
+
+    o = df["open"].to_numpy(dtype=np.float64)
+    close = df["close"].to_numpy(dtype=np.float64)
+    high = df["high"].to_numpy(dtype=np.float64)
+    low = df["low"].to_numpy(dtype=np.float64)
+    index = df.index
+    n = len(df)
+    is_end, oos_start = compute_split(n, s.is_pct)
+    pw = s.primary_window
+    pk = f"outcome_{pw}"
+    fwd = list(s.fwd_windows)
+    reg = s.regime_ma
+    regime_ma = (pd.Series(close).rolling(reg, min_periods=reg).mean().to_numpy() if n > reg else np.full(n, np.nan))
+    baseline = _Baseline(close, pw)
+
+    candidates = [(mt, p) for mt in s.ma_types for p in range(s.ma_start, s.ma_end + 1)]
+    n_c = len(candidates)
+    n_oos_est = n_c if s.oos_scope == "all" else min(s.top_n, n_c)
+    total = n_c + s.chance_shuffles * n_c + n_oos_est
+    done = 0
+    data_info = {
+        "n_bars": n, "first": _stamp(index[0]), "last": _stamp(index[-1]),
+        "is_bars": is_end + 1, "oos_bars": n - oos_start,
+        "is_first": _stamp(index[0]), "is_last": _stamp(index[is_end]),
+        "oos_first": _stamp(index[oos_start]) if oos_start < n else "",
+        "oos_last": _stamp(index[-1]) if oos_start < n else "",
+        "frequency": quality.inferred_frequency if quality is not None else "as loaded",
+        "timeframe_setting": s.timeframe}
+    say(f"Data: {n} bars, {data_info['first']} to {data_info['last']}. IS {data_info['is_bars']} bars "
+        f"({data_info['is_first']} to {data_info['is_last']}), OOS {data_info['oos_bars']} bars.")
+    say(f"Candidates: {n_c} ({', '.join(s.ma_types)}, periods {s.ma_start}-{s.ma_end}). Primary forward window {pw} "
+        f"bars. Chance test: {s.chance_shuffles} shuffles of {s.chance_block_bars}-bar blocks (seed {s.chance_seed}).")
+
+    def stop_if_asked():
+        if cancel and cancel():
+            raise RunCancelled("Run cancelled by user.")
+
+    # ---- Phase 1: IS scoring of every candidate ------------------------------------------------------------------
+    say("Phase 1/4: in-sample scoring of all candidates...")
+    results, is_state, all_records = [], {}, []
+    for mt, period in candidates:
+        stop_if_asked()
+        tick(done, total, f"In-sample {mt}-{period}")
+        ma = compute_ma(close, mt, period)
+        events, final_iz, final_lev = detect_interaction_episodes(
+            high, low, ma, 0, is_end, is_end, pw, s.proximity_pct, s.cooldown_bars,
+            initial_in_zone=False, last_event_bar=-(period + 1))
+        recs = build_interaction_records(events, ma, mt, period, is_end, close, high, low, index, regime_ma, fwd)
+        sc = score_window(recs, s)
+        is_state[(mt, period)] = (final_iz, final_lev)
+        results.append({
+            "ma_type": mt, "ma_period": period, "ma_label": f"{mt}-{period}", "horizon": horizon_label(period),
+            "rank": None, "rank_tie": False,
+            **{f"is_{key}": v for key, v in sc.items()},
+            **_baseline_fields("is", recs, ma, baseline, 0, min(is_end, is_end - pw), pk),
+            "chance_p": NAN,
+            "oos_status": "NOT_EVALUATED", "oos_n": np.nan, "oos_overall_sr": np.nan, "oos_n_outcomes": np.nan,
+            "oos_affinity_score": np.nan, "is_oos_sr_diff": np.nan, "is_oos_consistency_raw": np.nan,
+            "is_oos_consistency_score": np.nan, "is_oos_consistency_status": "NOT_EVALUATED",
+            "oos_baseline_sr": np.nan, "oos_edge_vs_baseline": np.nan, "oos_p_vs_baseline": np.nan,
+            "oos_baseline_bars": 0})
+        all_records.extend({"period_type": "IS", **r} for r in recs)
+        done += 1
+
+    # ---- Phase 2: rank on IS only and freeze the Top-N -----------------------------------------------------------
+    say("Phase 2/4: ranking on in-sample scores only and freezing the Top-N...")
+    rank_candidates(results)
+    frozen = freeze_top_n(results, s.top_n)
+    n_ok = sum(1 for r in results if r["is_status"] == "OK")
+    say(f"{n_ok} of {n_c} candidates have enough in-sample interactions (min {s.min_interactions}). Frozen "
+        f"Top-{len(frozen)}: " + ", ".join(f"{t}-{p}" for t, p in frozen))
+    if n_ok == 0:
+        warnings.append("No candidate reached the minimum number of in-sample interactions, so nothing was ranked. "
+                        "This means 'insufficient data', not 'poor results'.")
+    elif len(frozen) < s.top_n:
+        warnings.append(f"Only {len(frozen)} candidates qualified for the Top-{s.top_n} list.")
+    ties = sorted({r["rank"] for r in results if r.get("rank_tie") and r["rank"] <= s.top_n})
+    if ties:
+        warnings.append("Equal IS scores inside the Top-N (ranks " + ", ".join(map(str, ties))
+                        + "): their order is arbitrary (candidate order).")
+    dup_pairs = near_duplicate_pairs(frozen)
+    if dup_pairs:
+        warnings.append("Near-duplicate neighbours in the Top-N (periods within 3): "
+                        + "; ".join(f"{a}/{b}" for a, b in dup_pairs) + ".")
+    lookup = {(r["ma_type"], r["ma_period"]): r for r in results}
+
+    # ---- Phase 3: chance test on block-shuffled IS prices -----------------------------------------------------------
+    null_tops, null_labels = [], []
+    if s.chance_shuffles > 0 and frozen:
+        say(f"Phase 3/4: chance test - {s.chance_shuffles} block-shuffled copies of the in-sample prices...")
+        rng = np.random.default_rng(s.chance_seed)
+        seg = slice(0, is_end + 1)
+        for k in range(s.chance_shuffles):
+            stop_if_asked()
+            tick(done, total, f"Chance test: shuffle {k + 1} of {s.chance_shuffles}")
+            so, sh, sl, sc_ = block_shuffle_ohlc(o[seg], high[seg], low[seg], close[seg], s.chance_block_bars, rng)
+            top, top_label = _is_top_score(so, sh, sl, sc_, s, candidates, is_end)
+            null_tops.append(top)
+            null_labels.append(top_label)
+            done += n_c
+            if (k + 1) % 20 == 0 or k + 1 == s.chance_shuffles:
+                say(f"  chance test: {k + 1} of {s.chance_shuffles} shuffles done")
+    elif s.chance_shuffles > 0:
+        done += s.chance_shuffles * n_c
+        say("Phase 3/4: chance test skipped - no candidate was ranked.")
+    else:
+        say("Phase 3/4: chance test not run (Chance shuffles = 0).")
+    real_top = lookup[frozen[0]]["is_affinity_score"] if frozen else NAN
+    chance = chance_summary(real_top, null_tops, s.chance_shuffles, s.chance_block_bars, s.chance_seed)
+    chance["null_top_labels"] = null_labels
+    for key in frozen:
+        lookup[key]["chance_p"] = chance_p_for(lookup[key]["is_affinity_score"], null_tops, s.chance_shuffles)
+    if chance["verdict"] in (STANDS_OUT, NOT_DISTINGUISHABLE):
+        say(f"Chance test: real #1 score {real_top:.2f}; luck-only #1 scores average {chance['null_mean']:.2f}, 95th "
+            f"percentile {chance['null_p95']:.2f}; chance p-value {chance['p_value']:.4f} -> {chance['verdict']}.")
+    if chance["verdict"] == NOT_DISTINGUISHABLE:
+        warnings.append(f"Chance test: the #1 score ({real_top:.2f}) is NOT distinguishable from chance (chance "
+                        f"p-value {chance['p_value']:.4f}; block-shuffled prices reached a #1 score at least this high "
+                        f"in {int(round(chance['p_value'] * (s.chance_shuffles + 1))) - 1} of {s.chance_shuffles} "
+                        "shuffles). Treat the ranking as unproven.")
+    elif chance["verdict"] == NOT_RUN:
+        warnings.append("The chance test was not run (Chance shuffles = 0), so the scores cannot be judged against "
+                        "luck.")
+
+    # ---- Phase 4: independent OOS -------------------------------------------------------------------------------
+    to_eval = set(frozen) if s.oos_scope == "top_n" else {(r["ma_type"], r["ma_period"]) for r in results}
+    say(f"Phase 4/4: out-of-sample validation of {len(to_eval)} candidate(s) (scope: {s.oos_scope}). OOS never "
+        "changes ranks.")
+    todo = [c for c in candidates if c in to_eval]
+    for mt, period in todo:
+        stop_if_asked()
+        tick(done, total, f"Out-of-sample {mt}-{period}")
+        ma = compute_ma(close, mt, period)
+        iz, lev = is_state[(mt, period)]
+        events, _, _ = detect_interaction_episodes(high, low, ma, oos_start, n - 1, n - 1, pw, s.proximity_pct,
+                                                   s.cooldown_bars, initial_in_zone=iz, last_event_bar=lev)
+        recs = build_interaction_records(events, ma, mt, period, n - 1, close, high, low, index, regime_ma, fwd)
+        sc = score_window(recs, s)
+        r = lookup[(mt, period)]
+        for key, v in sc.items():
+            r[f"oos_{key}"] = v
+        r.update(_baseline_fields("oos", recs, ma, baseline, oos_start, n - 1 - pw, pk))
+        cons = consistency(r["is_overall_sr"], r["oos_overall_sr"], sc["n_outcomes"],
+                           s.min_oos_outcomes_for_consistency)
+        r["is_oos_sr_diff"], r["is_oos_consistency_raw"] = cons["diff"], cons["raw"]
+        r["is_oos_consistency_score"], r["is_oos_consistency_status"] = cons["value"], cons["status"]
+        all_records.extend({"period_type": "OOS", **x} for x in recs)
+        done += 1
+    tick(total, total, "Finished")
+
+    for r in results:
+        if r["rank"] and r["rank"] <= s.top_n:
+            r.update({f"nbr_{k}": v for k, v in neighbour_summary(results, r["ma_type"], r["ma_period"]).items()})
+    inter = pd.DataFrame(all_records) if all_records else pd.DataFrame()
+    secs = time.time() - t0
+    say(f"Research finished in {secs:.1f}s. {len(inter)} interactions recorded.")
+    return V2Result(label=label, settings=s, results=results, interactions=inter, data_info=data_info,
+                    frozen_top=frozen, warnings=warnings, notes=[], near_duplicates=dup_pairs, quality=quality,
+                    seconds=secs, price_frame=df, chance=chance)

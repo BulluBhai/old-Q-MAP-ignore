@@ -1,0 +1,424 @@
+"""MA Affinity V2 (analysis `ma_affinity_v2`, version 1): V1 plus a chance test and a drift baseline (owner decisions
+10-Nov-26). The calculation is in ma_affinity_v2_method.py; this module connects it to the Workbench.
+
+V1 (`ma_affinity`) is unchanged and stays available, so every V1 run can still be reproduced. V2 is a separate analysis
+with its own Run ID prefix (MAA2) rather than "version 2" of V1, because the registry keeps one version per analysis
+and reproducing an old run requires the analysis version it was made with.
+
+Everything V1 checks before a run is checked here too, with V1's own code (qmap.analytical_engine.ma_affinity):
+the parameters (QLOPB's parser and range checks), conflicting observations, mixed timeframes, data length and prices.
+V2 adds its own parameters (chance test) and one readiness item: the in-sample part must hold enough blocks to shuffle.
+"""
+
+from __future__ import annotations
+
+import datetime as dt
+from dataclasses import asdict, fields, replace
+from pathlib import Path
+from xml.sax.saxutils import escape
+
+import numpy as np
+
+from qlopb.config import settings as qcfg
+
+from ..catalog import DataRequirement, FAIL, PASS, WARN, fmt_date, get_dataset
+from ..core.build import build_label, current_build
+from . import ma_affinity as v1
+from .base import AnalysisSpec, Parameter, RunContext
+from .ma_affinity_v2_method import (LIMITATIONS_V2, METHOD_NAME, NOT_DISTINGUISHABLE, STANDS_OUT, MAAffinityV2Settings,
+                                    run_ma_affinity_v2)
+
+TIMEFRAMES = v1.TIMEFRAMES
+RESEARCH_QUESTION = v1.RESEARCH_QUESTION + (" And is the best result stronger than the best result that chance alone "
+                                            "produces on the same prices?")
+_D = MAAffinityV2Settings()
+METHOD_SOURCE = (f"{METHOD_NAME} (Q-MAP, owner decisions 10-Nov-26): QLOPB MA Affinity Scanner V2 calculations, "
+                 f"unchanged ({v1.METHOD_SOURCE}), plus a block-shuffle chance test and a drift baseline")
+
+# (key, label, default text, help) - the V2 additions; the V1 fields keep their V1 keys, labels and defaults
+_V2_FIELDS = (
+    ("chance_shuffles", "Chance shuffles", str(_D.chance_shuffles),
+     "Shuffled copies of the in-sample prices tested for the chance comparison (0 = not run)."),
+    ("chance_block", "Chance block bars", str(_D.chance_block_bars),
+     "Bars per block when shuffling (blocks keep short trends intact)."),
+    ("chance_seed", "Chance seed", str(_D.chance_seed),
+     "Fixes the random order of the shuffles, so the same run gives the same result."),
+)
+_V2_KEYS = {"chance_shuffles": "chance_shuffles", "chance_block": "chance_block_bars", "chance_seed": "chance_seed"}
+PARAMETERS = v1.PARAMETERS + tuple(Parameter(k, label, "text", default=default, help=help_)
+                                   for k, label, default, help_ in _V2_FIELDS)
+_BASE_FIELDS = {f.name for f in fields(qcfg.MAResearchSettings)}
+
+
+def _parse_v2_fields(params: dict) -> tuple[dict, list[str]]:
+    out, problems = {}, []
+    for key, label, default, _help in _V2_FIELDS:
+        text = str(params.get(key) if params.get(key) is not None else default).strip()
+        try:
+            out[_V2_KEYS[key]] = int(text)
+        except ValueError:
+            problems.append(f"{label} must be a whole number (you typed '{text}').")
+    return out, problems
+
+
+def check_params(params: dict) -> tuple[dict, list[str]]:
+    """V1's parameter checks (unchanged), then the V2 parameters; returns the cleaned parameters for Run_Metadata."""
+    cleaned, problems = v1.check_params(params)
+    extra, more = _parse_v2_fields(params)
+    problems = problems + more
+    raw = {"date_from": params.get("date_from"), "date_to": params.get("date_to"),
+           **{k: params.get(k) for k, *_ in v1._FIELDS + _V2_FIELDS}}
+    if problems:
+        return raw, problems
+    base = {k: (tuple(v) if isinstance(v, list) else v) for k, v in cleaned["qlopb_settings"].items()}
+    s = MAAffinityV2Settings(**base, **extra)
+    problems = s.problems()
+    if problems:
+        return raw, problems
+    return {"date_from": params.get("date_from"), "date_to": params.get("date_to"), "v2_settings": asdict(s)}, []
+
+
+def _settings(params: dict) -> MAAffinityV2Settings:
+    s = MAAffinityV2Settings(**{k: (tuple(v) if isinstance(v, list) else v) for k, v in params["v2_settings"].items()})
+    return s.check()
+
+
+def _v1_view(params: dict) -> dict:
+    """The parameters as V1's readiness checks expect them (V1 settings only)."""
+    if "v2_settings" not in params:
+        return params
+    return {**params, "qlopb_settings": {k: v for k, v in params["v2_settings"].items() if k in _BASE_FIELDS}}
+
+
+def dataset_checks(settings, db, dataset_id: int, params: dict, report) -> None:
+    """V1's readiness items (unchanged), then: the in-sample part must hold enough blocks for the chance test."""
+    v1.dataset_checks(settings, db, dataset_id, _v1_view(params), report)
+    if report.failures or "v2_settings" not in params:
+        return
+    s = _settings(params)
+    if s.chance_shuffles == 0:
+        report.add("ma_affinity_v2_chance", WARN, "Chance shuffles is 0: the chance test will not be run, so the "
+                                                  "scores cannot be judged against luck.")
+        return
+    frame, _ = v1._frame(settings, db, dataset_id, params)
+    is_bars = int(len(frame) * s.is_pct / 100)
+    blocks = (is_bars - 1) // s.chance_block_bars
+    if blocks < 5:
+        report.add("ma_affinity_v2_chance", FAIL,
+                   f"The in-sample part has {is_bars} bars, only {blocks} block(s) of {s.chance_block_bars} bars: too "
+                   "few to shuffle meaningfully (at least 5 are needed). Use a smaller block or more data.")
+    else:
+        report.add("ma_affinity_v2_chance", PASS,
+                   f"Chance test: {s.chance_shuffles} shuffles of {blocks} blocks of {s.chance_block_bars} bars "
+                   f"(seed {s.chance_seed}); {s.n_candidates} candidates are re-scanned on each shuffle.")
+
+
+# ---- outputs -------------------------------------------------------------------------------------------------------
+def _num(v, fmt="{:.2f}"):
+    return v1._num(v, fmt)
+
+
+def _chance_chart(res, folder: Path, stamp: str) -> Path | None:
+    ch = res.chance
+    tops = [x for x in ch.get("null_top_scores", []) if not np.isnan(x)]
+    if not tops or np.isnan(ch.get("real_top_score", np.nan)):
+        return None
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots(figsize=(10, 4.5))
+    ax.hist(tops, bins=min(30, max(5, len(tops) // 5)), color="#9fb6cd", edgecolor="white",
+            label=f"#1 score on each of {ch['shuffles']} shuffled series")
+    ax.axvline(ch["real_top_score"], color="#c0392b", lw=2, label=f"real #1 score {ch['real_top_score']:.2f}")
+    ax.set_xlabel("Best (#1) in-sample affinity score")
+    ax.set_ylabel("Shuffles")
+    ax.set_title(f"{res.label}\nChance test: {ch['verdict']} (chance p-value {ch['p_value']:.4f})", fontsize=10)
+    ax.legend(fontsize=8)
+    fig.text(0.5, 0.005, "Historical description only - not a prediction or trading signal.", ha="center", fontsize=7,
+             color="#555555")
+    path = Path(folder) / f"chance_test_distribution_{stamp}.png"
+    fig.savefig(path, dpi=120, bbox_inches="tight")
+    plt.close(fig)
+    return path
+
+
+_V2_COLUMNS = (("Chance p (adjusted)", "chance_p"), ("IS baseline %", "is_baseline_sr"),
+               ("IS edge vs baseline (pts)", "is_edge_vs_baseline"), ("IS p vs baseline", "is_p_vs_baseline"),
+               ("OOS baseline %", "oos_baseline_sr"), ("OOS edge vs baseline (pts)", "oos_edge_vs_baseline"))
+
+
+def _results_frame(res):
+    from qlopb.reports.excel_report import results_frame
+
+    df = results_frame(res)  # QLOPB's table, unchanged; the V2 columns are added after it
+    by_label = {r["ma_label"]: r for r in res.results}
+    for title, key in _V2_COLUMNS:
+        df[title] = [by_label[m].get(key) for m in df["MA"]]
+    return df
+
+
+def write_excel(res, folder: Path, stamp: str, charts: dict) -> Path:
+    import pandas as pd
+    from openpyxl import Workbook
+    from openpyxl.drawing.image import Image as XLImage
+    from openpyxl.styles import Alignment
+    from openpyxl.utils import get_column_letter
+    from qlopb.reports.excel_report import TOP_FILL, WEAK_FILL, _kv, _write_df
+
+    s, di, ch = res.settings, res.data_info, res.chance
+    counts = res.counts()
+    top = res.frozen_top_results()
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Summary"
+    rows = [("MA Affinity V2 research", ""), ("Instrument / dataset", res.label),
+            ("Report date", dt.datetime.now().strftime(qcfg.DATETIME_FMT)), ("DISCLAIMER", qcfg.DISCLAIMER_TEXT),
+            ("", ""), ("CHANCE TEST VERDICT", ch["verdict"]),
+            ("  real #1 in-sample score", _num(ch.get("real_top_score"))),
+            ("  chance p-value", _num(ch.get("p_value"), "{:.4f}")),
+            ("  luck-only #1 scores: mean / 95th pct / max",
+             f"{_num(ch.get('null_mean'))} / {_num(ch.get('null_p95'))} / {_num(ch.get('null_max'))}"),
+            ("  shuffles / block bars / seed", f"{ch['shuffles']} / {ch['block_bars']} / {ch['seed']}"), ("", ""),
+            ("Bars analysed", di["n_bars"]), ("Data period", f"{di['first']} to {di['last']}"),
+            ("In-sample", f"{di['is_bars']} bars ({di['is_first']} to {di['is_last']})"),
+            ("Out-of-sample", f"{di['oos_bars']} bars ({di['oos_first']} to {di['oos_last']})"),
+            ("Bar size", di["frequency"]), ("", ""), ("Candidates tested", len(res.results)),
+            ("  with enough IS interactions (ranked)", counts.get("OK", 0)),
+            ("  INSUFFICIENT_DATA (not ranked)", counts.get("INSUFFICIENT_DATA", 0)),
+            ("  NO_INTERACTIONS (not ranked)", counts.get("NO_INTERACTIONS", 0)),
+            ("Frozen Top-N", ", ".join(f"#{r['rank']} {r['ma_label']}" for r in top) or "none"), ("", ""),
+            ("WARNINGS", "")]
+    rows += [("  -", w) for w in res.warnings] or [("  -", "none")]
+    rows += [("", ""), ("LIMITATIONS", "")] + [("  -", t) for t in LIMITATIONS_V2]
+    _kv(ws, rows)
+    for r in ws.iter_rows(min_row=1, max_row=len(rows)):
+        r[1].alignment = Alignment(wrap_text=True, vertical="top")
+
+    df = _results_frame(res)
+    ws = wb.create_sheet("Top_N")
+    topdf = df[df["Rank"].notna() & (df["Rank"] <= s.top_n)]
+    _write_df(ws, topdf)
+    ws.cell(row=len(topdf) + 3, column=1,
+            value="Ranks use in-sample data only. OOS columns were calculated after the Top-N was frozen and never "
+                  "changed a rank. 'Chance p (adjusted)' compares each score with the best score found on shuffled "
+                  "prices, so it allows for the many candidates tested. Baselines are reported only.")
+    ws = wb.create_sheet("Rankings")
+    _write_df(ws, df, highlight=lambda row: TOP_FILL if (pd.notna(row["Rank"]) and row["Rank"] <= s.top_n)
+              else (WEAK_FILL if row["IS status"] != "OK" else None))
+    ws.auto_filter.ref = f"A1:{get_column_letter(len(df.columns))}{len(df) + 1}"
+
+    ws = wb.create_sheet("Chance_Test")
+    _write_df(ws, pd.DataFrame({"Shuffle": range(1, len(ch["null_top_scores"]) + 1),
+                                "#1 score": ch["null_top_scores"], "#1 candidate": ch.get("null_top_labels", [])}))
+
+    ws = wb.create_sheet("Interactions")
+    if res.interactions.empty:
+        ws.cell(row=1, column=1, value="No interactions were recorded.")
+    else:
+        _write_df(ws, res.interactions)
+
+    ws = wb.create_sheet("Settings")
+    _kv(ws, [(k, v) for k, v in s.to_dict().items()] + [
+        ("weights used (normalised)", {k: round(v / sum(s.weights.values()) * 100, 2) for k, v in s.weights.items()}),
+        ("Forward Return component", "Directed IR - V1 formula kept, PENDING OWNER REVIEW"),
+        ("Success baseline", "Score compares with 50% (as V1); drift baseline reported alongside"),
+        ("IS/OOS consistency", "Report only - not part of the affinity score")])
+    ws = wb.create_sheet("Data_Quality")
+    _kv(ws, [(f"line {i + 1}", ln) for i, ln in enumerate(res.quality.to_text().splitlines())]
+        if res.quality is not None else [("note", "No data note.")])
+    if charts:
+        ws = wb.create_sheet("Charts")
+        row = 1
+        for name, p in charts.items():
+            try:
+                img = XLImage(str(p))
+                img.width, img.height = 900, int(900 * img.height / img.width)
+                ws.add_image(img, f"A{row}")
+                row += int(img.height / 20) + 3
+            except Exception:
+                ws.cell(row=row, column=1, value=f"[{name} not embedded]")
+                row += 2
+    path = Path(folder) / f"MA_Affinity_V2_{stamp}.xlsx"
+    wb.save(path)
+    return path
+
+
+def write_pdf(res, folder: Path, stamp: str, charts: dict, heading: str) -> Path:
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+    from reportlab.lib.units import cm
+    from reportlab.platypus import Image, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+
+    path = Path(folder) / f"MA_Affinity_V2_Report_{stamp}.pdf"
+    doc = SimpleDocTemplate(str(path), pagesize=landscape(A4), leftMargin=1.5 * cm, rightMargin=1.5 * cm,
+                            topMargin=1.5 * cm, bottomMargin=1.5 * cm, title="MA Affinity V2")
+    ss = getSampleStyleSheet()
+    body = ParagraphStyle("b", parent=ss["BodyText"], fontSize=8.5, leading=11)
+    small = ParagraphStyle("s", parent=body, fontSize=7.5, leading=9.5, textColor=colors.HexColor("#444444"))
+    h = ss["Heading2"]
+    s, di, ch = res.settings, res.data_info, res.chance
+    counts = res.counts()
+    verdict_color = {STANDS_OUT: "#1e7b34", NOT_DISTINGUISHABLE: "#b03a2e"}.get(ch["verdict"], "#7a5c00")
+    st = [Paragraph("MA Affinity V2 research report", ss["Title"]),
+          Paragraph(escape(heading) + f" &nbsp;|&nbsp; {dt.datetime.now().strftime(qcfg.DATETIME_FMT)}", body),
+          Spacer(1, 0.2 * cm), Paragraph("<b>" + escape(qcfg.DISCLAIMER_TEXT) + "</b>", body), Spacer(1, 0.3 * cm),
+          Paragraph("Chance test", h),
+          Paragraph(f"<font color='{verdict_color}'><b>{escape(ch['verdict'])}</b></font>. Real #1 in-sample score "
+                    f"{_num(ch.get('real_top_score'))}; chance p-value {_num(ch.get('p_value'), '{:.4f}')}. On "
+                    f"{ch['shuffles']} block-shuffled copies of the in-sample prices ({ch['block_bars']}-bar blocks, "
+                    f"seed {ch['seed']}) the #1 score averaged {_num(ch.get('null_mean'))} (95th percentile "
+                    f"{_num(ch.get('null_p95'))}, highest {_num(ch.get('null_max'))}).", body),
+          Paragraph("Data and sample sizes", h),
+          Paragraph(f"{di['n_bars']} bars ({escape(str(di['frequency']))}), {di['first']} to {di['last']}. In-sample: "
+                    f"{di['is_bars']} bars ({di['is_first']} to {di['is_last']}). Out-of-sample: {di['oos_bars']} bars "
+                    f"({di['oos_first']} to {di['oos_last']}).", body),
+          Paragraph(f"Candidates tested: {len(res.results)}; ranked: {counts.get('OK', 0)}; insufficient data: "
+                    f"{counts.get('INSUFFICIENT_DATA', 0)}; no interactions: {counts.get('NO_INTERACTIONS', 0)}. "
+                    f"Minimum interactions: {s.min_interactions}.", body)]
+    if res.warnings:
+        st.append(Paragraph("Warnings", h))
+        st += [Paragraph("- " + escape(w), body) for w in res.warnings]
+    st.append(Paragraph("Limitations", h))
+    st += [Paragraph("- " + escape(t), small) for t in LIMITATIONS_V2]
+    st.append(PageBreak())
+    st.append(Paragraph(f"Frozen Top-{s.top_n} (ranked on in-sample data only)", h))
+    hdr = ["Rank", "MA", "IS aff.", "Chance p", "IS n", "IS succ %", "IS base %", "Edge pts", "OOS outc.",
+           "OOS succ %", "OOS base %", "Consistency"]
+    data = [hdr] + [[r["rank"], r["ma_label"], _num(r["is_affinity_score"]), _num(r["chance_p"], "{:.4f}"), r["is_n"],
+                     _num(r["is_overall_sr"]), _num(r["is_baseline_sr"]), _num(r["is_edge_vs_baseline"]),
+                     _num(r.get("oos_n_outcomes"), "{:.0f}"), _num(r["oos_overall_sr"]), _num(r["oos_baseline_sr"]),
+                     _num(r["is_oos_consistency_score"])] for r in res.frozen_top_results()]
+    if len(data) == 1:
+        data.append(["-"] * len(hdr))
+    t = Table(data, repeatRows=1)
+    t.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#DDE6F0")),
+                           ("GRID", (0, 0), (-1, -1), 0.3, colors.grey), ("FONTSIZE", (0, 0), (-1, -1), 7),
+                           ("ALIGN", (0, 0), (-1, -1), "CENTER")]))
+    st += [t, Spacer(1, 0.2 * cm),
+           Paragraph("'-' means not available (missing), not zero. Chance p compares each score with the best score "
+                     "found on shuffled prices. Base % = what price did anyway over the same bars (reported only; the "
+                     "score still compares with 50%). Edge = success rate minus baseline.", small)]
+    for c in (charts or {}).values():
+        try:
+            st.append(PageBreak())
+            img = Image(str(c))
+            sc = min((landscape(A4)[0] - 3 * cm) / img.drawWidth, (landscape(A4)[1] - 4 * cm) / img.drawHeight)
+            img.drawWidth *= sc
+            img.drawHeight *= sc
+            st.append(img)
+        except Exception:
+            st.append(Paragraph(f"[chart {escape(Path(str(c)).name)} could not be embedded]", small))
+    doc.build(st)
+    return path
+
+
+def _findings(ctx: RunContext, info, res) -> Path:
+    s, di, ch = res.settings, res.data_info, res.chance
+    pk = s.fwd_windows[0]
+    lines = [f"MA Affinity V2 findings - {v1.dataset_label(info)} - Run {ctx.run_id}", "",
+             "Research question", f"  {RESEARCH_QUESTION}", "",
+             "Chance test", f"  VERDICT: {ch['verdict']}"]
+    if ch["verdict"] in (STANDS_OUT, NOT_DISTINGUISHABLE):
+        lines.append(f"  The real #1 in-sample score is {_num(ch['real_top_score'])}. On {ch['shuffles']} copies of the "
+                     f"in-sample prices shuffled in blocks of {ch['block_bars']} bars (seed {ch['seed']}), the #1 score "
+                     f"averaged {_num(ch['null_mean'])}, its 95th percentile was {_num(ch['null_p95'])} and the "
+                     f"highest was {_num(ch['null_max'])}. Chance p-value {_num(ch['p_value'], '{:.4f}')} (the share "
+                     "of shuffles that did at least as well, counting the real series).")
+    lines += ["", "Data", f"  {di['n_bars']} bars from {di['first']} to {di['last']}. Ranking used the in-sample part "
+              f"only: {di['is_bars']} bars ({di['is_first']} to {di['is_last']}). The out-of-sample check used the "
+              f"remaining {di['oos_bars']} bars ({di['oos_first']} to {di['oos_last']}).", "",
+              f"Method: {len(res.results)} candidates ({', '.join(s.ma_types)}, periods {s.ma_start}-{s.ma_end}); an "
+              f"interaction is a bar entering the zone within {s.proximity_pct}% of the MA; success is a move in the "
+              f"expected direction after {pk} bars (support: up, resistance: down).", ""]
+    top = res.frozen_top_results()
+    if not top:
+        lines += ["Result", "  No candidate had enough in-sample interactions to be ranked. This means insufficient "
+                            "data for these settings, not poor results."]
+    else:
+        lines.append(f"Frozen Top-{len(top)} (chosen on in-sample data only, then checked out-of-sample)")
+        for r in top:
+            oos = ("not evaluated" if r["oos_status"] == "NOT_EVALUATED" else
+                   f"out-of-sample {_num(r['oos_overall_sr'])}% success over {int(r['oos_n_outcomes'] or 0)} "
+                   f"outcome(s) against a baseline of {_num(r['oos_baseline_sr'])}% (consistency "
+                   f"{_num(r['is_oos_consistency_score'])}, {r['is_oos_consistency_status']})")
+            lines.append(f"  {r['rank']}. {r['ma_label']}: affinity {_num(r['is_affinity_score'])}, chance p "
+                         f"{_num(r['chance_p'], '{:.4f}')}; in-sample {_num(r['is_overall_sr'])}% success over "
+                         f"{r['is_n_outcomes']} outcome(s) against a baseline of {_num(r['is_baseline_sr'])}% (edge "
+                         f"{_num(r['is_edge_vs_baseline'])} pts); {oos}.")
+    lines += ["", "How to read this", *[f"  - {t}" for t in LIMITATIONS_V2], f"  - {qcfg.DISCLAIMER_TEXT}",
+              "  - Full tables: MA_Affinity_V2_Candidates, MA_Affinity_V2_Interactions and MA_Affinity_V2_Chance_Shuffles "
+              "(CSV), the Excel workbook and the PDF."]
+    path = ctx.output(f"MA_Affinity_V2_Findings_{ctx.stamp}.txt")
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return path
+
+
+def _data_note(ctx: RunContext, info, frame):
+    note = v1.QmapDataNote(ctx, info, frame)
+    note.lines = [f"Method: {METHOD_SOURCE}" if ln.startswith("Method: ") else ln for ln in note.lines]
+    note.lines = [f"  {RESEARCH_QUESTION}" if ln == f"  {v1.RESEARCH_QUESTION}" else ln for ln in note.lines]
+    return note
+
+
+def execute(ctx: RunContext) -> list[Path]:
+    from qlopb.reports.chart_report import make_charts
+
+    (dataset_id,) = ctx.dataset_ids
+    info = get_dataset(ctx.db, dataset_id)
+    s = _settings(ctx.params)
+    frame, _ = v1._frame(ctx.settings, ctx.db, dataset_id, ctx.params)
+    label = f"{v1.dataset_label(info)}, Run {ctx.run_id}"
+    ctx.log(f"MA Affinity V2 on {label}: {len(frame)} bars, {fmt_date(frame.index[0].date())} to "
+            f"{fmt_date(frame.index[-1].date())}. Method: {METHOD_SOURCE}.")
+    res = run_ma_affinity_v2(frame, s, label=label, log=ctx.log, quality=_data_note(ctx, info, frame))
+    for w in res.warnings:
+        ctx.log(f"WARNING: {w}")
+    ch = res.chance
+    ctx.details.update({
+        "bars_used": {"count": int(len(frame)), "first": frame.index[0].date().isoformat(),
+                      "last": frame.index[-1].date().isoformat()},
+        "split": {k: res.data_info[k] for k in ("is_bars", "is_first", "is_last", "oos_bars", "oos_first", "oos_last")},
+        "frozen_top": [f"{t}-{p}" for t, p in res.frozen_top], "status_counts": res.counts(),
+        "engine": METHOD_SOURCE, "research_question": RESEARCH_QUESTION,
+        "chance_test": {k: ch[k] for k in ("verdict", "real_top_score", "p_value", "percentile", "shuffles",
+                                           "block_bars", "seed", "null_mean", "null_p95", "null_max")}})
+    res.warnings.extend(f"Q-MAP data: {w}" for w in ctx.readiness_warnings)
+    res.warnings.extend(f"Q-MAP dataset validation warning: {w}" for w in info.warnings)
+    charts = make_charts(res, ctx.run_dir, ctx.stamp)
+    chance_png = _chance_chart(res, ctx.run_dir, ctx.stamp)
+    if chance_png is not None:
+        charts = {"chance_test": chance_png, **charts}
+    b = current_build()
+    heading = (f"{v1.dataset_label(info)}, Run {ctx.run_id} | Q-MAP build: {build_label(b)} | Source fingerprint "
+               f"(SHA-256): {b['source_fingerprint']} | Dataset checksum (SHA-256): {info.sha256}")
+    outputs = [write_excel(res, ctx.run_dir, ctx.stamp, charts), write_pdf(res, ctx.run_dir, ctx.stamp, charts, heading)]
+    outputs += list(charts.values())
+    outputs.append(v1._csv(ctx.output(f"MA_Affinity_V2_Candidates_{ctx.stamp}.csv"), res.results))
+    outputs.append(v1._csv(ctx.output(f"MA_Affinity_V2_Interactions_{ctx.stamp}.csv"),
+                           res.interactions.to_dict("records")))
+    outputs.append(v1._csv(ctx.output(f"MA_Affinity_V2_Chance_Shuffles_{ctx.stamp}.csv"),
+                           [{"shuffle": i + 1, "top_score": sc, "top_candidate": lab} for i, (sc, lab) in
+                            enumerate(zip(ch["null_top_scores"], ch.get("null_top_labels", [])))]
+                           or [{"shuffle": "", "top_score": "", "top_candidate": ""}]))
+    outputs.append(_findings(ctx, info, res))
+    ctx.log(f"Frozen Top-{len(res.frozen_top)}: " + (", ".join(f"{t}-{p}" for t, p in res.frozen_top) or "none")
+            + f". Chance test: {ch['verdict']}.")
+    return [Path(p) for p in outputs]
+
+
+SPEC = AnalysisSpec(
+    analysis_id="ma_affinity_v2", name="MA Affinity V2 (chance-tested)", version=1,
+    description="MA Affinity as in V1 (same calculations, same in-sample ranking and out-of-sample check), plus a "
+                "chance test that compares the best score with the best scores found on block-shuffled copies of the "
+                "same prices, and a drift baseline next to every success rate. Daily, weekly or monthly registered "
+                "datasets; one dataset per run.",
+    run_prefix="MAA2",
+    requirement=DataRequirement(timeframes=TIMEFRAMES, min_rows=qcfg.MIN_ROWS_REQUIRED, allow_mixed=False),
+    execute=execute, parameters=PARAMETERS, min_datasets=1, max_datasets=1,
+    kind_note="exploratory historical research - not a trading signal; judge results by the chance test, not by the "
+              "uncorrected p-values; Directed IR and the weight scheme are pending owner review",
+    check_params=check_params, dataset_checks=dataset_checks, method_source=METHOD_SOURCE,
+    result_tables=("MA_Affinity_V2_Candidates_", "MA_Affinity_V2_Interactions_", "MA_Affinity_V2_Chance_Shuffles_"),
+)
