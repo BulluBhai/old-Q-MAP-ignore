@@ -203,7 +203,7 @@ def load_earlier_run(settings: Settings, db: Database, run_id: str, analyses: di
     return EarlierRun(run_id, folder, meta, tables)
 
 
-def reproduce_run(settings: Settings, db: Database, run_id: str, *, log=None):
+def reproduce_run(settings: Settings, db: Database, run_id: str, *, log=None, progress=None, cancel=None):
     """Run the earlier run again as a new run and compare. Returns the AnalysisRunResult of the new run; its
     `reproduction` (also in Run_Metadata) says whether every result table is identical."""
     from . import ANALYSES
@@ -219,7 +219,8 @@ def reproduce_run(settings: Settings, db: Database, run_id: str, *, log=None):
     say(f"Reproducing run {earlier.run_id} ({spec.name}) with its recorded datasets and parameters...")
     raw = {k: v for k, v in meta["raw_parameters"].items() if v is not None}
     ids = [d["dataset_id"] for d in meta["input_datasets"]]
-    return run_analysis(settings, db, spec, ids, raw, log=log, reproduce_of={"earlier": earlier})
+    return run_analysis(settings, db, spec, ids, raw, log=log, reproduce_of={"earlier": earlier}, progress=progress,
+                        cancel=cancel)
 
 
 def compare_and_report(ctx, spec, reproduce_of: dict, outputs: list[Path]) -> tuple[Path, dict]:

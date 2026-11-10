@@ -28,6 +28,7 @@ from ..catalog import DataRequirement, ReadinessReport, check_readiness, get_dat
 from ..core.build import current_build
 from ..core.config import Settings
 from ..core.dates import DateInputError, format_long, parse_user_date
+from ..core.errors import RunCancelled
 from ..core.runs import run_context
 from ..storage.db import Database
 from ..storage.files import atomic_write_bytes
@@ -68,9 +69,17 @@ class RunContext:
     # what the analysis actually used (for example the bars and the in-sample/out-of-sample split); recorded in
     # Run_Metadata under "analysis_details" (beta provenance, 09-Nov-26)
     details: dict = field(default_factory=dict)
+    # progress(done, total, text): how far the calculation is (for the Workbench's counter and ETA); optional
+    progress: Callable[[int, int, str], None] = field(default=lambda done, total, text: None)
+    # cancel_requested() -> True when the person pressed Cancel or closed the window; long analyses check it
+    cancel_requested: Callable[[], bool] = field(default=lambda: False)
 
     def output(self, name: str) -> Path:
         return self.run_dir / name
+
+    def stop_if_cancelled(self) -> None:
+        if self.cancel_requested():
+            raise RunCancelled("Cancelled by the user.")
 
 
 @dataclass
@@ -157,7 +166,7 @@ class AnalysisReadiness:
 
 @dataclass
 class AnalysisRunResult:
-    outcome: str  # completed | blocked | failed
+    outcome: str  # completed | blocked | failed | cancelled
     message: str
     run_id: str | None = None
     run_dir: Path | None = None
@@ -247,9 +256,12 @@ def _dataset_record(db: Database, dataset_id: int, report: ReadinessReport) -> d
 
 def run_analysis(settings: Settings, db: Database, spec: AnalysisSpec, dataset_ids: list[int], raw_params: dict, *,
                  log: Callable[[str], None] | None = None, now: datetime | None = None,
-                 reproduce_of: dict | None = None) -> AnalysisRunResult:
+                 reproduce_of: dict | None = None, progress: Callable[[int, int, str], None] | None = None,
+                 cancel: Callable[[], bool] | None = None) -> AnalysisRunResult:
     """`reproduce_of` (from qmap.analytical_engine.reproduce): the earlier run this run repeats. Its result tables are
-    compared with the new ones and a Reproducibility_Report is written into the new run folder."""
+    compared with the new ones and a Reproducibility_Report is written into the new run folder.
+    `progress(done, total, text)` receives the analysis's progress; `cancel()` returning True stops a running analysis
+    at its next check: the run is then closed as 'cancelled' and the result's outcome is 'cancelled'."""
     say = log or (lambda _m: None)
     say(f"Checking readiness of {len(dataset_ids)} dataset(s) for {spec.name}...")
     # A reproduction is tied to the exact historical dataset recorded by the earlier run. It may therefore
@@ -285,6 +297,10 @@ def run_analysis(settings: Settings, db: Database, spec: AnalysisSpec, dataset_i
                                  [(run.run_id, i) for i in ids])
             ctx = RunContext(settings, db, run.run_id, run.dir, ids, readiness.params, stamp,
                              lambda m: (run.logger.info(m), say(m)), list(readiness.warnings))
+            if progress is not None:
+                ctx.progress = progress
+            if cancel is not None:
+                ctx.cancel_requested = cancel
             outputs = list(spec.execute(ctx))
             reproduction = None
             if reproduce_of is not None:
@@ -308,6 +324,11 @@ def run_analysis(settings: Settings, db: Database, spec: AnalysisSpec, dataset_i
                 meta["reproduction"] = reproduction
             meta_path = run.dir / f"Run_Metadata_{stamp}.json"
             atomic_write_bytes(meta_path, json.dumps(meta, indent=2, default=str, sort_keys=True).encode("utf-8"))
+    except RunCancelled:
+        say(f"Run {run_id} cancelled by the user; it is recorded as cancelled.")
+        return AnalysisRunResult("cancelled", f"Cancelled. Run {run_id} stopped before it finished and is recorded as "
+                                 "cancelled; its folder holds only the run log, no results.", run_id, run_dir,
+                                 readiness=readiness)
     except Exception as exc:
         say(f"FAILED: {type(exc).__name__}: {exc}")
         return AnalysisRunResult("failed", f"The analysis failed ({type(exc).__name__}: {exc}). The run is recorded as "
