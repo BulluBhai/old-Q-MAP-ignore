@@ -208,7 +208,8 @@ def _chance_status_text(ch: dict) -> str:
         )
     if status == "not_run":
         return (
-            "Chance test was NOT RUN because it was disabled. Status: not_run. "
+            "The chance test was not run because it was disabled (Chance shuffles = 0); "
+            "no shuffles were requested or run. Status: not_run. "
             f"Requested/attempted/valid/invalid/unattempted: {spaced} ({compact})."
         )
     return (
@@ -280,8 +281,12 @@ def write_excel(res, folder: Path, stamp: str, charts: dict) -> Path:
     ws.title = "Summary"
     rows = [("MA Affinity V2 research", ""), ("Instrument / dataset", res.label),
             ("Report date", dt.datetime.now().strftime(qcfg.DATETIME_FMT)), ("DISCLAIMER", qcfg.DISCLAIMER_TEXT),
-            ("CHANCE TEST STATUS AND COUNTS", _chance_status_text(ch)),
-            ("", ""), ("EXECUTIVE INTERPRETATION", "Plain English; every number is from this run's results")]
+            ("CHANCE TEST STATUS AND COUNTS", _chance_status_text(ch))]
+    if ch.get("status") == "no_candidate":
+        rows.append(("  attempted / valid / invalid / test-run / unattempted",
+                     f"{ch['attempted_shuffles']} / {ch['valid_shuffles']} / {ch['invalid_shuffles']} / "
+                     f"{int(bool(ch['test_run']))} / {ch['unattempted_shuffles']}"))
+    rows += [("", ""), ("EXECUTIVE INTERPRETATION", "Plain English; every number is from this run's results")]
     rows += executive_interpretation(res.label.split(", Run ")[0], res)
     rows += [("", ""), ("CHANCE TEST VERDICT", ch["verdict"]),
             ("  real #1 in-sample score", _num(ch.get("real_top_score"))),
