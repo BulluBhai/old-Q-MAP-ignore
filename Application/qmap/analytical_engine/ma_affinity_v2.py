@@ -198,7 +198,7 @@ def _chance_chart(res, folder: Path, stamp: str) -> Path | None:
     ax.set_ylabel("Shuffles")
     p_label = (f"p-value {ch['p_value']:.4f}" if np.isfinite(ch.get("p_value", np.nan))
                else "no empirical p-value (incomplete or not applicable)")
-    ax.set_title(f"{res.label}\\nChance test: {ch['verdict']} ({p_label})", fontsize=10)
+    ax.set_title(f"{res.label}\nChance test: {ch['verdict']} ({p_label})", fontsize=10)
     ax.legend(fontsize=8)
     fig.text(0.5, 0.005, "Historical description only - not a prediction or trading signal.", ha="center", fontsize=7,
              color="#555555")
