@@ -11,6 +11,8 @@ files. When data are missing, it tells you what to prepare in Database Manager.
   the Workbench prepares the standard folders next to the program folder in the same way (see the Database Manager
   guide, **Home**).
 - **Available now**: analyses that genuinely work: **MA Research: MA Affinity (QLOPB)** and **Dataset Summary**.
+  The MA Research card covers both MA Affinity analyses in the **Analysis:** list: **MA Affinity (QLOPB)** (V1) and
+  **MA Affinity V2 (chance-tested)** (added 10-Nov-26, see below).
 - **Planned application windows** and **Planned research modules**: everything else is marked **COMING SOON**, with
   the reason. That includes Market Intelligence (MIQP), which is outside Q-MAP v0.1. Stage Analysis (Weinstein) is
   listed as planned; it needs approved rules first.
@@ -187,6 +189,96 @@ daily data, and a period with no data is refused.
   4. If the run was already writing its reports when you clicked, it finishes normally and says `Completed`.
 - **Closing the window during a run** also asks the run to stop, so Thonny or IDLE does not keep working in the
   background. The run is then recorded as cancelled.
+
+## MA Affinity V2 (chance-tested)
+
+Added 10-Nov-26 as a **beta release candidate**. It runs the same calculations as **MA Affinity (QLOPB)** and adds a
+test of whether the best result is better than luck, plus the other additions below. Its defaults are **provisional**:
+they are documented choices, not final owner-approved methodology (see
+`docs/release/Q-MAP_MA_Affinity_V2_Method_Review_and_Decisions_10_Nov_26_112718.md`).
+
+**V1 or V2: which to choose**
+
+| Choose | When |
+|---|---|
+| **MA Affinity V2 (chance-tested)** | New research: it tells you whether the ranking stands out from chance |
+| **MA Affinity (QLOPB)** (V1) | To repeat or compare with runs made before 10-Nov-26. V1 is unchanged and stays available |
+| Not **Dataset Summary** | It only describes the data; it does not rank moving averages |
+
+V1 runs have Run IDs starting `MAAF_`; V2 runs start `MAA2_`. The two never share a Run ID, a folder or a result table.
+
+**What V2 adds**
+
+| Addition | What it means for you |
+|---|---|
+| **Executive interpretation** | The first part of the findings file, of the Excel **Summary** sheet and of the PDF: eight short plain-English answers (question, data, findings, what the numbers mean, chance, baseline, limitations, what next). Every number in it comes from the run's calculated results. The detailed tables follow it, unchanged |
+| **Chance test** | The in-sample prices are cut into blocks of 15 bars, the blocks are put in a random order, and the whole scan is run again on that shuffled history, 200 times. Shuffling keeps each bar's shape and the stock's overall move but destroys any real link with a moving average. The real #1 score is compared with the 200 best scores that luck alone produced |
+| **Verdict** | `STANDS OUT FROM CHANCE` when the chance p-value is 0.05 or less, otherwise `NOT DISTINGUISHABLE FROM CHANCE` (treat the ranking as unproven). Standing out is evidence for this instrument and period under the shuffle model's assumptions, **not** proof of a profitable or lasting edge. With 200 shuffles the smallest possible p-value is 0.0050 |
+| **Chance p (adjusted)** | Each Top-N finding gets its own chance p-value. It allows for the many periods tested, so use it instead of the older "p-value (uncorrected)" |
+| **Baseline %** and **Edge** | What price did anyway over the same bars (for example, it rose after 54% of all days). Edge = success rate minus baseline, in percentage points. Reported only: the score itself still compares with 50%, as in V1 |
+| **Fairer strength** | Long MAs produce fewer interactions; V2 compares a candidate's count with nearby periods, so a long MA is not marked down just for being long |
+| **Distinct findings** | Neighbouring periods (for example EMA-34 to EMA-41) are nearly the same line; V2 groups them so each Top-N place is a different finding. The group's members and the full ranking are kept |
+| **MA warm-up** | With a **Start date**, the moving averages are also calculated from the dataset's earlier bars, so a long MA does not restart at the Start date. Interactions, outcomes and the in-sample/out-of-sample split still use only the chosen period |
+
+**How to run it**
+
+1. Open the Analytical Workbench (`analytical_workbench.py`, **F5**).
+2. In **1. Input - analysis and prepared datasets**, choose **MA Affinity V2 (chance-tested)** in **Analysis:**.
+3. Select one **daily, weekly or monthly** dataset in the list.
+4. In **3. Options - parameters**, change only what you need. The V1 options keep their V1 meaning and defaults. The
+   V2 options are at the end of the list:
+
+   | On screen | Default | Meaning |
+   |---|---|---|
+   | **Chance shuffles** | `200` | How many shuffled histories are tested. `0` = no chance test (the report then says so). For a finer p-value, use for example `1000` (about five times longer) |
+   | **Chance block bars** | `15` | Bars per block when shuffling |
+   | **Chance seed** | `1` | Fixes the random order, so the same settings always give the same result |
+   | **Strength rule** | `relative` | `relative` (V2) or `v1` (the old rule, for comparison) |
+   | **Group %** | `10` | Periods of one MA type within this % of a leader form one finding. `0` = no grouping |
+   | **Zone mode** | `percent` | `percent` uses **Proximity %** (as V1). `atr` uses **ATR multiple** x the average true range |
+   | **ATR period** | `14` | Only used when **Zone mode** is `atr` |
+   | **ATR multiple** | `1` | Only used when **Zone mode** is `atr` |
+   | **MA warm-up** | `earlier` | `earlier` = use the bars before the **Start date** to calculate the MAs; `none` = start the MAs at the Start date (as V1). It matters only when a Start date is entered |
+
+   With **Strength rule** `v1`, **Group %** `0` and **MA warm-up** `none` (or no Start date), V2 gives every V1
+   number exactly, plus the chance test and the baselines.
+5. Click **Check readiness (nothing is saved)**. Expect `READY - every requirement is met.` and, for the chance test,
+   an `OK` line such as `Chance test: 200 shuffles of 69 blocks of 15 bars (seed 1); ...`.
+   - If it says `INVALID PARAMETERS`, correct the option named in red.
+   - If a `FAIL` line ends with `too few to shuffle meaningfully (at least 5 are needed)`, use a smaller **Chance
+     block bars** or more data.
+   - With a **Start date**, a line `MA warm-up: ... bar(s) before the Start date ... are used to calculate the moving
+     averages` confirms the warm-up. A `NOTE` line `MA warm-up: only ... bar(s) exist before the Start date` means long
+     MAs still start inside the period; the run is allowed.
+6. Click **RUN ANALYSIS**. Watch **Progress:** and **ETA:**. The chance test is most of the work: about 1 to 2
+   minutes for SMA and EMA on 1,500 daily bars (measured on a Linux test computer; your PC may differ), longer with all
+   five MA types. **Cancel** stops it safely (see "Progress, ETA and Cancel" above).
+7. When it finishes, **Stage:** shows `Finished`, the bar is full and the result line starts with
+   `Completed. Run MAA2_...`.
+
+**Where the results are.** In the run folder (`Q-MAP_OUTPUT\Research_Reports\MAA2_<date>_<time>\`):
+
+| File | What to look at |
+|---|---|
+| `MA_Affinity_V2_Findings_<date>.txt` | Start here: **EXECUTIVE INTERPRETATION**, then **DETAILED FINDINGS** with the **VERDICT** line and each Top-N finding |
+| `MA_Affinity_V2_Report_<date>.pdf` | Page 1: the executive interpretation. Then the chance test, data and warnings, and the Top-N table |
+| `MA_Affinity_V2_<date>.xlsx` | **Summary** (executive interpretation, then the verdict), **Top_N** (with group members), **Rankings** (every candidate), **Chance_Test** (all luck-only scores), **Interactions**, **Settings** |
+| `chance_test_distribution_<date>.png` | The luck-only #1 scores as bars, and the real #1 score as a red line |
+| `MA_Affinity_V2_Candidates_`, `_Interactions_`, `_Chance_Shuffles_<date>.csv` | Full tables; these three are compared when a run is reproduced |
+| `Run_Metadata_<date>.json` | Everything needed to repeat the run: analysis and version, every option including the seed, the chance-test summary, the warm-up, the program build and the Python and library versions |
+
+**How to read the verdict**
+
+- `NOT DISTINGUISHABLE FROM CHANCE`: shuffled prices often scored as high. The Top-N may be luck; do not rely on it.
+  This is the expected result on the synthetic worked-example file `NSE_BETADEMO.csv`: the real #1 (EMA-37) scored
+  66.13 while luck averaged 72.59 (chance p-value 0.8657, checked 10-Nov-26).
+- `STANDS OUT FROM CHANCE`: the best score is higher than nearly all luck-only scores. This is evidence for this one
+  instrument and period only; confirm it on other instruments and later periods before relying on it.
+- `CHANCE TEST NOT RUN`: **Chance shuffles** was `0`.
+
+**Reproduce** works as for V1 (section **2. Output - where results are saved**, **Reproduce run (runs it again and
+compares)**). The Reproducibility report also has a row **Python and library versions**: `DIFFERENT` there explains
+small last-digit differences after a software update.
 
 ## What each run saves
 

@@ -1,4 +1,4 @@
-"""MA Affinity V2 (analysis `ma_affinity_v2`, version 1): V1 plus a chance test and a drift baseline (owner decisions
+"""MA Affinity V2 (analysis `ma_affinity_v2`, version 1): V1 plus a chance test and a drift baseline (owner direction
 10-Nov-26). The calculation is in ma_affinity_v2_method.py; this module connects it to the Workbench.
 
 V1 (`ma_affinity`) is unchanged and stays available, so every V1 run can still be reproduced. V2 is a separate analysis
@@ -13,6 +13,7 @@ V2 adds its own parameters (chance test) and one readiness item: the in-sample p
 from __future__ import annotations
 
 import datetime as dt
+import textwrap
 from dataclasses import asdict, fields, replace
 from pathlib import Path
 from xml.sax.saxutils import escape
@@ -25,14 +26,15 @@ from ..catalog import DataRequirement, FAIL, PASS, WARN, fmt_date, get_dataset
 from ..core.build import build_label, current_build
 from . import ma_affinity as v1
 from .base import AnalysisSpec, Parameter, RunContext
-from .ma_affinity_v2_method import (LIMITATIONS_V2, METHOD_NAME, NOT_DISTINGUISHABLE, STANDS_OUT, MAAffinityV2Settings,
+from .ma_affinity_v2_method import (LIMITATIONS_V2, METHOD_NAME, NOT_DISTINGUISHABLE, NOT_RUN, STANDS_OUT,
+                                    MAAffinityV2Settings,
                                     run_ma_affinity_v2)
 
 TIMEFRAMES = v1.TIMEFRAMES
 RESEARCH_QUESTION = v1.RESEARCH_QUESTION + (" And is the best result stronger than the best result that chance alone "
                                             "produces on the same prices?")
 _D = MAAffinityV2Settings()
-METHOD_SOURCE = (f"{METHOD_NAME} (Q-MAP, owner decisions 10-Nov-26): QLOPB MA Affinity Scanner V2 calculations, "
+METHOD_SOURCE = (f"{METHOD_NAME} (Q-MAP beta, provisional defaults, 10-Nov-26): QLOPB MA Affinity Scanner V2 calculations, "
                  f"unchanged ({v1.METHOD_SOURCE}), plus a block-shuffle chance test and a drift baseline")
 
 # (key, label, default text, help) - the V2 additions; the V1 fields keep their V1 keys, labels and defaults
@@ -50,11 +52,14 @@ _V2_FIELDS = (
     ("zone_mode", "Zone mode", _D.zone_mode, "percent = Proximity % of the MA (V1); atr = ATR multiple x ATR."),
     ("atr_period", "ATR period", str(_D.atr_period), "Bars in the average true range (zone mode atr only)."),
     ("atr_multiple", "ATR multiple", f"{_D.atr_multiple:g}", "Zone half-width in ATRs (zone mode atr only)."),
+    ("ma_warmup", "MA warm-up", "earlier",
+     "earlier = with a Start date, the MAs are calculated from the dataset's earlier bars too, and interactions are "
+     "counted from the Start date only; none = the MAs start at the Start date (V1)."),
 )
 _V2_KEYS = {"chance_shuffles": "chance_shuffles", "chance_block": "chance_block_bars", "chance_seed": "chance_seed",
             "strength_rule": "strength_rule", "group_pct": "group_pct", "zone_mode": "zone_mode",
-            "atr_period": "atr_period", "atr_multiple": "atr_multiple"}
-_V2_KINDS = {"strength_rule": str, "zone_mode": str, "group_pct": float, "atr_multiple": float}
+            "atr_period": "atr_period", "atr_multiple": "atr_multiple", "ma_warmup": "ma_warmup"}
+_V2_KINDS = {"strength_rule": str, "zone_mode": str, "group_pct": float, "atr_multiple": float, "ma_warmup": str}
 PARAMETERS = v1.PARAMETERS + tuple(Parameter(k, label, "text", default=default, help=help_)
                                    for k, label, default, help_ in _V2_FIELDS)
 _BASE_FIELDS = {f.name for f in fields(qcfg.MAResearchSettings)}
@@ -97,6 +102,20 @@ def _settings(params: dict) -> MAAffinityV2Settings:
     return s.check()
 
 
+def _frame_with_warmup(settings, db, dataset_id: int, params: dict, s):
+    """(frame, table, warm-up rows). With MA warm-up 'earlier' and a Start date, the frame also holds the dataset's
+    bars BEFORE the Start date (for the moving averages only); `warm-up rows` is how many. Otherwise exactly V1's
+    frame of the chosen period and 0."""
+    import pandas as pd
+
+    start = params.get("date_from")
+    if s.ma_warmup != "earlier" or not start:
+        frame, table = v1._frame(settings, db, dataset_id, params)
+        return frame, table, 0
+    frame, table = v1._frame(settings, db, dataset_id, {**params, "date_from": None})
+    return frame, table, int((frame.index < pd.Timestamp(start)).sum())
+
+
 def _v1_view(params: dict) -> dict:
     """The parameters as V1's readiness checks expect them (V1 settings only)."""
     if "v2_settings" not in params:
@@ -110,6 +129,9 @@ def dataset_checks(settings, db, dataset_id: int, params: dict, report) -> None:
     if report.failures or "v2_settings" not in params:
         return
     s = _settings(params)
+    _warmup_check(settings, db, dataset_id, params, s, report)
+    if report.failures:
+        return
     if s.chance_shuffles == 0:
         report.add("ma_affinity_v2_chance", WARN, "Chance shuffles is 0: the chance test will not be run, so the "
                                                   "scores cannot be judged against luck.")
@@ -125,6 +147,33 @@ def dataset_checks(settings, db, dataset_id: int, params: dict, report) -> None:
         report.add("ma_affinity_v2_chance", PASS,
                    f"Chance test: {s.chance_shuffles} shuffles of {blocks} blocks of {s.chance_block_bars} bars "
                    f"(seed {s.chance_seed}); {s.n_candidates} candidates are re-scanned on each shuffle.")
+
+
+def _warmup_check(settings, db, dataset_id: int, params: dict, s, report) -> None:
+    """MA warm-up readiness: how much earlier history the moving averages can use, and whether it is clean."""
+    if not params.get("date_from"):
+        return
+    if s.ma_warmup != "earlier":
+        report.add("ma_affinity_v2_warmup", WARN,
+                   f"MA warm-up is 'none': the moving averages start at the Start date ({fmt_date(params['date_from'])}), "
+                   f"so an MA of N bars has no value for its first N-1 bars of the period (the V1 behaviour).")
+        return
+    frame, table, a = _frame_with_warmup(settings, db, dataset_id, params, s)
+    flags = np.asarray(table.column("quality_flags").to_numpy(zero_copy_only=False), dtype=np.int64)[:a]
+    if a and ((flags & v1.C.FLAG_CONFLICTING_OBSERVATION) != 0).any():
+        report.add("ma_affinity_v2_warmup", FAIL,
+                   f"The {a} bar(s) before the Start date, used to warm up the moving averages, include conflicting "
+                   "observations (the same time with different values). Set MA warm-up to 'none', or choose a "
+                   "dataset without conflicts.")
+    elif a >= s.ma_end:
+        report.add("ma_affinity_v2_warmup", PASS,
+                   f"MA warm-up: {a} bar(s) before the Start date ({fmt_date(frame.index[0].date())} onwards) are used "
+                   "to calculate the moving averages; interactions are counted from the Start date only.")
+    else:
+        report.add("ma_affinity_v2_warmup", WARN,
+                   f"MA warm-up: only {a} bar(s) exist before the Start date, fewer than the longest MA ({s.ma_end}). "
+                   f"MAs longer than {a + 1} bars still start inside the chosen period, so they have fewer bars "
+                   "with a value (and usually fewer interactions).")
 
 
 # ---- outputs -------------------------------------------------------------------------------------------------------
@@ -190,7 +239,9 @@ def write_excel(res, folder: Path, stamp: str, charts: dict) -> Path:
     ws.title = "Summary"
     rows = [("MA Affinity V2 research", ""), ("Instrument / dataset", res.label),
             ("Report date", dt.datetime.now().strftime(qcfg.DATETIME_FMT)), ("DISCLAIMER", qcfg.DISCLAIMER_TEXT),
-            ("", ""), ("CHANCE TEST VERDICT", ch["verdict"]),
+            ("", ""), ("EXECUTIVE INTERPRETATION", "Plain English; every number is from this run's results")]
+    rows += executive_interpretation(res.label.split(", Run ")[0], res)
+    rows += [("", ""), ("CHANCE TEST VERDICT", ch["verdict"]),
             ("  real #1 in-sample score", _num(ch.get("real_top_score"))),
             ("  chance p-value", _num(ch.get("p_value"), "{:.4f}")),
             ("  luck-only #1 scores: mean / 95th pct / max",
@@ -286,7 +337,10 @@ def write_pdf(res, folder: Path, stamp: str, charts: dict, heading: str) -> Path
     st = [Paragraph("MA Affinity V2 research report", ss["Title"]),
           Paragraph(escape(heading) + f" &nbsp;|&nbsp; {dt.datetime.now().strftime(qcfg.DATETIME_FMT)}", body),
           Spacer(1, 0.2 * cm), Paragraph("<b>" + escape(qcfg.DISCLAIMER_TEXT) + "</b>", body), Spacer(1, 0.3 * cm),
-          Paragraph("Chance test", h),
+          Paragraph("Executive interpretation", h)]
+    st += [Paragraph(f"<b>{escape(head)}.</b> {escape(text)}", body)
+           for head, text in executive_interpretation(res.label.split(", Run ")[0], res)]
+    st += [PageBreak(), Paragraph("Chance test", h),
           Paragraph(f"<font color='{verdict_color}'><b>{escape(ch['verdict'])}</b></font>. Real #1 in-sample score "
                     f"{_num(ch.get('real_top_score'))}; chance p-value {_num(ch.get('p_value'), '{:.4f}')}. On "
                     f"{ch['shuffles']} block-shuffled copies of the in-sample prices ({ch['block_bars']}-bar blocks, "
@@ -338,12 +392,122 @@ def write_pdf(res, folder: Path, stamp: str, charts: dict, heading: str) -> Path
     return path
 
 
+SMALL_SAMPLE = 30  # fewer outcomes than this: success rates can swing widely by chance (said in the interpretation)
+
+
+def executive_interpretation(dataset_label: str, res) -> list[tuple[str, str]]:
+    """The 'Executive interpretation' (10-Nov-26 reporting requirement): eight short plain-English answers, every
+    number taken from the calculated results (nothing estimated or invented here). Used by the findings file, the Excel
+    Summary sheet and the PDF. Returns [(heading, text)]."""
+    s, di, ch = res.settings, res.data_info, res.chance
+    pk = s.fwd_windows[0]
+    top = res.frozen_top_results()
+    counts = res.counts()
+    warm = (f" The moving averages were also calculated from {di['warmup_bars']} earlier bar(s) (from "
+            f"{di['warmup_first']}), but nothing before {di['first']} was counted." if di.get("warmup_bars") else "")
+    out = [("1. Question investigated",
+            f"{RESEARCH_QUESTION} Instrument: {dataset_label}."),
+           ("2. Data and period",
+            f"{di['n_bars']:,} bars from {di['first']} to {di['last']} (bar size: {di['frequency']}). The ranking "
+            "used only the "
+            f"first {di['is_bars']} bars ({di['is_first']} to {di['is_last']}, in-sample); the later {di['oos_bars']} "
+            f"bars ({di['oos_first']} to {di['oos_last']}, out-of-sample) were kept aside to check the ranking "
+            f"afterwards.{warm}")]
+    if not top:
+        out.append(("3. What the analysis found",
+                    f"No candidate had the minimum {s.min_interactions} in-sample interactions, so nothing was ranked "
+                    f"({len(res.results)} candidates tested). This means not enough data for these settings, not "
+                    "poor results."))
+    else:
+        r = top[0]
+        others = ", ".join(x["ma_label"] for x in top[1:])
+        out.append(("3. What the analysis found",
+                    f"Of {len(res.results)} moving averages tested ({counts.get('OK', 0)} with enough interactions to "
+                    f"be ranked), the highest in-sample score was {r['ma_label']} with an affinity score of "
+                    f"{_num(r['is_affinity_score'])} out of 100: price came near it {r['is_n']} time(s) in-sample and "
+                    f"moved the expected way {pk} bars later in {_num(r['is_overall_sr'])}% of {r['is_n_outcomes']} "
+                    f"usable outcome(s)." + (f" The other Top-{len(top)} findings: {others}." if others else "")))
+    out.append(("4. What the scores and percentages mean",
+                "The affinity score (0-100) combines four parts with fixed weights: how often price interacted with "
+                "the MA, how often it then moved the expected way, how large that move was relative to its "
+                "variability, and how steady the success rate was over time. It is a ranking score, not a "
+                f"probability or a forecast. 'In-sample success %' is the share of qualifying in-sample outcomes in "
+                f"which price moved the expected way after {pk} bars: higher after touching the MA from above "
+                "(support), lower after touching it from below (resistance)."))
+    if ch["verdict"] in (STANDS_OUT, NOT_DISTINGUISHABLE):
+        finest = 1 / (ch["shuffles"] + 1)
+        chance_text = (f"Verdict: {ch['verdict']}. On {ch['shuffles']} block-shuffled copies of the same in-sample "
+                       f"prices (where any real link with a moving average is destroyed) the best score averaged "
+                       f"{_num(ch['null_mean'])} and reached {_num(ch['null_max'])} at most; the real best score was "
+                       f"{_num(ch['real_top_score'])} (chance p-value {_num(ch['p_value'], '{:.4f}')}). ")
+        chance_text += ("The best real result is higher than nearly all luck-only results. That is evidence for this "
+                        "instrument and period under the shuffle model's assumptions, not proof of a profitable or "
+                        "lasting edge." if ch["verdict"] == STANDS_OUT else
+                        "Luck alone often produced a best score this high, so the ranking may be chance and should "
+                        "be treated as unproven.")
+        chance_text += (f" With {ch['shuffles']} shuffles the smallest possible chance p-value is {finest:.4f}, so "
+                        "p-values are approximate at that resolution.")
+    elif ch["verdict"] == NOT_RUN:
+        chance_text = "The chance test was not run (Chance shuffles = 0), so the scores cannot be judged against luck."
+    else:
+        chance_text = f"{ch['verdict']}."
+    out.append(("5. Comparison with chance", chance_text))
+    if top:
+        r = top[0]
+        oos_part = ("It was not evaluated out-of-sample." if r["oos_status"] == "NOT_EVALUATED" else
+                    f"Out-of-sample its success rate was {_num(r['oos_overall_sr'])}% over "
+                    f"{int(r['oos_n_outcomes'] or 0)} outcome(s), against a baseline of {_num(r['oos_baseline_sr'])}% "
+                    f"(edge {_num(r['oos_edge_vs_baseline'])} points).")
+        out.append(("6. Comparison with the market's own movement (drift baseline)",
+                    f"Over the same in-sample bars, price was higher or lower {pk} bars later anyway in "
+                    f"{_num(r['is_baseline_sr'])}% of cases (weighted to {r['ma_label']}'s own support and "
+                    f"resistance outcomes). Its {_num(r['is_overall_sr'])}% success is therefore "
+                    f"{_num(r['is_edge_vs_baseline'])} percentage points above that baseline. {oos_part} The baseline "
+                    "is reported only; the score still compares with 50%, as in V1."))
+    else:
+        out.append(("6. Comparison with the market's own movement (drift baseline)",
+                    "Not applicable: nothing was ranked."))
+    lim = ["the chance test uses one price history and one shuffle model (blocks of "
+           f"{s.chance_block_bars} bars), so it does not prove that a result will persist",
+           "the chance threshold 0.05, the 15-bar blocks, the strength rule, Group % and the ATR option are "
+           "provisional beta defaults, not owner-approved methodology",
+           "Directed IR and the score weights are pending owner review"]
+    if top and (top[0]["is_n_outcomes"] or 0) < SMALL_SAMPLE:
+        lim.insert(0, f"the #1 finding rests on only {top[0]['is_n_outcomes']} in-sample outcome(s), so its success "
+                      "rate can swing widely by chance")
+    if top and top[0]["oos_status"] != "NOT_EVALUATED" and (top[0].get("oos_n_outcomes") or 0) < SMALL_SAMPLE:
+        lim.insert(1, f"the out-of-sample check rests on {int(top[0].get('oos_n_outcomes') or 0)} outcome(s)")
+    text = "; ".join(lim)
+    out.append(("7. Main limitations", text[:1].upper() + text[1:] + ". The full list is under 'How to read this' "
+                                                                       "in the findings file and in the reports."))
+    nxt = []
+    if ch["verdict"] == NOT_DISTINGUISHABLE or not top:
+        nxt.append("do not rely on this ranking; try a longer history, another timeframe or other instruments")
+    elif ch["verdict"] == STANDS_OUT:
+        nxt.append("confirm the finding on other instruments and later periods before relying on it")
+        nxt.append("for a finer chance p-value, run again with more Chance shuffles (for example 1000; it takes "
+                   "about five times longer)")
+    elif ch["verdict"] == NOT_RUN:
+        nxt.append("run again with Chance shuffles above 0 (default 200) so the result can be judged against luck")
+    if top and r["oos_status"] != "NOT_EVALUATED" and not (r.get("oos_edge_vs_baseline") or 0) > 0:
+        nxt.append("note that out-of-sample the #1 finding did not beat its baseline")
+    nxt.append("look at the detailed tables (Excel Top_N and Rankings sheets, CSV files) for the evidence behind "
+               "each number")
+    text = "; ".join(nxt)
+    out.append(("8. What to investigate next", text[:1].upper() + text[1:] + "."))
+    return out
+
+
 def _findings(ctx: RunContext, info, res) -> Path:
     s, di, ch = res.settings, res.data_info, res.chance
     pk = s.fwd_windows[0]
     lines = [f"MA Affinity V2 findings - {v1.dataset_label(info)} - Run {ctx.run_id}", "",
-             "Research question", f"  {RESEARCH_QUESTION}", "",
-             "Chance test", f"  VERDICT: {ch['verdict']}"]
+             "EXECUTIVE INTERPRETATION (plain English; every number below is from this run's calculated results)", ""]
+    for head, text in executive_interpretation(v1.dataset_label(info), res):
+        lines += [head, *textwrap.wrap(text, 110, initial_indent="  ", subsequent_indent="  "), ""]
+    lines += ["DETAILED FINDINGS", "",
+              "Research question", f"  {RESEARCH_QUESTION}", "",
+              "Chance test", f"  VERDICT: {ch['verdict']}"]
     if ch["verdict"] in (STANDS_OUT, NOT_DISTINGUISHABLE):
         lines.append(f"  The real #1 in-sample score is {_num(ch['real_top_score'])}. On {ch['shuffles']} copies of the "
                      f"in-sample prices shuffled in blocks of {ch['block_bars']} bars (seed {ch['seed']}), the #1 score "
@@ -402,13 +566,17 @@ def execute(ctx: RunContext) -> list[Path]:
     (dataset_id,) = ctx.dataset_ids
     info = get_dataset(ctx.db, dataset_id)
     s = _settings(ctx.params)
-    frame, _ = v1._frame(ctx.settings, ctx.db, dataset_id, ctx.params)
+    full, _, a = _frame_with_warmup(ctx.settings, ctx.db, dataset_id, ctx.params, s)
+    frame = full.iloc[a:]  # the chosen analysis period (what V1 would use)
     label = f"{v1.dataset_label(info)}, Run {ctx.run_id}"
     ctx.log(f"MA Affinity V2 on {label}: {len(frame)} bars, {fmt_date(frame.index[0].date())} to "
             f"{fmt_date(frame.index[-1].date())}. Method: {METHOD_SOURCE}.")
+    if a:
+        ctx.log(f"MA warm-up: {a} earlier bar(s) from {fmt_date(full.index[0].date())} are used to calculate the "
+                "moving averages only; no interaction is counted before the Start date.")
     try:
-        res = run_ma_affinity_v2(frame, s, label=label, log=ctx.log, quality=_data_note(ctx, info, frame),
-                                 progress=ctx.progress, cancel=ctx.cancel_requested)
+        res = run_ma_affinity_v2(full, s, label=label, log=ctx.log, quality=_data_note(ctx, info, frame),
+                                 progress=ctx.progress, cancel=ctx.cancel_requested, analysis_start=a)
     except QlopbCancelled:
         raise RunCancelled("Cancelled by the user.") from None
     ctx.stop_if_cancelled()  # a request that arrived during the last step stops the run before any report is written
@@ -418,6 +586,8 @@ def execute(ctx: RunContext) -> list[Path]:
     ctx.details.update({
         "bars_used": {"count": int(len(frame)), "first": frame.index[0].date().isoformat(),
                       "last": frame.index[-1].date().isoformat()},
+        "ma_warmup": {"rule": s.ma_warmup, "bars_before_start": a,
+                      "first": full.index[0].date().isoformat() if a else None},
         "split": {k: res.data_info[k] for k in ("is_bars", "is_first", "is_last", "oos_bars", "oos_first", "oos_last")},
         "frozen_top": [f"{t}-{p}" for t, p in res.frozen_top], "status_counts": res.counts(),
         "engine": METHOD_SOURCE, "research_question": RESEARCH_QUESTION,

@@ -1,4 +1,7 @@
-"""MA Affinity V2 - the calculation (no files, no GUI, no registry). Approved by the Project Owner on 10-Nov-26.
+"""MA Affinity V2 - the calculation (no files, no GUI, no registry). Beta method: the owner gave the direction on
+10-Nov-26 (chance test with 200 block shuffles, drift baseline reported only, rescaled strength); the thresholds, block
+mechanics, strength rule, grouping, ATR and warm-up details are PROVISIONAL implementation choices, not owner-approved
+final methodology.
 
 V2 keeps every V1 definition (QLOPB MA Affinity Scanner V2, Application/qlopb, which is NOT changed and is reused here):
 the five MA formulas, zone entry and cooldown, the forward-window rule, Support/Resistance, the four score
@@ -21,7 +24,7 @@ check. V2 ADDS:
      fits) after which price was higher (the Support baseline) or lower (the Resistance baseline), weighted by the
      candidate's own Support and Resistance outcomes. `edge` = success rate - baseline (percentage points), with a
      one-sided binomial p-value against the baseline. The baseline is REPORTED ONLY: the affinity score still
-     compares the success rate with 50%, as in V1 (owner decision 10-Nov-26).
+     compares the success rate with 50%, as in V1 (owner direction 10-Nov-26).
   3. Fairer interaction strength (`strength_rule` "relative", the default). V1 gives full strength at 30 interactions
      (max(3 x min interactions, 20)) for every period, but long MAs produce fewer interactions, so they were marked down
      for their length. V2 uses as the reference the SMALLER of the V1 number and the median interaction count of the
@@ -69,6 +72,14 @@ LIMITATIONS_V2 = (
     "The chance test compares the real #1 score with the #1 scores found on block-shuffled copies of the same "
     "in-sample prices. It allows for the many candidates tested, but it is still a test on one history: a result that "
     "stands out from chance on one instrument should be confirmed on others before it is relied on.",
+    "The chance result is conditional on the shuffle model: blocks of bars keep each bar's shape, the overall move and "
+    "short-term patterns within a block, but not longer trends or volatility regimes. Standing out from this "
+    "simulated chance is not proof of a profitable or persistent trading edge.",
+    "With N shuffles the smallest possible chance p-value is 1/(N+1) (0.0050 with 200), so chance p-values are "
+    "approximate at that resolution; use more shuffles (for example 1000) for a finer value.",
+    "The chance threshold (0.05), the 15-bar blocks, the relative strength rule (+/-20% median), Group % (10), the ATR "
+    "option (14 bars, 1.0 x) and MA warm-up are PROVISIONAL beta defaults, documented and configurable; they are not "
+    "owner-approved final methodology.",
     "The binomial p-values in the tables are NOT corrected for the many candidates tested; they are kept for "
     "reference only. Use the chance p-value to judge a finding.",
     "Success is scored against 50% (as in V1). The drift baseline (what price did anyway over the same bars) is "
@@ -97,6 +108,7 @@ class MAAffinityV2Settings(MAResearchSettings):
     zone_mode: str = "percent"  # percent | atr
     atr_period: int = 14
     atr_multiple: float = 1.0
+    ma_warmup: str = "earlier"  # earlier = MAs use the bars before the Start date (counted from it only) | none = V1
 
     def problems(self) -> list:
         out = super().problems()
@@ -126,6 +138,8 @@ class MAAffinityV2Settings(MAResearchSettings):
                 out.append("ATR multiple must be above 0 and at most 20.")
         except (TypeError, ValueError):
             out.append("ATR multiple must be a number.")
+        if self.ma_warmup not in ("earlier", "none"):
+            out.append("MA warm-up must be 'earlier' or 'none'.")
         if self.timeframe != "as_loaded":
             out.append("MA Affinity V2 always runs on the dataset's own timeframe (as_loaded).")
         return out
@@ -418,16 +432,16 @@ def block_shuffle_ohlc(o, h, l, c, block: int, rng: np.random.Generator) -> tupl
     return o2, h2, l2, c2
 
 
-def _is_top_score(o, h, l, c, s: MAAffinityV2Settings, candidates: list, is_end: int) -> tuple:
-    """Run the IS scan on one (shuffled) series exactly as on the real one (same zone, same strength rule); return
-    (#1 IS affinity among ranked candidates, its label)."""
+def _is_top_score(o, h, l, c, s: MAAffinityV2Settings, candidates: list, is_end: int, start: int = 0) -> tuple:
+    """Run the IS scan on one (shuffled) series exactly as on the real one (same zone, same strength rule, same first
+    bar `start` after the MA warm-up bars); return (#1 IS affinity among ranked candidates, its label)."""
     best, best_label = -math.inf, ""
     fwd = list(s.fwd_windows)
     zone = _Zone(s, h, l, c)
     recs = {}
     for mt, period in candidates:
         ma = compute_ma(c, mt, period)
-        events, _, _ = zone.detect(ma, 0, is_end, is_end, False, -(period + 1))
+        events, _, _ = zone.detect(ma, start, is_end, is_end, False, start - (period + 1))
         recs[(mt, period)] = _fast_records(events, ma, c, is_end, fwd)
     refs = strength_references({k: len(v) for k, v in recs.items()}, s)
     for (mt, period), r in recs.items():
@@ -471,8 +485,14 @@ def _stamp(ts) -> str:
 
 # ---- the run ------------------------------------------------------------------------------------------------------
 def run_ma_affinity_v2(df: pd.DataFrame, s: MAAffinityV2Settings, *, label: str = "instrument", log=None,
-                       progress=None, cancel=None, quality=None) -> V2Result:
-    """progress(done, total, text); log(text); cancel() -> True to stop (raises RunCancelled)."""
+                       progress=None, cancel=None, quality=None, analysis_start: int = 0) -> V2Result:
+    """progress(done, total, text); log(text); cancel() -> True to stop (raises RunCancelled).
+
+    `analysis_start` (MA warm-up, 10-Nov-26): the first `analysis_start` rows of `df` are history BEFORE the chosen
+    analysis period. They are used only to calculate the moving averages (and the regime MA and ATR), so a long MA does
+    not restart at the chosen start date; no interaction, outcome, baseline bar or split is counted in them. The
+    in-sample / out-of-sample split is made on the analysis period alone, exactly as if it were the whole frame.
+    0 (the default) = no earlier history: the V1 behaviour."""
     t0 = time.time()
     say = log or (lambda m: None)
     tick = progress or (lambda d, t, m: None)
@@ -480,7 +500,10 @@ def run_ma_affinity_v2(df: pd.DataFrame, s: MAAffinityV2Settings, *, label: str 
     problems = validate_ohlc_frame(df)
     if problems:
         raise ResearchError("The price table is not usable:\n- " + "\n- ".join(problems))
-    errors, warns = check_data_for_settings(df, s)
+    a = int(analysis_start)
+    if not 0 <= a < len(df):
+        raise ResearchError(f"The analysis period starts at row {a}, outside the {len(df)} rows given.")
+    errors, warns = check_data_for_settings(df.iloc[a:], s)  # the analysis period must be long enough on its own
     if errors:
         raise ResearchError("\n".join(errors))
     warnings = list(warns)
@@ -491,7 +514,7 @@ def run_ma_affinity_v2(df: pd.DataFrame, s: MAAffinityV2Settings, *, label: str 
     low = df["low"].to_numpy(dtype=np.float64)
     index = df.index
     n = len(df)
-    is_end, oos_start = compute_split(n, s.is_pct)
+    is_end, oos_start = (a + k for k in compute_split(n - a, s.is_pct))  # split of the analysis period only
     pw = s.primary_window
     pk = f"outcome_{pw}"
     fwd = list(s.fwd_windows)
@@ -506,9 +529,10 @@ def run_ma_affinity_v2(df: pd.DataFrame, s: MAAffinityV2Settings, *, label: str 
     total = n_c + s.chance_shuffles * n_c + n_oos_est
     done = 0
     data_info = {
-        "n_bars": n, "first": _stamp(index[0]), "last": _stamp(index[-1]),
-        "is_bars": is_end + 1, "oos_bars": n - oos_start,
-        "is_first": _stamp(index[0]), "is_last": _stamp(index[is_end]),
+        "n_bars": n - a, "first": _stamp(index[a]), "last": _stamp(index[-1]),
+        "is_bars": is_end - a + 1, "oos_bars": n - oos_start,
+        "is_first": _stamp(index[a]), "is_last": _stamp(index[is_end]),
+        "warmup_bars": a, "warmup_first": _stamp(index[0]) if a else "",
         "oos_first": _stamp(index[oos_start]) if oos_start < n else "",
         "oos_last": _stamp(index[-1]) if oos_start < n else "",
         "frequency": quality.inferred_frequency if quality is not None else "as loaded",
@@ -532,7 +556,7 @@ def run_ma_affinity_v2(df: pd.DataFrame, s: MAAffinityV2Settings, *, label: str 
         stop_if_asked()
         tick(done, total, f"In-sample {mt}-{period}")
         ma = compute_ma(close, mt, period)
-        events, final_iz, final_lev = zone.detect(ma, 0, is_end, is_end, False, -(period + 1))
+        events, final_iz, final_lev = zone.detect(ma, a, is_end, is_end, False, a - (period + 1))
         recs = build_interaction_records(events, ma, mt, period, is_end, close, high, low, index, regime_ma, fwd)
         scanned[(mt, period)] = (ma, recs)
         is_state[(mt, period)] = (final_iz, final_lev)
@@ -546,7 +570,7 @@ def run_ma_affinity_v2(df: pd.DataFrame, s: MAAffinityV2Settings, *, label: str 
             "rank": None, "rank_tie": False,
             **{f"is_{key}": v for key, v in sc.items()},
             "is_strength_reference": round(refs[(mt, period)], 2),
-            **_baseline_fields("is", recs, ma, baseline, 0, min(is_end, is_end - pw), pk),
+            **_baseline_fields("is", recs, ma, baseline, a, min(is_end, is_end - pw), pk),
             "chance_p": NAN, "finding": None, "group_leader": "", "group_size": np.nan, "group_members": "",
             "oos_status": "NOT_EVALUATED", "oos_n": np.nan, "oos_overall_sr": np.nan, "oos_n_outcomes": np.nan,
             "oos_affinity_score": np.nan, "is_oos_sr_diff": np.nan, "is_oos_consistency_raw": np.nan,
@@ -589,12 +613,18 @@ def run_ma_affinity_v2(df: pd.DataFrame, s: MAAffinityV2Settings, *, label: str 
     if s.chance_shuffles > 0 and frozen:
         say(f"Phase 3/4: chance test - {s.chance_shuffles} block-shuffled copies of the in-sample prices...")
         rng = np.random.default_rng(s.chance_seed)
-        seg = slice(0, is_end + 1)
+        # the in-sample bars are shuffled; with MA warm-up, the warm-up bars stay as they are in front of them (the
+        # last warm-up bar anchors the shuffled series), so the MAs warm up exactly as in the real scan
+        anchor = max(a - 1, 0)
+        seg = slice(anchor, is_end + 1)
         for k in range(s.chance_shuffles):
             stop_if_asked()
             tick(done, total, f"Chance test: shuffle {k + 1} of {s.chance_shuffles}")
             so, sh, sl, sc_ = block_shuffle_ohlc(o[seg], high[seg], low[seg], close[seg], s.chance_block_bars, rng)
-            top, top_label = _is_top_score(so, sh, sl, sc_, s, candidates, is_end)
+            if anchor:
+                so, sh, sl, sc_ = (np.concatenate([x[:anchor], y]) for x, y in ((o, so), (high, sh), (low, sl),
+                                                                               (close, sc_)))
+            top, top_label = _is_top_score(so, sh, sl, sc_, s, candidates, is_end, a)
             null_tops.append(top)
             null_labels.append(top_label)
             done += n_c
@@ -627,7 +657,7 @@ def run_ma_affinity_v2(df: pd.DataFrame, s: MAAffinityV2Settings, *, label: str 
     say(f"Phase 4/4: out-of-sample validation of {len(to_eval)} candidate(s) (scope: {s.oos_scope}). OOS never "
         "changes ranks.")
     todo = [c for c in candidates if c in to_eval]
-    is_usable, oos_usable = max(is_end - pw + 1, 1), max((n - 1 - pw) - oos_start + 1, 0)
+    is_usable, oos_usable = max(is_end - pw - a + 1, 1), max((n - 1 - pw) - oos_start + 1, 0)
     for mt, period in todo:
         stop_if_asked()
         tick(done, total, f"Out-of-sample {mt}-{period}")
