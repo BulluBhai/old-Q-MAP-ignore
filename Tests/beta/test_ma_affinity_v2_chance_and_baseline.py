@@ -273,6 +273,8 @@ def test_v2_run_reproduces_identically(settings, db, dataset):
 def test_null_shuffles_must_all_be_valid(null_tops, valid, invalid, status):
     result = V.chance_summary(2.5, null_tops, 3, 15, 1)
     assert result["requested_shuffles"] == result["shuffles"] == 3
+    assert result["attempted_shuffles"] == 3
+    assert result["unattempted_shuffles"] == 0
     assert result["valid_shuffles"] == valid
     assert result["invalid_shuffles"] == invalid
     assert result["status"] == status
@@ -302,3 +304,28 @@ def test_null_shuffle_results_remain_deterministic_for_fixed_seed():
     first, second = V.run_ma_affinity_v2(df, settings), V.run_ma_affinity_v2(df, settings)
     assert first.chance == second.chance
     assert first.chance["requested_shuffles"] == first.chance["valid_shuffles"] + first.chance["invalid_shuffles"]
+
+
+
+def test_no_ranked_candidate_is_not_misreported_as_failed_shuffles():
+    result = V.chance_summary(float("nan"), [], 200, 15, 1)
+    assert result["status"] == "no_candidate"
+    assert result["requested_shuffles"] == 200
+    assert result["attempted_shuffles"] == 0
+    assert result["valid_shuffles"] == 0
+    assert result["invalid_shuffles"] == 0
+    assert result["unattempted_shuffles"] == 200
+    assert np.isnan(result["p_value"])
+    assert result["verdict"] != V.STANDS_OUT
+
+
+def test_missing_requested_shuffles_make_null_distribution_inconclusive():
+    result = V.chance_summary(90.0, [88.0, 89.0], 3, 15, 1)
+    assert result["status"] == "inconclusive"
+    assert result["requested_shuffles"] == 3
+    assert result["attempted_shuffles"] == 2
+    assert result["valid_shuffles"] == 2
+    assert result["invalid_shuffles"] == 0
+    assert result["unattempted_shuffles"] == 1
+    assert np.isnan(result["p_value"])
+    assert result["verdict"] != V.STANDS_OUT
