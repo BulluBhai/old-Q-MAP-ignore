@@ -68,11 +68,12 @@ def test_v2_keeps_every_v1_number(types):
     df = random_walk()
     kw = dict(ma_types=types, ma_start=10, ma_end=80, oos_scope="all")
     v1 = run_ma_affinity(df, MAResearchSettings(**kw))
-    v2 = V.run_ma_affinity_v2(df, V.MAAffinityV2Settings(**kw, chance_shuffles=3))
+    # with the V1 strength rule and no grouping (batch 2 options), V2 gives exactly the V1 numbers
+    v2 = V.run_ma_affinity_v2(df, V.MAAffinityV2Settings(**kw, chance_shuffles=3, strength_rule="v1", group_pct=0))
     assert v2.frozen_top == v1.frozen_top
     for a, b in zip(v2.results, v1.results):
         for key, value in b.items():
-            if key.startswith("nbr_") or key in ("is_fwd_stats", "oos_fwd_stats", "is_score_components",
+            if key.startswith("nbr_") or key in ("is_strength_reference", "oos_strength_reference", "is_fwd_stats", "oos_fwd_stats", "is_score_components",
                                                  "oos_score_components"):
                 continue
             assert a[key] == value or (value != value and a[key] != a[key]), (a["ma_label"], key)
@@ -146,7 +147,8 @@ def test_a_planted_ma_bounce_stands_out_and_a_random_walk_does_not():
     assert any("NOT distinguishable from chance" in w for w in noise.warnings)
     leaders = noise.frozen_top_results()
     assert all(r["chance_p"] >= noise.chance["p_value"] for r in leaders)  # lower scores never look stronger
-    assert all(r["chance_p"] != r["chance_p"] for r in noise.results if r["rank"] is None or r["rank"] > 5)
+    assert all(r["chance_p"] != r["chance_p"] for r in noise.results  # only the frozen Top-N get one
+               if (r["ma_type"], r["ma_period"]) not in noise.frozen_top)
 
 
 def test_zero_shuffles_runs_without_the_test_and_says_so():
@@ -174,7 +176,8 @@ def test_baseline_rates_equal_a_direct_count():
 
 def test_candidate_baseline_weights_support_and_resistance_and_does_not_change_the_score():
     df = random_walk(700, seed=5, drift=0.001)  # an up-trending stock: the Support baseline is above 50%
-    res = V.run_ma_affinity_v2(df, V.MAAffinityV2Settings(ma_end=60, chance_shuffles=0))
+    res = V.run_ma_affinity_v2(df, V.MAAffinityV2Settings(ma_end=60, chance_shuffles=0, strength_rule="v1",
+                                                         group_pct=0))
     c = df["close"].to_numpy()
     r = res.frozen_top_results()[0]
     recs = res.interactions[(res.interactions.period_type == "IS") & (res.interactions.ma_label == r["ma_label"])]

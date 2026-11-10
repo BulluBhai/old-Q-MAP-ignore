@@ -22,6 +22,21 @@ check. V2 ADDS:
      candidate's own Support and Resistance outcomes. `edge` = success rate - baseline (percentage points), with a
      one-sided binomial p-value against the baseline. The baseline is REPORTED ONLY: the affinity score still
      compares the success rate with 50%, as in V1 (owner decision 10-Nov-26).
+  3. Fairer interaction strength (`strength_rule` "relative", the default). V1 gives full strength at 30 interactions
+     (max(3 x min interactions, 20)) for every period, but long MAs produce fewer interactions, so they were marked down
+     for their length. V2 uses as the reference the SMALLER of the V1 number and the median interaction count of the
+     same MA type at nearby periods (within +/-20%, at least +/-2 periods) on the same data:
+        strength = min(1, interactions / reference)
+     A candidate with fewer interactions than is usual for its period still scores lower; a long MA is no longer
+     marked down only for being long. The reference is never stricter than V1. Out-of-sample, the in-sample reference
+     is scaled by the number of usable out-of-sample bars over in-sample bars. `strength_rule` "v1" keeps the V1 rule.
+  4. Neighbour grouping (`group_pct`, default 10). Neighbouring periods of one MA type are nearly the same line, so the
+     Top-N list is built from distinct findings: going down the in-sample ranking, a candidate of the same type within
+     `group_pct`% of a group leader's period (at least 1 period) joins that group instead of taking a Top-N place.
+     The frozen Top-N are the group leaders; each lists its members. 0 = no grouping (the V1 Top-N).
+  5. Optional volatility zone (`zone_mode` "atr"): the zone is the MA +/- `atr_multiple` x ATR(`atr_period`) (Wilder's
+     average true range up to and including the bar) instead of +/- `proximity_pct`% of the MA, so the zone means the
+     same thing for quiet and volatile instruments. "percent" (the default) is the V1 zone, calculated by V1's code.
 """
 
 from __future__ import annotations
@@ -40,7 +55,7 @@ from qlopb.config.settings import MAResearchSettings
 from qlopb.core.research_engine import ResearchError, ResearchResult, RunCancelled, horizon_label
 from qlopb.core.validation import check_data_for_settings, validate_ohlc_frame
 from qlopb.references.moving_average import compute_ma
-from qlopb.validation.is_oos import compute_split, consistency, freeze_top_n, rank_candidates
+from qlopb.validation.is_oos import compute_split, consistency, rank_candidates
 from qlopb.validation.robustness import near_duplicate_pairs, neighbour_summary
 
 METHOD_NAME = "MA Affinity V2"
@@ -58,7 +73,8 @@ LIMITATIONS_V2 = (
     "reference only. Use the chance p-value to judge a finding.",
     "Success is scored against 50% (as in V1). The drift baseline (what price did anyway over the same bars) is "
     "reported alongside; a success rate close to its baseline mostly reflects the stock's own trend.",
-    "Neighbouring MA periods are almost identical, so the Top-N list may show one finding several times.",
+    "Neighbouring MA periods are almost identical. V2 groups them (Group %), so each Top-N place is a distinct "
+    "finding; MA types are not grouped with each other, so an EMA and an SMA of similar period can both appear.",
     "Forward windows longer than the primary window overlap each other, so those statistics are not independent "
     "observations.",
     "Forward Return (Directed IR) methodology is PENDING OWNER REVIEW. The V1 formula is kept unchanged.",
@@ -76,6 +92,11 @@ class MAAffinityV2Settings(MAResearchSettings):
     chance_shuffles: int = 200  # 0 = do not run the chance test (the report then says it was not run)
     chance_block_bars: int = 15
     chance_seed: int = 1
+    strength_rule: str = "relative"  # relative | v1
+    group_pct: float = 10.0  # 0 = no grouping
+    zone_mode: str = "percent"  # percent | atr
+    atr_period: int = 14
+    atr_multiple: float = 1.0
 
     def problems(self) -> list:
         out = super().problems()
@@ -89,6 +110,22 @@ class MAAffinityV2Settings(MAResearchSettings):
             out.append("Chance block bars must be a whole number from 2 to 500.")
         if not is_int(self.chance_seed) or self.chance_seed < 0:
             out.append("Chance seed must be a whole number of 0 or more.")
+        if self.strength_rule not in ("relative", "v1"):
+            out.append("Strength rule must be 'relative' or 'v1'.")
+        try:
+            if not 0 <= float(self.group_pct) <= 100:
+                out.append("Group % must be from 0 to 100 (0 = no grouping).")
+        except (TypeError, ValueError):
+            out.append("Group % must be a number.")
+        if self.zone_mode not in ("percent", "atr"):
+            out.append("Zone mode must be 'percent' or 'atr'.")
+        if not is_int(self.atr_period) or not 1 <= self.atr_period <= 500:
+            out.append("ATR period must be a whole number from 1 to 500.")
+        try:
+            if not 0 < float(self.atr_multiple) <= 20:
+                out.append("ATR multiple must be above 0 and at most 20.")
+        except (TypeError, ValueError):
+            out.append("ATR multiple must be a number.")
         if self.timeframe != "as_loaded":
             out.append("MA Affinity V2 always runs on the dataset's own timeframe (as_loaded).")
         return out
@@ -131,10 +168,11 @@ def _fast_records(events, ma_vals, close, fwd_end_bar, fwd_windows) -> list:
     return recs
 
 
-def affinity_only(records: list, s) -> tuple:
+def affinity_only(records: list, s, ref_n: float | None = None) -> tuple:
     """(status, affinity score rounded to 2 decimals) exactly as QLOPB's `score_window` computes them, without the
     descriptive statistics, reliability and p-values that a shuffled series does not need (about 4x faster).
-    A test checks that both give the same status and score."""
+    A test checks that both give the same status and score. `ref_n` replaces V1's interaction-strength reference
+    (max(3 x min interactions, 20)) when given."""
     n = len(records)
     if n == 0:
         return "NO_INTERACTIONS", NAN
@@ -153,7 +191,7 @@ def affinity_only(records: list, s) -> tuple:
         srs = [x for x in srs if not np.isnan(x)]
         if len(srs) >= 2:
             stability = float(max(0.0, min(1.0, 1.0 - 2 * np.std(srs))))
-    s_inter = min(1.0, n / max(s.min_interactions * 3, 20))
+    s_inter = strength(n, s, ref_n)
     s_success = float(max(0.0, min(1.0, (all_sr - 0.5) / 0.5))) if all_n > 0 else 0.0
     dir_scores = []
     for w in s.fwd_windows:
@@ -172,6 +210,130 @@ def affinity_only(records: list, s) -> tuple:
         ("interaction_strength", s_inter), ("success_rate", s_success),
         ("forward_return", s_fwd), ("stability", s_stab))) * 100
     return status, round(affinity, 2)
+
+
+def v1_reference(s) -> int:
+    return max(s.min_interactions * 3, 20)
+
+
+def strength(n: int, s, ref_n: float | None) -> float:
+    ref = v1_reference(s) if ref_n is None else max(float(ref_n), 1.0)
+    return min(1.0, n / ref)
+
+
+def strength_references(counts: dict, s) -> dict:
+    """(type, period) -> interaction-strength reference. "v1": V1's fixed number. "relative": the smaller of V1's
+    number and the median interaction count of the same MA type at periods within +/-20% (at least +/-2)."""
+    v1ref = v1_reference(s)
+    if s.strength_rule == "v1":
+        return {k: float(v1ref) for k in counts}
+    by_type: dict = {}
+    for (mt, p), n in counts.items():
+        by_type.setdefault(mt, []).append((p, n))
+    refs = {}
+    for mt, items in by_type.items():
+        periods = np.array([p for p, _ in items])
+        ns = np.array([n for _, n in items], dtype=float)
+        for p, _ in items:
+            width = max(2.0, 0.2 * p)
+            near = ns[np.abs(periods - p) <= width]
+            refs[(mt, p)] = float(min(v1ref, np.median(near)))
+    return refs
+
+
+def score_v2(records: list, s, ref_n: float) -> dict:
+    """QLOPB's score_window (all descriptive numbers unchanged) with the V2 interaction strength and the affinity
+    score recalculated from it. With ref_n = V1's reference the result equals score_window exactly."""
+    sc = score_window(records, s)
+    if sc["status"] == "NO_INTERACTIONS":
+        return sc
+    status, score = affinity_only(records, s, ref_n)
+    sc["affinity_score"] = score
+    sc["score_components"] = {**sc["score_components"],
+                              "interaction_strength": round(strength(len(records), s, ref_n) * 100, 2)}
+    sc["strength_reference"] = round(float(ref_n), 2)
+    return sc
+
+
+def atr_wilder(high, low, close, period: int) -> np.ndarray:
+    """Wilder's average true range; causal (bar i uses bars up to i); NaN until `period` true ranges exist."""
+    high, low, close = (np.asarray(x, dtype=np.float64) for x in (high, low, close))
+    n = len(close)
+    tr = high - low
+    if n > 1:
+        tr[1:] = np.maximum(tr[1:], np.maximum(np.abs(high[1:] - close[:-1]), np.abs(low[1:] - close[:-1])))
+    out = np.full(n, np.nan)
+    if n >= period:
+        out[period - 1] = tr[:period].mean()
+        for i in range(period, n):
+            out[i] = (out[i - 1] * (period - 1) + tr[i]) / period
+    return out
+
+
+def detect_entries(high, low, ma_vals, half_width, start_bar, end_bar, fwd_end_bar, primary_window, cooldown_bars,
+                   initial_in_zone=False, last_event_bar=-999999):
+    """QLOPB's detect_interaction_episodes with the zone given as MA +/- half_width (an array, e.g. k x ATR) instead of
+    +/- a percentage. Same entry, cooldown, eligibility and IS->OOS carry-over rules. A bar without an MA or a
+    half-width value is never in the zone."""
+    n = len(ma_vals)
+    scan_s, scan_e = max(start_bar, 0), min(end_bar, n - 1)
+    if scan_s > scan_e:
+        return [], initial_in_zone, last_event_bar
+    ma_s, hw_s = ma_vals[scan_s: scan_e + 1], half_width[scan_s: scan_e + 1]
+    valid = ~np.isnan(ma_s) & ~np.isnan(hw_s)
+    zone_up = np.where(valid, ma_s + hw_s, np.inf)
+    zone_lo = np.where(valid, ma_s - hw_s, -np.inf)
+    in_zone = valid & (low[scan_s: scan_e + 1] <= zone_up) & (high[scan_s: scan_e + 1] >= zone_lo)
+    entries = in_zone & ~np.concatenate([[initial_in_zone], in_zone[:-1]])
+    record_end = min(scan_e, fwd_end_bar - primary_window)
+    events, last_ev = [], last_event_bar
+    for local_i in np.where(entries)[0]:
+        i = int(local_i) + scan_s
+        if i > record_end:
+            continue
+        if (i - last_ev) >= cooldown_bars:
+            events.append(i)
+            last_ev = i
+    return events, bool(in_zone[-1]), last_ev
+
+
+class _Zone:
+    """Interaction detection for the chosen zone: V1's own function for "percent", detect_entries for "atr"."""
+
+    def __init__(self, s, high, low, close):
+        self.s, self.high, self.low = s, high, low
+        self.atr_hw = (atr_wilder(high, low, close, s.atr_period) * float(s.atr_multiple)
+                       if s.zone_mode == "atr" else None)
+
+    def detect(self, ma, start, end, fwd_end, initial_in_zone, last_event_bar):
+        s = self.s
+        if self.atr_hw is None:
+            return detect_interaction_episodes(self.high, self.low, ma, start, end, fwd_end, s.primary_window,
+                                               s.proximity_pct, s.cooldown_bars, initial_in_zone=initial_in_zone,
+                                               last_event_bar=last_event_bar)
+        return detect_entries(self.high, self.low, ma, self.atr_hw, start, end, fwd_end, s.primary_window,
+                              s.cooldown_bars, initial_in_zone=initial_in_zone, last_event_bar=last_event_bar)
+
+
+def group_neighbours(results: list, s) -> list:
+    """Distinct findings from the in-sample ranking. Returns the groups in rank order, each a list of results (leader
+    first). Only ranked (status OK) candidates are grouped; group_pct 0 makes every candidate its own group."""
+    ranked = sorted((r for r in results if r.get("rank")), key=lambda r: r["rank"])
+    groups = []
+    for r in ranked:
+        home = None
+        if float(s.group_pct) > 0:
+            for g in groups:
+                lead = g[0]
+                width = max(1, math.ceil(lead["ma_period"] * float(s.group_pct) / 100))
+                if lead["ma_type"] == r["ma_type"] and abs(lead["ma_period"] - r["ma_period"]) <= width:
+                    home = g
+                    break
+        if home is None:
+            groups.append([r])
+        else:
+            home.append(r)
+    return groups
 
 
 class _Baseline:
@@ -257,15 +419,19 @@ def block_shuffle_ohlc(o, h, l, c, block: int, rng: np.random.Generator) -> tupl
 
 
 def _is_top_score(o, h, l, c, s: MAAffinityV2Settings, candidates: list, is_end: int) -> tuple:
-    """Run the IS scan on one (shuffled) series; return (#1 IS affinity among ranked candidates, its label)."""
+    """Run the IS scan on one (shuffled) series exactly as on the real one (same zone, same strength rule); return
+    (#1 IS affinity among ranked candidates, its label)."""
     best, best_label = -math.inf, ""
     fwd = list(s.fwd_windows)
-    pw = s.primary_window
+    zone = _Zone(s, h, l, c)
+    recs = {}
     for mt, period in candidates:
         ma = compute_ma(c, mt, period)
-        events, _, _ = detect_interaction_episodes(h, l, ma, 0, is_end, is_end, pw, s.proximity_pct, s.cooldown_bars,
-                                                   initial_in_zone=False, last_event_bar=-(period + 1))
-        status, score = affinity_only(_fast_records(events, ma, c, is_end, fwd), s)
+        events, _, _ = zone.detect(ma, 0, is_end, is_end, False, -(period + 1))
+        recs[(mt, period)] = _fast_records(events, ma, c, is_end, fwd)
+    refs = strength_references({k: len(v) for k, v in recs.items()}, s)
+    for (mt, period), r in recs.items():
+        status, score = affinity_only(r, s, refs[(mt, period)])
         if status == "OK" and score > best:
             best, best_label = score, f"{mt}-{period}"
     return (best if best > -math.inf else NAN), best_label
@@ -332,6 +498,7 @@ def run_ma_affinity_v2(df: pd.DataFrame, s: MAAffinityV2Settings, *, label: str 
     reg = s.regime_ma
     regime_ma = (pd.Series(close).rolling(reg, min_periods=reg).mean().to_numpy() if n > reg else np.full(n, np.nan))
     baseline = _Baseline(close, pw)
+    zone = _Zone(s, high, low, close)
 
     candidates = [(mt, p) for mt in s.ma_types for p in range(s.ma_start, s.ma_end + 1)]
     n_c = len(candidates)
@@ -349,7 +516,10 @@ def run_ma_affinity_v2(df: pd.DataFrame, s: MAAffinityV2Settings, *, label: str 
     say(f"Data: {n} bars, {data_info['first']} to {data_info['last']}. IS {data_info['is_bars']} bars "
         f"({data_info['is_first']} to {data_info['is_last']}), OOS {data_info['oos_bars']} bars.")
     say(f"Candidates: {n_c} ({', '.join(s.ma_types)}, periods {s.ma_start}-{s.ma_end}). Primary forward window {pw} "
-        f"bars. Chance test: {s.chance_shuffles} shuffles of {s.chance_block_bars}-bar blocks (seed {s.chance_seed}).")
+        f"bars. Chance test: {s.chance_shuffles} shuffles of {s.chance_block_bars}-bar blocks (seed {s.chance_seed}). "
+        f"Zone: " + (f"{s.proximity_pct}% of the MA" if s.zone_mode == "percent" else
+                     f"{s.atr_multiple} x ATR({s.atr_period})") +
+        f". Strength rule: {s.strength_rule}. Grouping: " + (f"{s.group_pct}%" if float(s.group_pct) > 0 else "off") + ".")
 
     def stop_if_asked():
         if cancel and cancel():
@@ -357,52 +527,62 @@ def run_ma_affinity_v2(df: pd.DataFrame, s: MAAffinityV2Settings, *, label: str 
 
     # ---- Phase 1: IS scoring of every candidate ------------------------------------------------------------------
     say("Phase 1/4: in-sample scoring of all candidates...")
-    results, is_state, all_records = [], {}, []
+    results, is_state, all_records, scanned = [], {}, [], {}
     for mt, period in candidates:
         stop_if_asked()
         tick(done, total, f"In-sample {mt}-{period}")
         ma = compute_ma(close, mt, period)
-        events, final_iz, final_lev = detect_interaction_episodes(
-            high, low, ma, 0, is_end, is_end, pw, s.proximity_pct, s.cooldown_bars,
-            initial_in_zone=False, last_event_bar=-(period + 1))
+        events, final_iz, final_lev = zone.detect(ma, 0, is_end, is_end, False, -(period + 1))
         recs = build_interaction_records(events, ma, mt, period, is_end, close, high, low, index, regime_ma, fwd)
-        sc = score_window(recs, s)
+        scanned[(mt, period)] = (ma, recs)
         is_state[(mt, period)] = (final_iz, final_lev)
+        done += 1
+    refs = strength_references({k: len(v[1]) for k, v in scanned.items()}, s)
+    for mt, period in candidates:
+        ma, recs = scanned.pop((mt, period))
+        sc = score_v2(recs, s, refs[(mt, period)])
         results.append({
             "ma_type": mt, "ma_period": period, "ma_label": f"{mt}-{period}", "horizon": horizon_label(period),
             "rank": None, "rank_tie": False,
             **{f"is_{key}": v for key, v in sc.items()},
+            "is_strength_reference": round(refs[(mt, period)], 2),
             **_baseline_fields("is", recs, ma, baseline, 0, min(is_end, is_end - pw), pk),
-            "chance_p": NAN,
+            "chance_p": NAN, "finding": None, "group_leader": "", "group_size": np.nan, "group_members": "",
             "oos_status": "NOT_EVALUATED", "oos_n": np.nan, "oos_overall_sr": np.nan, "oos_n_outcomes": np.nan,
             "oos_affinity_score": np.nan, "is_oos_sr_diff": np.nan, "is_oos_consistency_raw": np.nan,
             "is_oos_consistency_score": np.nan, "is_oos_consistency_status": "NOT_EVALUATED",
             "oos_baseline_sr": np.nan, "oos_edge_vs_baseline": np.nan, "oos_p_vs_baseline": np.nan,
             "oos_baseline_bars": 0})
         all_records.extend({"period_type": "IS", **r} for r in recs)
-        done += 1
 
     # ---- Phase 2: rank on IS only and freeze the Top-N -----------------------------------------------------------
     say("Phase 2/4: ranking on in-sample scores only and freezing the Top-N...")
     rank_candidates(results)
-    frozen = freeze_top_n(results, s.top_n)
+    groups = group_neighbours(results, s)
+    for k, g in enumerate(groups, 1):
+        for r in g:
+            r["group_leader"] = g[0]["ma_label"]
+        g[0].update({"finding": k, "group_size": len(g),
+                     "group_members": ", ".join(r["ma_label"] for r in g)})
+    frozen = [(g[0]["ma_type"], g[0]["ma_period"]) for g in groups[: s.top_n]]
     n_ok = sum(1 for r in results if r["is_status"] == "OK")
-    say(f"{n_ok} of {n_c} candidates have enough in-sample interactions (min {s.min_interactions}). Frozen "
-        f"Top-{len(frozen)}: " + ", ".join(f"{t}-{p}" for t, p in frozen))
+    say(f"{n_ok} of {n_c} candidates have enough in-sample interactions (min {s.min_interactions}); "
+        f"{len(groups)} distinct finding(s) after grouping. Frozen Top-{len(frozen)}: "
+        + ", ".join(f"{t}-{p}" for t, p in frozen))
     if n_ok == 0:
         warnings.append("No candidate reached the minimum number of in-sample interactions, so nothing was ranked. "
                         "This means 'insufficient data', not 'poor results'.")
     elif len(frozen) < s.top_n:
-        warnings.append(f"Only {len(frozen)} candidates qualified for the Top-{s.top_n} list.")
-    ties = sorted({r["rank"] for r in results if r.get("rank_tie") and r["rank"] <= s.top_n})
+        warnings.append(f"Only {len(frozen)} distinct findings qualified for the Top-{s.top_n} list.")
+    lookup = {(r["ma_type"], r["ma_period"]): r for r in results}
+    ties = sorted({lookup[k]["rank"] for k in frozen if lookup[k].get("rank_tie")})
     if ties:
-        warnings.append("Equal IS scores inside the Top-N (ranks " + ", ".join(map(str, ties))
+        warnings.append("Equal IS scores among the Top-N leaders (ranks " + ", ".join(map(str, ties))
                         + "): their order is arbitrary (candidate order).")
     dup_pairs = near_duplicate_pairs(frozen)
     if dup_pairs:
         warnings.append("Near-duplicate neighbours in the Top-N (periods within 3): "
                         + "; ".join(f"{a}/{b}" for a, b in dup_pairs) + ".")
-    lookup = {(r["ma_type"], r["ma_period"]): r for r in results}
 
     # ---- Phase 3: chance test on block-shuffled IS prices -----------------------------------------------------------
     null_tops, null_labels = [], []
@@ -447,15 +627,17 @@ def run_ma_affinity_v2(df: pd.DataFrame, s: MAAffinityV2Settings, *, label: str 
     say(f"Phase 4/4: out-of-sample validation of {len(to_eval)} candidate(s) (scope: {s.oos_scope}). OOS never "
         "changes ranks.")
     todo = [c for c in candidates if c in to_eval]
+    is_usable, oos_usable = max(is_end - pw + 1, 1), max((n - 1 - pw) - oos_start + 1, 0)
     for mt, period in todo:
         stop_if_asked()
         tick(done, total, f"Out-of-sample {mt}-{period}")
         ma = compute_ma(close, mt, period)
         iz, lev = is_state[(mt, period)]
-        events, _, _ = detect_interaction_episodes(high, low, ma, oos_start, n - 1, n - 1, pw, s.proximity_pct,
-                                                   s.cooldown_bars, initial_in_zone=iz, last_event_bar=lev)
+        events, _, _ = zone.detect(ma, oos_start, n - 1, n - 1, iz, lev)
         recs = build_interaction_records(events, ma, mt, period, n - 1, close, high, low, index, regime_ma, fwd)
-        sc = score_window(recs, s)
+        oos_ref = (refs[(mt, period)] if s.strength_rule == "v1"
+                   else max(1.0, refs[(mt, period)] * oos_usable / is_usable))
+        sc = score_v2(recs, s, oos_ref)
         r = lookup[(mt, period)]
         for key, v in sc.items():
             r[f"oos_{key}"] = v
@@ -468,9 +650,9 @@ def run_ma_affinity_v2(df: pd.DataFrame, s: MAAffinityV2Settings, *, label: str 
         done += 1
     tick(total, total, "Finished")
 
-    for r in results:
-        if r["rank"] and r["rank"] <= s.top_n:
-            r.update({f"nbr_{k}": v for k, v in neighbour_summary(results, r["ma_type"], r["ma_period"]).items()})
+    for key in frozen:
+        r = lookup[key]
+        r.update({f"nbr_{k}": v for k, v in neighbour_summary(results, r["ma_type"], r["ma_period"]).items()})
     inter = pd.DataFrame(all_records) if all_records else pd.DataFrame()
     secs = time.time() - t0
     say(f"Research finished in {secs:.1f}s. {len(inter)} interactions recorded.")

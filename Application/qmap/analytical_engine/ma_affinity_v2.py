@@ -43,8 +43,18 @@ _V2_FIELDS = (
      "Bars per block when shuffling (blocks keep short trends intact)."),
     ("chance_seed", "Chance seed", str(_D.chance_seed),
      "Fixes the random order of the shuffles, so the same run gives the same result."),
+    ("strength_rule", "Strength rule", _D.strength_rule,
+     "relative = interactions compared with nearby periods (V2); v1 = fixed V1 reference, for comparison."),
+    ("group_pct", "Group %", f"{_D.group_pct:g}",
+     "Periods of one MA type within this % of a leader form one finding in the Top-N (0 = no grouping)."),
+    ("zone_mode", "Zone mode", _D.zone_mode, "percent = Proximity % of the MA (V1); atr = ATR multiple x ATR."),
+    ("atr_period", "ATR period", str(_D.atr_period), "Bars in the average true range (zone mode atr only)."),
+    ("atr_multiple", "ATR multiple", f"{_D.atr_multiple:g}", "Zone half-width in ATRs (zone mode atr only)."),
 )
-_V2_KEYS = {"chance_shuffles": "chance_shuffles", "chance_block": "chance_block_bars", "chance_seed": "chance_seed"}
+_V2_KEYS = {"chance_shuffles": "chance_shuffles", "chance_block": "chance_block_bars", "chance_seed": "chance_seed",
+            "strength_rule": "strength_rule", "group_pct": "group_pct", "zone_mode": "zone_mode",
+            "atr_period": "atr_period", "atr_multiple": "atr_multiple"}
+_V2_KINDS = {"strength_rule": str, "zone_mode": str, "group_pct": float, "atr_multiple": float}
 PARAMETERS = v1.PARAMETERS + tuple(Parameter(k, label, "text", default=default, help=help_)
                                    for k, label, default, help_ in _V2_FIELDS)
 _BASE_FIELDS = {f.name for f in fields(qcfg.MAResearchSettings)}
@@ -54,10 +64,14 @@ def _parse_v2_fields(params: dict) -> tuple[dict, list[str]]:
     out, problems = {}, []
     for key, label, default, _help in _V2_FIELDS:
         text = str(params.get(key) if params.get(key) is not None else default).strip()
+        kind = _V2_KINDS.get(key, int)
+        if kind is str:
+            out[_V2_KEYS[key]] = text.lower()
+            continue
         try:
-            out[_V2_KEYS[key]] = int(text)
+            out[_V2_KEYS[key]] = kind(text)
         except ValueError:
-            problems.append(f"{label} must be a whole number (you typed '{text}').")
+            problems.append(f"{label} must be a {'whole number' if kind is int else 'number'} (you typed '{text}').")
     return out, problems
 
 
@@ -143,7 +157,9 @@ def _chance_chart(res, folder: Path, stamp: str) -> Path | None:
     return path
 
 
-_V2_COLUMNS = (("Chance p (adjusted)", "chance_p"), ("IS baseline %", "is_baseline_sr"),
+_V2_COLUMNS = (("Finding", "finding"), ("Group leader", "group_leader"), ("Group members", "group_members"),
+               ("Strength reference", "is_strength_reference"),
+               ("Chance p (adjusted)", "chance_p"), ("IS baseline %", "is_baseline_sr"),
                ("IS edge vs baseline (pts)", "is_edge_vs_baseline"), ("IS p vs baseline", "is_p_vs_baseline"),
                ("OOS baseline %", "oos_baseline_sr"), ("OOS edge vs baseline (pts)", "oos_edge_vs_baseline"))
 
@@ -197,14 +213,16 @@ def write_excel(res, folder: Path, stamp: str, charts: dict) -> Path:
 
     df = _results_frame(res)
     ws = wb.create_sheet("Top_N")
-    topdf = df[df["Rank"].notna() & (df["Rank"] <= s.top_n)]
+    leaders = {r["ma_label"] for r in top}
+    topdf = df[df["MA"].isin(leaders)].sort_values("Finding", kind="stable")
     _write_df(ws, topdf)
     ws.cell(row=len(topdf) + 3, column=1,
-            value="Ranks use in-sample data only. OOS columns were calculated after the Top-N was frozen and never "
-                  "changed a rank. 'Chance p (adjusted)' compares each score with the best score found on shuffled "
-                  "prices, so it allows for the many candidates tested. Baselines are reported only.")
+            value="The Top-N are the leaders of distinct findings (neighbouring periods of one MA type are grouped; "
+                  "'Group members'). Ranks use in-sample data only. OOS columns were calculated after the Top-N was "
+                  "frozen and never changed a rank. 'Chance p (adjusted)' compares each score with the best score found "
+                  "on shuffled prices, so it allows for the many candidates tested. Baselines are reported only.")
     ws = wb.create_sheet("Rankings")
-    _write_df(ws, df, highlight=lambda row: TOP_FILL if (pd.notna(row["Rank"]) and row["Rank"] <= s.top_n)
+    _write_df(ws, df, highlight=lambda row: TOP_FILL if row["MA"] in leaders
               else (WEAK_FILL if row["IS status"] != "OK" else None))
     ws.auto_filter.ref = f"A1:{get_column_letter(len(df.columns))}{len(df) + 1}"
 
@@ -223,6 +241,10 @@ def write_excel(res, folder: Path, stamp: str, charts: dict) -> Path:
         ("weights used (normalised)", {k: round(v / sum(s.weights.values()) * 100, 2) for k, v in s.weights.items()}),
         ("Forward Return component", "Directed IR - V1 formula kept, PENDING OWNER REVIEW"),
         ("Success baseline", "Score compares with 50% (as V1); drift baseline reported alongside"),
+        ("Interaction strength", "relative: min(V1 reference, median interactions of the same type within +/-20% of the "
+                                 "period)" if s.strength_rule == "relative" else "v1: fixed V1 reference"),
+        ("Zone", f"{s.proximity_pct}% of the MA" if s.zone_mode == "percent" else
+                 f"MA +/- {s.atr_multiple} x ATR({s.atr_period})"),
         ("IS/OOS consistency", "Report only - not part of the affinity score")])
     ws = wb.create_sheet("Data_Quality")
     _kv(ws, [(f"line {i + 1}", ln) for i, ln in enumerate(res.quality.to_text().splitlines())]
@@ -283,10 +305,11 @@ def write_pdf(res, folder: Path, stamp: str, charts: dict, heading: str) -> Path
     st.append(Paragraph("Limitations", h))
     st += [Paragraph("- " + escape(t), small) for t in LIMITATIONS_V2]
     st.append(PageBreak())
-    st.append(Paragraph(f"Frozen Top-{s.top_n} (ranked on in-sample data only)", h))
-    hdr = ["Rank", "MA", "IS aff.", "Chance p", "IS n", "IS succ %", "IS base %", "Edge pts", "OOS outc.",
+    st.append(Paragraph(f"Frozen Top-{s.top_n} distinct findings (ranked on in-sample data only)", h))
+    hdr = ["#", "Rank", "MA", "Group", "IS aff.", "Chance p", "IS n", "IS succ %", "IS base %", "Edge pts", "OOS outc.",
            "OOS succ %", "OOS base %", "Consistency"]
-    data = [hdr] + [[r["rank"], r["ma_label"], _num(r["is_affinity_score"]), _num(r["chance_p"], "{:.4f}"), r["is_n"],
+    data = [hdr] + [[r["finding"], r["rank"], r["ma_label"], r["group_size"], _num(r["is_affinity_score"]),
+                     _num(r["chance_p"], "{:.4f}"), r["is_n"],
                      _num(r["is_overall_sr"]), _num(r["is_baseline_sr"]), _num(r["is_edge_vs_baseline"]),
                      _num(r.get("oos_n_outcomes"), "{:.0f}"), _num(r["oos_overall_sr"]), _num(r["oos_baseline_sr"]),
                      _num(r["is_oos_consistency_score"])] for r in res.frozen_top_results()]
@@ -297,7 +320,8 @@ def write_pdf(res, folder: Path, stamp: str, charts: dict, heading: str) -> Path
                            ("GRID", (0, 0), (-1, -1), 0.3, colors.grey), ("FONTSIZE", (0, 0), (-1, -1), 7),
                            ("ALIGN", (0, 0), (-1, -1), "CENTER")]))
     st += [t, Spacer(1, 0.2 * cm),
-           Paragraph("'-' means not available (missing), not zero. Chance p compares each score with the best score "
+           Paragraph("'-' means not available (missing), not zero. Group = how many neighbouring periods of the same "
+                     "MA type form this finding (members in the Excel Top_N sheet). Chance p compares each score with the best score "
                      "found on shuffled prices. Base % = what price did anyway over the same bars (reported only; the "
                      "score still compares with 50%). Edge = success rate minus baseline.", small)]
     for c in (charts or {}).values():
@@ -330,20 +354,27 @@ def _findings(ctx: RunContext, info, res) -> Path:
               f"only: {di['is_bars']} bars ({di['is_first']} to {di['is_last']}). The out-of-sample check used the "
               f"remaining {di['oos_bars']} bars ({di['oos_first']} to {di['oos_last']}).", "",
               f"Method: {len(res.results)} candidates ({', '.join(s.ma_types)}, periods {s.ma_start}-{s.ma_end}); an "
-              f"interaction is a bar entering the zone within {s.proximity_pct}% of the MA; success is a move in the "
-              f"expected direction after {pk} bars (support: up, resistance: down).", ""]
+              "interaction is a bar entering the zone within " + (f"{s.proximity_pct}% of the MA" if s.zone_mode ==
+                                                                 "percent" else f"{s.atr_multiple} x ATR({s.atr_period}) "
+                                                                                "of the MA") +
+              f"; success is a move in the expected direction after {pk} bars (support: up, resistance: down). "
+              f"Interaction strength rule: {s.strength_rule}. Neighbouring periods grouped within "
+              + (f"{s.group_pct:g}%." if float(s.group_pct) > 0 else "- (grouping off)."), ""]
     top = res.frozen_top_results()
     if not top:
         lines += ["Result", "  No candidate had enough in-sample interactions to be ranked. This means insufficient "
                             "data for these settings, not poor results."]
     else:
-        lines.append(f"Frozen Top-{len(top)} (chosen on in-sample data only, then checked out-of-sample)")
+        lines.append(f"Frozen Top-{len(top)} distinct findings (chosen on in-sample data only, then checked "
+                     "out-of-sample)")
         for r in top:
             oos = ("not evaluated" if r["oos_status"] == "NOT_EVALUATED" else
                    f"out-of-sample {_num(r['oos_overall_sr'])}% success over {int(r['oos_n_outcomes'] or 0)} "
                    f"outcome(s) against a baseline of {_num(r['oos_baseline_sr'])}% (consistency "
                    f"{_num(r['is_oos_consistency_score'])}, {r['is_oos_consistency_status']})")
-            lines.append(f"  {r['rank']}. {r['ma_label']}: affinity {_num(r['is_affinity_score'])}, chance p "
+            members = (f" (group of {r['group_size']}: {r['group_members']})" if r["group_size"] > 1 else "")
+            lines.append(f"  {r['finding']}. {r['ma_label']}{members}, in-sample rank {r['rank']}: affinity "
+                         f"{_num(r['is_affinity_score'])}, chance p "
                          f"{_num(r['chance_p'], '{:.4f}')}; in-sample {_num(r['is_overall_sr'])}% success over "
                          f"{r['is_n_outcomes']} outcome(s) against a baseline of {_num(r['is_baseline_sr'])}% (edge "
                          f"{_num(r['is_edge_vs_baseline'])} pts); {oos}.")
@@ -410,9 +441,10 @@ def execute(ctx: RunContext) -> list[Path]:
 
 SPEC = AnalysisSpec(
     analysis_id="ma_affinity_v2", name="MA Affinity V2 (chance-tested)", version=1,
-    description="MA Affinity as in V1 (same calculations, same in-sample ranking and out-of-sample check), plus a "
-                "chance test that compares the best score with the best scores found on block-shuffled copies of the "
-                "same prices, and a drift baseline next to every success rate. Daily, weekly or monthly registered "
+    description="MA Affinity built on V1 (same MA formulas, interactions, in-sample ranking and out-of-sample "
+                "check), plus a chance test against block-shuffled copies of the same prices, a drift baseline next "
+                "to every success rate, an interaction strength that does not mark long MAs down, neighbouring "
+                "periods grouped into one finding, and an optional ATR zone. Daily, weekly or monthly registered "
                 "datasets; one dataset per run.",
     run_prefix="MAA2",
     requirement=DataRequirement(timeframes=TIMEFRAMES, min_rows=qcfg.MIN_ROWS_REQUIRED, allow_mixed=False),
