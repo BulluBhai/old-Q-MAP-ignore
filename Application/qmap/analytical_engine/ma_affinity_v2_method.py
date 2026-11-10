@@ -691,6 +691,11 @@ def run_ma_affinity_v2(df: pd.DataFrame, s: MAAffinityV2Settings, *, label: str 
                         f"p-value {chance['p_value']:.4f}; block-shuffled prices reached a #1 score at least this high "
                         f"in {int(round(chance['p_value'] * (s.chance_shuffles + 1))) - 1} of {s.chance_shuffles} "
                         "shuffles). Treat the ranking as unproven.")
+    elif chance.get("status") == "inconclusive":
+        warnings.append(f"Chance test INCONCLUSIVE: {chance['invalid_shuffles']} of "
+                        f"{chance['attempted_shuffles']} attempted shuffles were invalid and "
+                        f"{chance['unattempted_shuffles']} requested shuffles were not completed; "
+                        "no empirical p-value or positive chance verdict is available.")
     elif chance["verdict"] == NOT_RUN:
         warnings.append("The chance test was not run (Chance shuffles = 0), so the scores cannot be judged against "
                         "luck.")
