@@ -691,6 +691,7 @@ def run_ma_affinity_v2(df: pd.DataFrame, s: MAAffinityV2Settings, *, label: str 
         row.setdefault("chance_status", chance["status"])
         row.setdefault("chance_verdict", chance["verdict"] if chance["status"] in ("no_candidate", "inconclusive")
                        else NOT_RUN if chance["status"] == "not_run" else "NOT_EVALUATED - NOT IN FROZEN TOP-N")
+        row.setdefault("chance_test_run", bool(chance.get("test_run", False)))
     if chance["verdict"] in (STANDS_OUT, NOT_DISTINGUISHABLE):
         say(f"Chance test: real #1 score {real_top:.2f}; luck-only #1 scores average {chance['null_mean']:.2f}, 95th "
             f"percentile {chance['null_p95']:.2f}; chance p-value {chance['p_value']:.4f} -> {chance['verdict']}.")
