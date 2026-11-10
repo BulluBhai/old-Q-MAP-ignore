@@ -278,8 +278,6 @@ def test_v2_incomplete_null_distribution_is_inconclusive_in_production_outputs(s
     assert chance["valid_shuffles"] == 2 and chance["invalid_shuffles"] == 1
     assert chance["unattempted_shuffles"] == 0 and chance["test_run"] is True
     assert math.isnan(chance["p_value"])
-    assert all(math.isnan(row["chance_p"]) for row in result.metadata_path.parent and
-               [])  # Candidate p-values are checked from the actual output below.
     import csv
     with next(result.run_dir.glob("MA_Affinity_V2_Candidates_*.csv")).open(encoding="utf-8", newline="") as handle:
         candidates_out = list(csv.DictReader(handle))

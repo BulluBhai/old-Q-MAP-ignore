@@ -486,7 +486,10 @@ def chance_summary(real_top: float, null_tops: list, shuffles: int, block: int, 
     if requested == 0:
         return {**base, **stats, "real_top_score": real_top, "p_value": NAN, "percentile": NAN,
                 "verdict": NOT_RUN, "status": "not_run", "test_run": False}
-    real_is_valid = real_top is not None and math.isfinite(float(real_top))
+    try:
+        real_is_valid = real_top is not None and math.isfinite(float(real_top))
+    except (TypeError, ValueError, OverflowError):
+        real_is_valid = False
     if not real_is_valid and attempted == 0:
         return {**base, **stats, "real_top_score": real_top, "p_value": NAN, "percentile": NAN,
                 "verdict": "NO RANKED CANDIDATE - CHANCE TEST SKIPPED", "status": "no_candidate",
@@ -508,7 +511,11 @@ def chance_summary(real_top: float, null_tops: list, shuffles: int, block: int, 
 
 def chance_p_for(score: float, null_tops: list, shuffles: int) -> float:
     """Candidate-adjusted p-value; defined only for a complete finite null distribution."""
-    if shuffles == 0 or score is None or not math.isfinite(float(score)):
+    try:
+        score_is_valid = score is not None and math.isfinite(float(score))
+    except (TypeError, ValueError, OverflowError):
+        score_is_valid = False
+    if shuffles == 0 or not score_is_valid:
         return NAN
     arr = _valid_null_scores(null_tops)
     if len(arr) != shuffles:
