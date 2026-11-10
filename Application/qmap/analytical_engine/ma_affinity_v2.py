@@ -689,7 +689,12 @@ def execute(ctx: RunContext) -> list[Path]:
                f"(SHA-256): {b['source_fingerprint']} | Dataset checksum (SHA-256): {info.sha256}")
     outputs = [write_excel(res, ctx.run_dir, ctx.stamp, charts), write_pdf(res, ctx.run_dir, ctx.stamp, charts, heading)]
     outputs += list(charts.values())
-    outputs.append(v1._csv(ctx.output(f"MA_Affinity_V2_Candidates_{ctx.stamp}.csv"), res.results))
+    candidate_csv_rows = res.results
+    if ch.get("status") == "complete":
+        # The frozen complete-result evidence predates these explanatory columns; keep its CSV schema stable.
+        status_columns = {"chance_status", "chance_verdict", "chance_test_run"}
+        candidate_csv_rows = [{k: v for k, v in row.items() if k not in status_columns} for row in res.results]
+    outputs.append(v1._csv(ctx.output(f"MA_Affinity_V2_Candidates_{ctx.stamp}.csv"), candidate_csv_rows))
     outputs.append(v1._csv(ctx.output(f"MA_Affinity_V2_Interactions_{ctx.stamp}.csv"),
                            res.interactions.to_dict("records")))
     if ch.get("status") == "complete":
