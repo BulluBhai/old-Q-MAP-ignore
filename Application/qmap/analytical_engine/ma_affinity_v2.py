@@ -687,19 +687,27 @@ def execute(ctx: RunContext) -> list[Path]:
     outputs.append(v1._csv(ctx.output(f"MA_Affinity_V2_Candidates_{ctx.stamp}.csv"), res.results))
     outputs.append(v1._csv(ctx.output(f"MA_Affinity_V2_Interactions_{ctx.stamp}.csv"),
                            res.interactions.to_dict("records")))
-    chance_csv_context = {
-        "status": ch.get("status"), "verdict": ch.get("verdict"), "test_run": ch.get("test_run"),
-        "requested_shuffles": ch.get("requested_shuffles"),
-        "attempted_shuffles": ch.get("attempted_shuffles"), "valid_shuffles": ch.get("valid_shuffles"),
-        "invalid_shuffles": ch.get("invalid_shuffles"), "unattempted_shuffles": ch.get("unattempted_shuffles"),
-        "interpretation": _chance_status_text(ch),
-    }
-    chance_csv_rows = [
-        {"shuffle": i + 1, "top_score": sc, "top_candidate": lab, **chance_csv_context}
-        for i, (sc, lab) in enumerate(zip(ch["null_top_scores"], ch.get("null_top_labels", [])))
-    ]
-    if not chance_csv_rows:
-        chance_csv_rows = [{"shuffle": "", "top_score": "", "top_candidate": "", **chance_csv_context}]
+    if ch.get("status") == "complete":
+        # Preserve the committed complete-null CSV schema and evidence bytes.
+        chance_csv_rows = [
+            {"shuffle": i + 1, "top_score": sc, "top_candidate": lab}
+            for i, (sc, lab) in enumerate(zip(ch["null_top_scores"], ch.get("null_top_labels", [])))
+        ]
+    else:
+        # In non-complete states, carry the common status and audit counts on every recorded row.
+        chance_csv_context = {
+            "status": ch.get("status"), "verdict": ch.get("verdict"), "test_run": ch.get("test_run"),
+            "requested_shuffles": ch.get("requested_shuffles"),
+            "attempted_shuffles": ch.get("attempted_shuffles"), "valid_shuffles": ch.get("valid_shuffles"),
+            "invalid_shuffles": ch.get("invalid_shuffles"), "unattempted_shuffles": ch.get("unattempted_shuffles"),
+            "interpretation": _chance_status_text(ch),
+        }
+        chance_csv_rows = [
+            {"shuffle": i + 1, "top_score": sc, "top_candidate": lab, **chance_csv_context}
+            for i, (sc, lab) in enumerate(zip(ch["null_top_scores"], ch.get("null_top_labels", [])))
+        ]
+        if not chance_csv_rows:
+            chance_csv_rows = [{"shuffle": "", "top_score": "", "top_candidate": "", **chance_csv_context}]
     outputs.append(v1._csv(ctx.output(f"MA_Affinity_V2_Chance_Shuffles_{ctx.stamp}.csv"), chance_csv_rows))
     outputs.append(_findings(ctx, info, res))
     ctx.log(f"Frozen Top-{len(res.frozen_top)}: " + (", ".join(f"{t}-{p}" for t, p in res.frozen_top) or "none")
