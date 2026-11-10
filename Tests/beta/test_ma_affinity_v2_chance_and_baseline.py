@@ -117,8 +117,13 @@ def test_block_shuffle_keeps_bar_shapes_endpoints_and_blocks():
     assert np.allclose(np.sort(ret), np.sort(sret))  # the same bar moves, in another order
     assert not np.allclose(ret, sret)
     # blocks of consecutive bars survive: most 15-bar runs of the shuffled moves appear in the original order
-    pos = {round(x, 12): i for i, x in enumerate(ret)}
-    idx = np.array([pos[round(x, 12)] for x in sret])
+    # match each shuffled move to its original bar (nearest value: the rebuilt prices can differ in the last digit
+    # between numpy builds, so an exact-rounding lookup is not portable); every match must be essentially exact
+    order = np.argsort(ret)
+    pos = np.clip(np.searchsorted(ret[order], sret), 1, len(ret) - 1)
+    near = np.where(np.abs(ret[order][pos - 1] - sret) <= np.abs(ret[order][pos] - sret), pos - 1, pos)
+    idx = order[near]
+    assert np.max(np.abs(ret[idx] - sret)) < 1e-9
     assert (np.diff(idx) == 1).mean() > 0.85
     again = V.block_shuffle_ohlc(o, h, l, c, 15, np.random.default_rng(4))
     assert all(np.array_equal(a, b) for a, b in zip(again, (so, sh, sl, sc)))  # same seed -> same series
