@@ -232,6 +232,14 @@ def compare_and_report(ctx, spec, reproduce_of: dict, outputs: list[Path]) -> tu
     same_build = build_now.get("source_fingerprint") == build_then.get("source_fingerprint")
     rows.append(("Code build", build_then.get("source_fingerprint", "(not recorded)"),
                  build_now.get("source_fingerprint"), "same" if same_build else "DIFFERENT"))
+    libs_then, libs_now = build_then.get("libraries"), build_now.get("libraries")
+    same_libs = libs_then == libs_now if libs_then is not None else None
+
+    def _libs(d):
+        return "(not recorded - run made before 10-Nov-26)" if d is None else ", ".join(
+            f"{k} {v}" for k, v in sorted(d.items()))
+    rows.append(("Python and library versions", _libs(libs_then), _libs(libs_now),
+                 "not recorded" if same_libs is None else "same" if same_libs else "DIFFERENT"))
     for d in meta["input_datasets"]:
         rows.append((f"Dataset {d['dataset_id']} ({d.get('instrument')}) checksum", d["sha256"], d["sha256"],
                      "same (checked before the run)"))
@@ -247,7 +255,8 @@ def compare_and_report(ctx, spec, reproduce_of: dict, outputs: list[Path]) -> tu
                      f"{new.name if new else '-'} sha256 {sha_now}", "IDENTICAL" if same else "DIFFERENT"))
     verdict = ("REPRODUCED: every result table is identical to run " + earlier.run_id if identical else
                "NOT REPRODUCED: at least one result table differs from run " + earlier.run_id +
-               ("" if same_build else " (the code build is different, see the first row)"))
+               ("" if same_build else " (the code build is different, see the first row)") +
+               (" (Python or library versions differ, see the second row)" if same_libs is False else ""))
     path = ctx.output(f"Reproducibility_Report_{ctx.stamp}.csv")
     with open(path, "w", newline="", encoding="utf-8") as fh:
         w = csv.writer(fh)
@@ -255,4 +264,5 @@ def compare_and_report(ctx, spec, reproduce_of: dict, outputs: list[Path]) -> tu
         w.writerows(rows)
         w.writerow(("Verdict", "", "", verdict))
     ctx.log(verdict)
-    return path, {"of_run_id": earlier.run_id, "identical": identical, "same_build": same_build, "verdict": verdict}
+    return path, {"of_run_id": earlier.run_id, "identical": identical, "same_build": same_build,
+                  "same_libraries": same_libs, "verdict": verdict}
