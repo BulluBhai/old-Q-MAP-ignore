@@ -13,12 +13,12 @@ check. V2 ADDS:
      keeps its own shape (gap, body, wicks) and the series keeps the same overall move and volatility, but any real
      link between price and a moving average is destroyed. The full IS scan is run on `chance_shuffles` such series
      (fixed `chance_seed`, so a run can be repeated exactly) and the best (#1) score of each is recorded. The real #1
-     score is then compared with these luck-only #1 scores:
-        chance p-value = (1 + number of shuffles whose #1 score >= the real score) / (shuffles + 1)
-        verdict        = "STANDS OUT FROM CHANCE" if chance p <= 0.05, otherwise "NOT DISTINGUISHABLE FROM CHANCE".
-     Each frozen Top-N candidate gets its own chance p-value against the same luck-only #1 scores. Because it is
-     compared with the BEST of all candidates on each shuffled series, it already allows for the many candidates
-     tested (unlike V1's uncorrected binomial p-values, which are still shown for reference).
+     score is compared with these luck-only #1 scores only when every requested shuffle produced a finite maximum
+     score. Any invalid shuffle makes the chance test inconclusive; invalid/no-candidate shuffles never count as low
+     scores. Requested, valid and invalid counts are recorded, and no empirical p-value is reported for an incomplete
+     null distribution. Each frozen Top-N candidate follows the same completeness rule for its candidate-adjusted
+     p-value. The max-statistic comparison allows for the many candidates tested. V1 binomial p-values are retained
+     only as exploratory reference diagnostics.
   2. Drift baseline. For each candidate the success rate is shown next to what the stock did anyway over the same
      bars: the share of all bars (from the first bar with an MA value to the last bar whose primary forward window
      fits) after which price was higher (the Support baseline) or lower (the Resistance baseline), weighted by the
@@ -80,8 +80,12 @@ LIMITATIONS_V2 = (
     "The chance threshold (0.05), the 15-bar blocks, the relative strength rule (+/-20% median), Group % (10), the ATR "
     "option (14 bars, 1.0 x) and MA warm-up are PROVISIONAL beta defaults, documented and configurable; they are not "
     "owner-approved final methodology.",
-    "The binomial p-values in the tables are NOT corrected for the many candidates tested; they are kept for "
-    "reference only. Use the chance p-value to judge a finding.",
+    "The legacy binomial baseline p-values are EXPLORATORY, not definitive inferential evidence. Their usual "
+    "interpretation assumes independent observations; market observations can be dependent and forward windows "
+    "overlap, so nominal p-values may be overconfident. The calculations are retained unchanged; treat these "
+    "values as descriptive diagnostics, not proof of significance.",
+    "The block-shuffle chance test is inconclusive if any requested shuffle has no finite maximum score. Requested, "
+    "valid and invalid counts are recorded, and overall and candidate-adjusted p-values are suppressed.",
     "Success is scored against 50% (as in V1). The drift baseline (what price did anyway over the same bars) is "
     "reported alongside; a success rate close to its baseline mostly reflects the stock's own trend.",
     "Neighbouring MA periods are almost identical. V2 groups them (Group %), so each Top-N place is a distinct "
@@ -451,31 +455,54 @@ def _is_top_score(o, h, l, c, s: MAAffinityV2Settings, candidates: list, is_end:
     return (best if best > -math.inf else NAN), best_label
 
 
+def _valid_null_scores(null_tops: list) -> np.ndarray:
+    """Return finite shuffle maxima; NaN, infinity and non-numeric values are invalid, never low scores."""
+    valid = []
+    for value in null_tops:
+        try:
+            score = float(value)
+        except (TypeError, ValueError):
+            continue
+        if math.isfinite(score):
+            valid.append(score)
+    return np.asarray(valid, dtype=float)
+
+
 def chance_summary(real_top: float, null_tops: list, shuffles: int, block: int, seed: int) -> dict:
-    """Compare the real #1 IS score with the #1 scores of the shuffled series."""
-    base = {"shuffles": shuffles, "block_bars": block, "seed": seed, "null_top_scores": list(null_tops)}
-    if shuffles == 0:
-        return {**base, "real_top_score": real_top, "p_value": NAN, "percentile": NAN, "verdict": NOT_RUN,
-                "null_mean": NAN, "null_p95": NAN, "null_max": NAN}
-    arr = np.array([x for x in null_tops if not np.isnan(x)], dtype=float)
-    if np.isnan(real_top):
-        return {**base, "real_top_score": real_top, "p_value": NAN, "percentile": NAN,
-                "verdict": "NO RANKED CANDIDATE - nothing to test", "null_mean": NAN, "null_p95": NAN, "null_max": NAN}
-    at_least = int((arr >= real_top).sum())  # a shuffle with no ranked candidate counts as below the real score
-    p = (1 + at_least) / (shuffles + 1)
-    return {**base, "real_top_score": real_top, "p_value": round(p, 4),
-            "percentile": round((shuffles - at_least) / shuffles * 100, 1),
-            "verdict": STANDS_OUT if p <= CHANCE_ALPHA else NOT_DISTINGUISHABLE,
-            "null_mean": round(float(arr.mean()), 2) if len(arr) else NAN,
-            "null_p95": round(float(np.percentile(arr, 95)), 2) if len(arr) else NAN,
-            "null_max": round(float(arr.max()), 2) if len(arr) else NAN}
+    """Compare real and shuffled maxima; an incomplete null distribution is inconclusive."""
+    arr = _valid_null_scores(null_tops)
+    requested = int(shuffles)
+    valid = min(len(arr), requested)
+    invalid = max(0, requested - valid)
+    base = {"shuffles": requested, "requested_shuffles": requested, "valid_shuffles": valid,
+            "invalid_shuffles": invalid, "block_bars": block, "seed": seed, "null_top_scores": list(null_tops)}
+    stats = {"null_mean": round(float(arr.mean()), 2) if len(arr) else NAN,
+             "null_p95": round(float(np.percentile(arr, 95)), 2) if len(arr) else NAN,
+             "null_max": round(float(arr.max()), 2) if len(arr) else NAN}
+    if requested == 0:
+        return {**base, **stats, "real_top_score": real_top, "p_value": NAN, "percentile": NAN,
+                "verdict": NOT_RUN, "status": "not_run"}
+    if invalid:
+        return {**base, **stats, "real_top_score": real_top, "p_value": NAN, "percentile": NAN,
+                "verdict": "INCONCLUSIVE - INVALID NULL SHUFFLES", "status": "inconclusive"}
+    if real_top is None or not math.isfinite(float(real_top)):
+        return {**base, **stats, "real_top_score": real_top, "p_value": NAN, "percentile": NAN,
+                "verdict": "NO RANKED CANDIDATE - nothing to test", "status": "no_candidate"}
+    at_least = int((arr >= float(real_top)).sum())
+    p = (1 + at_least) / (requested + 1)
+    return {**base, **stats, "real_top_score": real_top, "p_value": round(p, 4),
+            "percentile": round((requested - at_least) / requested * 100, 1),
+            "verdict": STANDS_OUT if p <= CHANCE_ALPHA else NOT_DISTINGUISHABLE, "status": "complete"}
 
 
 def chance_p_for(score: float, null_tops: list, shuffles: int) -> float:
-    if shuffles == 0 or score is None or np.isnan(score):
+    """Candidate-adjusted p-value; defined only for a complete finite null distribution."""
+    if shuffles == 0 or score is None or not math.isfinite(float(score)):
         return NAN
-    arr = np.array([x for x in null_tops if not np.isnan(x)], dtype=float)
-    return round((1 + int((arr >= score).sum())) / (shuffles + 1), 4)
+    arr = _valid_null_scores(null_tops)
+    if len(arr) != shuffles:
+        return NAN
+    return round((1 + int((arr >= float(score)).sum())) / (shuffles + 1), 4)
 
 
 def _stamp(ts) -> str:
@@ -627,6 +654,8 @@ def run_ma_affinity_v2(df: pd.DataFrame, s: MAAffinityV2Settings, *, label: str 
             top, top_label = _is_top_score(so, sh, sl, sc_, s, candidates, is_end, a)
             null_tops.append(top)
             null_labels.append(top_label)
+            if not math.isfinite(float(top)):
+                say(f"Chance test: shuffle {k + 1} of {s.chance_shuffles} produced no valid maximum score.")
             done += n_c
             if (k + 1) % 20 == 0 or k + 1 == s.chance_shuffles:
                 say(f"  chance test: {k + 1} of {s.chance_shuffles} shuffles done")
@@ -640,6 +669,12 @@ def run_ma_affinity_v2(df: pd.DataFrame, s: MAAffinityV2Settings, *, label: str 
     chance["null_top_labels"] = null_labels
     for key in frozen:
         lookup[key]["chance_p"] = chance_p_for(lookup[key]["is_affinity_score"], null_tops, s.chance_shuffles)
+        lookup[key]["chance_status"] = chance["status"]
+        lookup[key]["chance_verdict"] = (
+            chance["verdict"] if chance["status"] == "inconclusive"
+            else STANDS_OUT if lookup[key]["chance_p"] <= CHANCE_ALPHA
+            else NOT_DISTINGUISHABLE if math.isfinite(lookup[key]["chance_p"]) else NOT_RUN
+        )
     if chance["verdict"] in (STANDS_OUT, NOT_DISTINGUISHABLE):
         say(f"Chance test: real #1 score {real_top:.2f}; luck-only #1 scores average {chance['null_mean']:.2f}, 95th "
             f"percentile {chance['null_p95']:.2f}; chance p-value {chance['p_value']:.4f} -> {chance['verdict']}.")
