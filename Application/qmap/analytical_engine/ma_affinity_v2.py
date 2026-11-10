@@ -394,7 +394,10 @@ def _data_note(ctx: RunContext, info, frame):
 
 
 def execute(ctx: RunContext) -> list[Path]:
+    from qlopb.core.research_engine import RunCancelled as QlopbCancelled
     from qlopb.reports.chart_report import make_charts
+
+    from ..core.errors import RunCancelled
 
     (dataset_id,) = ctx.dataset_ids
     info = get_dataset(ctx.db, dataset_id)
@@ -403,7 +406,12 @@ def execute(ctx: RunContext) -> list[Path]:
     label = f"{v1.dataset_label(info)}, Run {ctx.run_id}"
     ctx.log(f"MA Affinity V2 on {label}: {len(frame)} bars, {fmt_date(frame.index[0].date())} to "
             f"{fmt_date(frame.index[-1].date())}. Method: {METHOD_SOURCE}.")
-    res = run_ma_affinity_v2(frame, s, label=label, log=ctx.log, quality=_data_note(ctx, info, frame))
+    try:
+        res = run_ma_affinity_v2(frame, s, label=label, log=ctx.log, quality=_data_note(ctx, info, frame),
+                                 progress=ctx.progress, cancel=ctx.cancel_requested)
+    except QlopbCancelled:
+        raise RunCancelled("Cancelled by the user.") from None
+    ctx.stop_if_cancelled()  # a request that arrived during the last step stops the run before any report is written
     for w in res.warnings:
         ctx.log(f"WARNING: {w}")
     ch = res.chance
