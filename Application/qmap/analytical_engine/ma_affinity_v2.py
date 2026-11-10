@@ -498,7 +498,7 @@ def executive_interpretation(dataset_label: str, res) -> list[tuple[str, str]]:
                 "(support), lower after touching it from below (resistance)."))
     if ch.get("status") in ("no_candidate", "not_run"):
         chance_text = _chance_status_text(ch)
-    elif ch["verdict"] in (STANDS_OUT, NOT_DISTINGUISHABLE):    elif ch["verdict"] in (STANDS_OUT, NOT_DISTINGUISHABLE):
+    elif ch["verdict"] in (STANDS_OUT, NOT_DISTINGUISHABLE):
         finest = 1 / (ch["shuffles"] + 1)
         chance_text = (f"Verdict: {ch['verdict']}. On {ch['shuffles']} block-shuffled copies of the same in-sample "
                        f"prices (where any real link with a moving average is destroyed) the best score averaged "
