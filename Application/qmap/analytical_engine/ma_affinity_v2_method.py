@@ -470,7 +470,6 @@ def _valid_null_scores(null_tops: list) -> np.ndarray:
 
 def chance_summary(real_top: float, null_tops: list, shuffles: int, block: int, seed: int) -> dict:
     """Compare real and shuffled maxima; an incomplete null distribution is inconclusive."""
-    arr = _valid_null_scores(null_tops)
     requested = int(shuffles)
     attempted = min(len(null_tops), requested)
     sample = list(null_tops)[:requested]
