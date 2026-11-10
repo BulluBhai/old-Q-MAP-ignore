@@ -1,7 +1,7 @@
 # Q-MAP MA Affinity V2 release candidate acceptance tracker (R1 to R10)
 
 Guide: `Q-MAP_MA_Affinity_V2_RC_Acceptance_Guide_10_Nov_26_113344.md` (same folder). Program: commit
-`429c50c32143e35088b3a0a500b8e20a4285b083`. To be filled in by the Project Owner; nothing below has been tested by the
+`e230de3fe15df345ed28b0385b217b1cd47d830e`. To be filled in by the Project Owner; nothing below has been tested by the
 owner yet. Evidence folder: `D:\Q-MAP_V01\RC_Test\Evidence`.
 
 ## 1. Test details
@@ -10,7 +10,7 @@ owner yet. Evidence folder: `D:\Q-MAP_V01\RC_Test\Evidence`.
 |---|---|
 | Date (dd-mmm-yy) | |
 | Python version (IDLE first line) | |
-| Commit to test (filled in; must match the downloaded folder name) | `429c50c32143e35088b3a0a500b8e20a4285b083` |
+| Commit to test (filled in; must match the downloaded folder name) | `e230de3fe15df345ed28b0385b217b1cd47d830e` |
 | Downloaded folder name ends with that commit (yes / no) | |
 | Test folder used (`RC_Test`, or the new name from step 2.1.2) | |
 | R1 case seen (A = remembered folders kept, B = prepared automatically) | |

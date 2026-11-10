@@ -1,6 +1,6 @@
 # Q-MAP MA Affinity V2 release candidate: focused Windows acceptance guide (R1 to R10)
 
-**10-Nov-26 | Program to test: exactly commit `429c50c32143e35088b3a0a500b8e20a4285b083` | Tracker:
+**10-Nov-26 | Program to test: exactly commit `e230de3fe15df345ed28b0385b217b1cd47d830e` | Tracker:
 `Q-MAP_MA_Affinity_V2_RC_Acceptance_Tracker_10_Nov_26_113344.md` (same folder)**
 
 **Test exactly this commit.** It holds the program, the example file and the expected results. Step 2.1.4 downloads
@@ -55,13 +55,13 @@ in the pull request). This is your own check on your laptop. Nothing in it has b
 3. **Do:** double-click `RC_Test`. Inside it make **only these three** new folders: `Q-MAP_APP`, `Beta_Files`,
    `Evidence`. Do **not** make `Q-MAP_DATA` or `Q-MAP_OUTPUT`: Q-MAP makes them itself in R1.
 4. **Do:** in your browser open exactly this address (it downloads the ZIP of that one commit straight away):
-   `https://github.com/BulluBhai/Q-MAP/archive/429c50c32143e35088b3a0a500b8e20a4285b083.zip`
+   `https://github.com/BulluBhai/Q-MAP/archive/e230de3fe15df345ed28b0385b217b1cd47d830e.zip`
 5. **Do:** in **Downloads**, right-click the ZIP → **Extract All...** → **Extract**.
-6. **Do:** open the extracted folder (its name is `Q-MAP-429c50c32143e35088b3a0a500b8e20a4285b083`) until you see
+6. **Do:** open the extracted folder (its name is `Q-MAP-e230de3fe15df345ed28b0385b217b1cd47d830e`) until you see
    `database_manager.py`. Press **Ctrl+A**, **Ctrl+C**, open `D:\Q-MAP_V01\RC_Test\Q-MAP_APP` and press **Ctrl+V**.
 7. **Do:** in `Q-MAP_APP`, open `docs` → `acceptance_testing` → `rc_ma_affinity_v2`. Click `NSE_BETADEMO.csv` once,
    press **Ctrl+C**, open `D:\Q-MAP_V01\RC_Test\Beta_Files` and press **Ctrl+V**.
-8. **Check:** the name of the extracted folder ends with `429c50c32143e35088b3a0a500b8e20a4285b083`. If it does not,
+8. **Check:** the name of the extracted folder ends with `e230de3fe15df345ed28b0385b217b1cd47d830e`. If it does not,
    you downloaded something else: **STOP** and ask for help (section 5).
 
 **You should see** in `RC_Test`: `Beta_Files` (one file, `NSE_BETADEMO.csv`), `Evidence` (empty) and `Q-MAP_APP`.
