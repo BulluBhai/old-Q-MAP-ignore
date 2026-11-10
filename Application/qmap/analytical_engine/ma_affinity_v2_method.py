@@ -472,20 +472,29 @@ def chance_summary(real_top: float, null_tops: list, shuffles: int, block: int, 
     """Compare real and shuffled maxima; an incomplete null distribution is inconclusive."""
     arr = _valid_null_scores(null_tops)
     requested = int(shuffles)
-    valid = min(len(arr), requested)
-    invalid = max(0, requested - valid)
-    base = {"shuffles": requested, "requested_shuffles": requested, "valid_shuffles": valid,
-            "invalid_shuffles": invalid, "block_bars": block, "seed": seed, "null_top_scores": list(null_tops)}
+    attempted = min(len(null_tops), requested)
+    sample = list(null_tops)[:requested]
+    arr = _valid_null_scores(sample)
+    valid = len(arr)
+    invalid = attempted - valid
+    unattempted = requested - attempted
+    base = {"shuffles": requested, "requested_shuffles": requested, "attempted_shuffles": attempted,
+            "valid_shuffles": valid, "invalid_shuffles": invalid, "unattempted_shuffles": unattempted,
+            "block_bars": block, "seed": seed, "null_top_scores": list(null_tops)}
     stats = {"null_mean": round(float(arr.mean()), 2) if len(arr) else NAN,
              "null_p95": round(float(np.percentile(arr, 95)), 2) if len(arr) else NAN,
              "null_max": round(float(arr.max()), 2) if len(arr) else NAN}
     if requested == 0:
         return {**base, **stats, "real_top_score": real_top, "p_value": NAN, "percentile": NAN,
                 "verdict": NOT_RUN, "status": "not_run"}
-    if invalid:
+    real_is_valid = real_top is not None and math.isfinite(float(real_top))
+    if not real_is_valid and attempted == 0:
         return {**base, **stats, "real_top_score": real_top, "p_value": NAN, "percentile": NAN,
-                "verdict": "INCONCLUSIVE - INVALID NULL SHUFFLES", "status": "inconclusive"}
-    if real_top is None or not math.isfinite(float(real_top)):
+                "verdict": "NO RANKED CANDIDATE - nothing to test", "status": "no_candidate"}
+    if invalid or unattempted:
+        return {**base, **stats, "real_top_score": real_top, "p_value": NAN, "percentile": NAN,
+                "verdict": "INCONCLUSIVE - INCOMPLETE NULL DISTRIBUTION", "status": "inconclusive"}
+    if not real_is_valid:
         return {**base, **stats, "real_top_score": real_top, "p_value": NAN, "percentile": NAN,
                 "verdict": "NO RANKED CANDIDATE - nothing to test", "status": "no_candidate"}
     at_least = int((arr >= float(real_top)).sum())
