@@ -263,3 +263,42 @@ def test_v2_run_reproduces_identically(settings, db, dataset):
     first = run_analysis(settings, db, MA_AFFINITY_V2, [dataset], SMALL)
     again = reproduce_run(settings, db, first.run_id)
     assert again.ok and again.reproduction["identical"], again.message
+
+
+@pytest.mark.parametrize("null_tops, valid, invalid, status", [
+    ([1.0, 2.0, 3.0], 3, 0, "complete"),
+    ([1.0, np.nan, 3.0], 2, 1, "inconclusive"),
+    ([np.nan, np.inf, -np.inf], 0, 3, "inconclusive"),
+])
+def test_null_shuffles_must_all_be_valid(null_tops, valid, invalid, status):
+    result = V.chance_summary(2.5, null_tops, 3, 15, 1)
+    assert result["requested_shuffles"] == result["shuffles"] == 3
+    assert result["valid_shuffles"] == valid
+    assert result["invalid_shuffles"] == invalid
+    assert result["status"] == status
+    if status == "complete":
+        assert result["p_value"] == pytest.approx(0.5)
+        assert result["verdict"] == V.NOT_DISTINGUISHABLE
+    else:
+        assert np.isnan(result["p_value"]) and result["verdict"] != V.STANDS_OUT
+
+
+def test_candidate_adjusted_p_is_suppressed_for_incomplete_null():
+    assert np.isnan(V.chance_p_for(95.0, [90.0, np.nan, 80.0], 3))
+    assert V.chance_p_for(95.0, [90.0, 100.0, 80.0], 3) == pytest.approx(0.25)
+
+
+def test_no_candidate_does_not_hide_invalid_null_shuffle():
+    result = V.chance_summary(float("nan"), [np.nan, 1.0], 2, 15, 1)
+    assert result["status"] == "inconclusive"
+    assert result["valid_shuffles"] == 1 and result["invalid_shuffles"] == 1
+    assert np.isnan(result["p_value"]) and result["verdict"] != V.STANDS_OUT
+
+
+def test_null_shuffle_results_remain_deterministic_for_fixed_seed():
+    df = random_walk(n=300, seed=44)
+    settings = V.MAAffinityV2Settings(ma_types=("SMA",), ma_start=5, ma_end=12, min_interactions=2,
+                                      fwd_windows=(2,), chance_shuffles=5, chance_block_bars=15, chance_seed=17)
+    first, second = V.run_ma_affinity_v2(df, settings), V.run_ma_affinity_v2(df, settings)
+    assert first.chance == second.chance
+    assert first.chance["requested_shuffles"] == first.chance["valid_shuffles"] + first.chance["invalid_shuffles"]
