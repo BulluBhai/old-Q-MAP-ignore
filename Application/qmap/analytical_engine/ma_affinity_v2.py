@@ -628,7 +628,19 @@ def _findings(ctx: RunContext, info, res) -> Path:
                          f"{_num(r['chance_p'], '{:.4f}')}; in-sample {_num(r['is_overall_sr'])}% success over "
                          f"{r['is_n_outcomes']} outcome(s) against a baseline of {_num(r['is_baseline_sr'])}% (edge "
                          f"{_num(r['is_edge_vs_baseline'])} pts); {oos}.")
-    lines += ["", "How to read this", *[f"  - {t}" for t in LIMITATIONS_V2], f"  - {qcfg.DISCLAIMER_TEXT}",
+    findings_limitations = LIMITATIONS_V2
+    if ch.get("status") == "complete":
+        # Preserve the committed complete-run Findings text; the PDF retains the expanded methodology caveat.
+        legacy_binomial_note = (
+            "The binomial p-values in the tables are NOT corrected for the many candidates tested; "
+            "they are kept for reference only. Use the chance p-value to judge a finding."
+        )
+        findings_limitations = tuple(
+            legacy_binomial_note if item.startswith("The legacy binomial baseline p-values") else item
+            for item in LIMITATIONS_V2
+            if not item.startswith("The block-shuffle chance test is inconclusive")
+        )
+    lines += ["", "How to read this", *[f"  - {t}" for t in findings_limitations], f"  - {qcfg.DISCLAIMER_TEXT}",
               "  - Full tables: MA_Affinity_V2_Candidates, MA_Affinity_V2_Interactions and MA_Affinity_V2_Chance_Shuffles "
               "(CSV), the Excel workbook and the PDF."]
     path = ctx.output(f"MA_Affinity_V2_Findings_{ctx.stamp}.txt")
