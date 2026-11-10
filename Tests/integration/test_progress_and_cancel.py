@@ -179,3 +179,68 @@ def test_cancelled_run_never_emits_success_completion(settings, db, dataset):
                           progress=lambda done, total, message: events.append((done, total, message)))
     assert result.outcome == "cancelled"
     assert not any(done == total for done, total, _ in events)
+
+
+def test_v2_no_ranked_candidate_skips_chance_test_in_production_outputs(settings, db, dataset):
+    import csv
+    import json
+    import math
+    import openpyxl
+    from qmap.analytical_engine import MA_AFFINITY_V2
+
+    # Force the real engine's candidate-ranking phase to reject every MA candidate.
+    params = {**SMALL, "min_interactions": "9999", "chance_shuffles": "7"}
+    res = run_analysis(settings, db, MA_AFFINITY_V2, [dataset], params)
+    assert res.ok, res.message
+
+    metadata = json.loads(res.metadata_path.read_text(encoding="utf-8"))
+    chance = metadata["analysis_details"]["chance_test"]
+    assert chance["status"] == "no_candidate"
+    assert chance["test_run"] is False
+    assert chance["verdict"] == "NO RANKED CANDIDATE - CHANCE TEST SKIPPED"
+    assert chance["requested_shuffles"] == 7
+    assert chance["attempted_shuffles"] == 0
+    assert chance["valid_shuffles"] == 0
+    assert chance["invalid_shuffles"] == 0
+    assert chance["unattempted_shuffles"] == 7
+    assert math.isnan(chance["p_value"]) if isinstance(chance["p_value"], float) else chance["p_value"] is None
+
+    findings = next(res.run_dir.glob("MA_Affinity_V2_Findings_*.txt")).read_text(encoding="utf-8")
+    assert "Chance test was NOT RUN" in findings
+    assert "7 shuffles were requested, but zero were attempted" in findings
+    assert "VERDICT: NO RANKED CANDIDATE" in findings
+
+    with next(res.run_dir.glob("MA_Affinity_V2_Candidates_*.csv")).open(encoding="utf-8", newline="") as handle:
+        candidate_rows = list(csv.DictReader(handle))
+    assert candidate_rows
+    assert all(row["chance_status"] == "no_candidate" for row in candidate_rows)
+    assert all(row["chance_verdict"] == "NO RANKED CANDIDATE - CHANCE TEST SKIPPED" for row in candidate_rows)
+    assert all(row["chance_test_run"] in ("False", "false", "0") for row in candidate_rows)
+    assert all(row["chance_p"] in ("", "nan", "NaN") for row in candidate_rows)
+
+    with next(res.run_dir.glob("MA_Affinity_V2_Chance_Shuffles_*.csv")).open(encoding="utf-8", newline="") as handle:
+        shuffle_rows = list(csv.DictReader(handle))
+    assert len(shuffle_rows) == 1
+    assert shuffle_rows[0]["status"] == "no_candidate"
+    assert shuffle_rows[0]["test_run"] in ("False", "false", "0")
+    assert shuffle_rows[0]["requested_shuffles"] == "7"
+    assert shuffle_rows[0]["attempted_shuffles"] == "0"
+    assert shuffle_rows[0]["valid_shuffles"] == "0"
+    assert shuffle_rows[0]["invalid_shuffles"] == "0"
+    assert shuffle_rows[0]["unattempted_shuffles"] == "7"
+
+    workbook = openpyxl.load_workbook(next(res.run_dir.glob("MA_Affinity_V2_*.xlsx")), read_only=True)
+    summary = list(workbook["Summary"].values)
+    summary_text = " ".join(str(cell) for row in summary for cell in row if cell is not None)
+    assert "no_candidate" in summary_text and "0 / 0 / 0 / 0 / 7" in summary_text
+    chance_tab = list(workbook["Chance_Test"].values)
+    chance_text = " ".join(str(cell) for row in chance_tab for cell in row if cell is not None)
+    assert "no_candidate" in chance_text and "7" in chance_text and "not run" in chance_text.lower()
+
+    # The PDF must not claim that the requested shuffles actually ran.
+    from pypdf import PdfReader
+    pdf = PdfReader(str(next(res.run_dir.glob("MA_Affinity_V2_Report_*.pdf"))))
+    pdf_text = " ".join(page.extract_text() or "" for page in pdf.pages)
+    assert "no_candidate" in pdf_text
+    assert "7/0/0/0/7" in pdf_text
+    assert "no chance-test shuffles were run" in pdf_text
