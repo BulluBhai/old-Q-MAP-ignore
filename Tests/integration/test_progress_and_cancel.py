@@ -157,14 +157,15 @@ def test_progress_completion_follows_successful_run_finalisation(settings, db, d
 
 def test_finalisation_failure_never_emits_success_completion(settings, db, dataset, monkeypatch):
     import qmap.core.runs as runs
-    actual_finish = runs.finish_run
+    actual_finalise = runs._finish
 
-    def fail_finish(run, status="completed", error=None):
+    def fail_finalise(run, status, error):
         if status == "completed":
-            raise OSError("simulated finalisation failure")
-        return actual_finish(run, status, error)
+            raise OSError("simulated output-hashing/finalisation failure")
+        return actual_finalise(run, status, error)
 
-    monkeypatch.setattr(runs, "finish_run", fail_finish)
+    # Exercise the real finish_run wrapper, including its liveness-lock release in finally.
+    monkeypatch.setattr(runs, "_finish", fail_finalise)
     events = []
     result = run_analysis(settings, db, MA_AFFINITY, [dataset], SMALL,
                           progress=lambda done, total, message: events.append((done, total, message)))
