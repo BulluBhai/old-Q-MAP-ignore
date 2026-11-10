@@ -449,6 +449,10 @@ def executive_interpretation(dataset_label: str, res) -> list[tuple[str, str]]:
                         "p-values are approximate at that resolution.")
     elif ch["verdict"] == NOT_RUN:
         chance_text = "The chance test was not run (Chance shuffles = 0), so the scores cannot be judged against luck."
+    elif ch.get("status") == "inconclusive":
+        chance_text = (f"INCONCLUSIVE: {ch['invalid_shuffles']} of {ch['requested_shuffles']} requested shuffles "
+                       f"did not produce a finite maximum score. No empirical p-value or positive chance verdict "
+                       f"is available. The test must be rerun with a complete null distribution.")
     else:
         chance_text = f"{ch['verdict']}."
     out.append(("5. Comparison with chance", chance_text))
@@ -514,7 +518,8 @@ def _findings(ctx: RunContext, info, res) -> Path:
                      f"averaged {_num(ch['null_mean'])}, its 95th percentile was {_num(ch['null_p95'])} and the "
                      f"highest was {_num(ch['null_max'])}. Chance p-value {_num(ch['p_value'], '{:.4f}')} (the share "
                      "of shuffles that did at least as well, counting the real series).")
-    lines += ["", "Data", f"  {di['n_bars']} bars from {di['first']} to {di['last']}. Ranking used the in-sample part "
+    lines += [f"  Requested/valid/invalid shuffles: {ch['requested_shuffles']}/{ch['valid_shuffles']}/{ch['invalid_shuffles']}",
+              "", "Data", f"  {di['n_bars']} bars from {di['first']} to {di['last']}. Ranking used the in-sample part "
               f"only: {di['is_bars']} bars ({di['is_first']} to {di['is_last']}). The out-of-sample check used the "
               f"remaining {di['oos_bars']} bars ({di['oos_first']} to {di['oos_last']}).", "",
               f"Method: {len(res.results)} candidates ({', '.join(s.ma_types)}, periods {s.ma_start}-{s.ma_end}); an "
@@ -591,7 +596,8 @@ def execute(ctx: RunContext) -> list[Path]:
         "split": {k: res.data_info[k] for k in ("is_bars", "is_first", "is_last", "oos_bars", "oos_first", "oos_last")},
         "frozen_top": [f"{t}-{p}" for t, p in res.frozen_top], "status_counts": res.counts(),
         "engine": METHOD_SOURCE, "research_question": RESEARCH_QUESTION,
-        "chance_test": {k: ch[k] for k in ("verdict", "real_top_score", "p_value", "percentile", "shuffles",
+        "chance_test": {k: ch[k] for k in ("verdict", "status", "real_top_score", "p_value", "percentile",
+                                           "shuffles", "requested_shuffles", "valid_shuffles", "invalid_shuffles",
                                            "block_bars", "seed", "null_mean", "null_p95", "null_max")}})
     res.warnings.extend(f"Q-MAP data: {w}" for w in ctx.readiness_warnings)
     res.warnings.extend(f"Q-MAP dataset validation warning: {w}" for w in info.warnings)
