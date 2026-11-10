@@ -7,8 +7,32 @@ Database Manager prepares the data every analysis depends on. It **never changes
 
 ## Home
 
-- **Your folders**: choose `Q-MAP_DATA` and `Q-MAP_OUTPUT` once. They are checked with the platform's own rules
-  (separate, outside the program folder) and remembered for both Q-MAP applications.
+- **Your folders**: `Q-MAP_DATA` (your prepared data and the Data Registry) and `Q-MAP_OUTPUT` (reports and research
+  results). They are checked with the platform's own rules (separate, outside the program folder) and remembered for
+  both Q-MAP applications: whichever application you open, it uses the same two folders.
+  - **Prepared automatically (added 10-Nov-26).** The first time Q-MAP opens (no folders remembered yet), it uses the
+    two standard folders **next to** the program folder, in the folder that holds `Q-MAP_APP`. A missing folder is
+    created empty; a folder that is already there is used as it is (nothing in it is changed, moved or deleted). The
+    line under the two folders then says `Folders prepared automatically next to the Q-MAP program folder: ...`, and
+    **Both folders are ready and remembered.** appears in green. Example:
+
+    ```text
+    D:\Q-MAP_V01\Beta_Test\
+        Q-MAP_APP\          (the program: database_manager.py, analytical_workbench.py)
+        Q-MAP_DATA\         (prepared automatically)
+        Q-MAP_OUTPUT\       (prepared automatically)
+    ```
+  - **Folders you chose earlier are kept.** If Q-MAP already remembers two folders, it keeps using them and never
+    switches on its own. When they are not the standard folders next to this copy of Q-MAP, the line under the
+    folders says `You are using the folders you chose earlier (remembered). The standard folders for this copy of
+    Q-MAP would be ...`. To switch, click **Use standard folders** and answer **Yes**. Your current folders and
+    everything in them stay exactly as they are; datasets registered there are simply not visible from the new
+    folders. **No** changes nothing.
+  - **Choosing other folders** works as before: **Browse...** next to each folder, or type the path and press Enter;
+    **Create folder** makes a folder you typed.
+  - If the standard folders cannot be prepared (for example, a file called `Q-MAP_DATA` is in the way, or Windows
+    refuses to create a folder), the line under the folders says `The standard folders could not be prepared
+    automatically: ...` in red, with the reason, and nothing is changed. Choose your folders with **Browse...**.
 - **Data at a glance**: the number of instruments, active datasets per timeframe, Permanent and Temporary datasets,
   superseded datasets, datasets you deleted, and preserved original files.
 - The two working areas below, each with an **Open** button.
@@ -57,6 +81,11 @@ material is listed once, grouped, in **Exceptions**, where you can reject, resto
 3. **Options - scan, review and correct.**
    - **SCAN SELECTED FOLDER NOW**; **Stop scan** stops safely: the file being read is finished, the rest is listed as
      "not processed" in the scan report, and everything already done is kept. Scan again to continue.
+   - **Progress / Status** (checked 10-Nov-26): a scan that ran to its end shows **Stage:** `Finished` and a full bar.
+     A stopped scan shows `Stopped (as you asked)` and the bar stays where it stopped; a scan stopped by a problem
+     shows `Stopped by a problem`; a scan that could not read part of the folder shows `Finished (incomplete)` with a
+     red message. The same rule applies on **Data Management** (**Stop after this file**: `Load stopped by you after
+     <n> of <total> file(s)`, in amber) and on **Datasets and Storage**.
    - Select one or more files (Ctrl+click, Shift+click), then:
      - **Reject selected**: the data are kept unchanged but no longer offered to analyses. It is recorded with your
        reason and is **reversible**: **Restore selected** undoes it. Nothing is ever deleted.

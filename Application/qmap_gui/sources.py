@@ -605,7 +605,13 @@ class SourcesFrame(tk.Frame):
     def _finish(self, summary) -> None:
         self.running = False
         self.app.active_job = None
-        self.stage_var.set("Finished")
+        stopped, incomplete = getattr(summary, "stopped", False), getattr(summary, "incomplete", None)
+        # the Stage field and the bar agree with the outcome: only a scan that ran to its end is "Finished" with a
+        # full bar; a stopped, failed or incomplete scan keeps the bar where it stopped
+        self.stage_var.set("Stopped (as you asked)" if stopped else "Stopped by a problem" if summary.error else
+                           "Finished (incomplete)" if incomplete else "Finished")
+        if not (stopped or summary.error or incomplete):
+            self.progress.configure(value=100)
         self.item_var.set("-")
         if summary.report_path:
             self.last_report = summary.report_path

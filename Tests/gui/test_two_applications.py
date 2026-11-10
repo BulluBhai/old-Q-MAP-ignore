@@ -40,10 +40,13 @@ def _select(tree_frame, dataset_id):
 # ---- entry points -----------------------------------------------------------------------------------------------
 @pytest.mark.parametrize("entry", ["database_manager.py", "analytical_workbench.py", "Q-MAP.py"])
 def test_each_entry_point_opens_its_own_window_and_closes_cleanly(gui, world, entry):
-    done = subprocess.run([sys.executable, str(REPO / entry), "--selftest", "--settings-dir", str(world.settings)],
+    done = subprocess.run([sys.executable, str(REPO / entry), "--selftest", "--settings-dir", str(world.settings),
+                           "--standard-parent", str(world.settings.parent)],
                           capture_output=True, text=True, timeout=120, env=dict(os.environ), cwd=world.src)
     assert done.returncode == 0, done.stderr
     assert "SELFTEST OK" in done.stdout
+    # first start (nothing remembered): the standard folders were prepared next to the given program parent folder
+    assert (world.settings.parent / "Q-MAP_DATA").is_dir() and (world.settings.parent / "Q-MAP_OUTPUT").is_dir()
 
 
 def test_both_applications_can_be_open_at_the_same_time_and_share_folders(gui, world):

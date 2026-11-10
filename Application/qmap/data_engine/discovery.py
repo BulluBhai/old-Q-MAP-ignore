@@ -607,8 +607,8 @@ def scan_source(run: Run, source_id: int, *, today: date | None = None, progress
                      sha256=row["sha256"], dataset_ids_json=row["dataset_ids_json"], detail=detail)
             result.counts["missing"] = result.counts.get("missing", 0) + 1
             result.files.append((rel, "missing", "none", "missing", detail))
-        if progress:
-            progress(len(files), len(files), "")
+        if progress:  # a stopped scan reports how far it got, never a full count
+            progress(len(files) - len(result.not_processed) if result.stopped else len(files), len(files), "")
         result.report_path = _write_report(run, src, result)
         result.overlap_report_path = write_overlap_report(run, result.overlaps)
         result.identification_report_path = _write_identification_report(run, db, source_id, result)

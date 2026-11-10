@@ -298,7 +298,13 @@ def run_analysis(settings: Settings, db: Database, spec: AnalysisSpec, dataset_i
             ctx = RunContext(settings, db, run.run_id, run.dir, ids, readiness.params, stamp,
                              lambda m: (run.logger.info(m), say(m)), list(readiness.warnings))
             if progress is not None:
-                ctx.progress = progress
+                # one extra final step (reports, run record): the count reaches its total only when the run is done
+                reported = {"total": 0}
+
+                def analysis_progress(done: int, total: int, text: str) -> None:
+                    reported["total"] = total
+                    progress(min(done, total), total + 1, text)
+                ctx.progress = analysis_progress
             if cancel is not None:
                 ctx.cancel_requested = cancel
             outputs = list(spec.execute(ctx))
@@ -324,6 +330,9 @@ def run_analysis(settings: Settings, db: Database, spec: AnalysisSpec, dataset_i
                 meta["reproduction"] = reproduction
             meta_path = run.dir / f"Run_Metadata_{stamp}.json"
             atomic_write_bytes(meta_path, json.dumps(meta, indent=2, default=str, sort_keys=True).encode("utf-8"))
+            if progress is not None:
+                final = reported["total"] + 1
+                progress(final, final, "Reports and run record written")
     except RunCancelled:
         say(f"Run {run_id} cancelled by the user; it is recorded as cancelled.")
         return AnalysisRunResult("cancelled", f"Cancelled. Run {run_id} stopped before it finished and is recorded as "

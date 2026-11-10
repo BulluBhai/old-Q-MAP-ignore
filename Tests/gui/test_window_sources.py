@@ -50,6 +50,7 @@ def test_add_scan_answer_and_load_from_the_sources_screen(gui, world, tmp_path):
 
     frame.scan_button.invoke()
     gui.wait(lambda: not frame.running)
+    assert frame.stage_var.get() == "Finished" and float(frame.progress["value"]) == 100  # a finished scan: full bar
     files = _files(frame)
     assert files["NSE_ABC.csv"].outcome == "imported"
     assert files["prices.csv"].outcome == "needs_answer"
@@ -236,6 +237,7 @@ def test_stop_scan_stops_safely_after_the_current_file(gui, world, tmp_path, mon
     frame.stop_button.invoke()
     gui.wait(lambda: not frame.running, timeout=30)
     assert "Stopped by you" in frame.final_label.cget("text") and "not processed" in frame.final_label.cget("text")
+    assert frame.stage_var.get() == "Stopped (as you asked)" and float(frame.progress["value"]) < 100
     done = [s for s in frame.file_rows.values() if s.outcome == "imported"]
     assert 0 < len(done) < 8
     app.show("datasets")

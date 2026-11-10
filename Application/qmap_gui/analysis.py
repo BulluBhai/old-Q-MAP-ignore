@@ -410,12 +410,7 @@ class AnalysisFrame(tk.Frame):
             self.app.active_job = None
         self.job = None
         self.progress.stop()
-        if result.ok and str(self.progress.cget("mode")) == "determinate":
-            self.progress.configure(value=self.progress.cget("maximum"))
-        else:
-            self.progress.configure(mode="indeterminate", value=0)
-        self.eta_var.set("-")
-        self.stage_var.set("Cancelled" if result.outcome == "cancelled" else "Finished")
+        self._show_end_state(result.outcome)
         if result.run_id:
             self.run_id_var.set(result.run_id)
         if result.ok and result.run_dir:  # only a COMPLETED run becomes "the last run"; its own recorded folder
@@ -435,6 +430,30 @@ class AnalysisFrame(tk.Frame):
                 self.reproduce_var.set(result.run_id)  # ready to be reproduced later
         self.final_label.configure(text=text, fg=color)
         self._update_state()
+
+    # what the Stage field says when a run ends, by outcome (the bar and the coloured message agree with it)
+    END_STAGES = {"completed": "Finished", "cancelled": "Cancelled", "failed": "Failed", "blocked": "Not started"}
+
+    def _show_end_state(self, outcome: str) -> None:
+        """Completed: the bar is full and the count says so. Cancelled or failed: the bar stays where the run stopped
+        (empty if no count had arrived), so it never looks like a completed run. Blocked: nothing ran, the bar is empty."""
+        determinate = str(self.progress.cget("mode")) == "determinate"
+        if outcome == "completed":
+            if not determinate:  # an analysis that reports no count: the finished run still shows a full bar
+                self.progress.configure(mode="determinate", maximum=1)
+                self.count_var.set("Complete")
+            self.progress.configure(value=self.progress.cget("maximum"))
+        elif outcome in ("cancelled", "failed") and determinate:
+            done = int(float(self.progress.cget("value")))
+            total = int(float(self.progress.cget("maximum")))
+            word = "Cancelled" if outcome == "cancelled" else "Stopped"
+            self.count_var.set(f"{word} at {done:,} of {total:,} steps (not complete)")
+        else:
+            self.progress.configure(mode="determinate", maximum=1, value=0)
+            if outcome in ("cancelled", "failed"):
+                self.count_var.set("Cancelled (not complete)" if outcome == "cancelled" else "Stopped (not complete)")
+        self.eta_var.set("-")
+        self.stage_var.set(self.END_STAGES.get(outcome, "Finished"))
 
     def _tick(self) -> None:
         if getattr(self, "_closing", False):
