@@ -576,9 +576,11 @@ def _findings(ctx: RunContext, info, res) -> Path:
         lines += [head, *textwrap.wrap(text, 110, initial_indent="  ", subsequent_indent="  "), ""]
     lines += ["DETAILED FINDINGS", "",
               "Research question", f"  {RESEARCH_QUESTION}", "",
-              "Chance test", f"  STATUS: {ch.get('status', 'unknown')}",
-              f"  TEST RUN: {'yes' if ch.get('test_run') else 'no'}",
-              f"  VERDICT: {ch['verdict']}"]
+              "Chance test"]
+    if ch.get("status") != "complete":
+        lines += [f"  STATUS: {ch.get('status', 'unknown')}",
+                  f"  TEST RUN: {'yes' if ch.get('test_run') else 'no'}"]
+    lines.append(f"  VERDICT: {ch['verdict']}")
     if ch["verdict"] in (STANDS_OUT, NOT_DISTINGUISHABLE):
         lines.append(f"  The real #1 in-sample score is {_num(ch['real_top_score'])}. On {ch['shuffles']} copies of the "
                      f"in-sample prices shuffled in blocks of {ch['block_bars']} bars (seed {ch['seed']}), the #1 score "
@@ -594,10 +596,11 @@ def _findings(ctx: RunContext, info, res) -> Path:
         lines.append(f"  CHANCE TEST INCONCLUSIVE: {ch['valid_shuffles']} valid, {ch['invalid_shuffles']} invalid, "
                      f"{ch['unattempted_shuffles']} unattempted out of {ch['requested_shuffles']} requested; "
                      "no empirical p-value or positive verdict.")
-    lines += [f"  Requested/attempted/valid/invalid/unattempted shuffles: "
-              f"{ch['requested_shuffles']}/{ch['attempted_shuffles']}/{ch['valid_shuffles']}/"
-              f"{ch['invalid_shuffles']}/{ch['unattempted_shuffles']}",
-              "", "Data", f"  {di['n_bars']} bars from {di['first']} to {di['last']}. Ranking used the in-sample part "
+    if ch.get("status") != "complete":
+        lines.append(f"  Requested/attempted/valid/invalid/unattempted shuffles: "
+                     f"{ch['requested_shuffles']}/{ch['attempted_shuffles']}/{ch['valid_shuffles']}/"
+                     f"{ch['invalid_shuffles']}/{ch['unattempted_shuffles']}")
+    lines += ["", "Data", f"  {di['n_bars']} bars from {di['first']} to {di['last']}. Ranking used the in-sample part "
               f"only: {di['is_bars']} bars ({di['is_first']} to {di['is_last']}). The out-of-sample check used the "
               f"remaining {di['oos_bars']} bars ({di['oos_first']} to {di['oos_last']}).", "",
               f"Method: {len(res.results)} candidates ({', '.join(s.ma_types)}, periods {s.ma_start}-{s.ma_end}); an "
@@ -666,6 +669,13 @@ def execute(ctx: RunContext) -> list[Path]:
     for w in res.warnings:
         ctx.log(f"WARNING: {w}")
     ch = res.chance
+    chance_metadata = {k: ch[k] for k in (
+        "verdict", "real_top_score", "p_value", "percentile", "shuffles", "block_bars", "seed",
+        "null_mean", "null_p95", "null_max")}
+    if ch.get("status") != "complete":
+        chance_metadata.update({k: ch[k] for k in (
+            "status", "test_run", "requested_shuffles", "attempted_shuffles", "valid_shuffles",
+            "invalid_shuffles", "unattempted_shuffles")})
     ctx.details.update({
         "bars_used": {"count": int(len(frame)), "first": frame.index[0].date().isoformat(),
                       "last": frame.index[-1].date().isoformat()},
@@ -674,10 +684,7 @@ def execute(ctx: RunContext) -> list[Path]:
         "split": {k: res.data_info[k] for k in ("is_bars", "is_first", "is_last", "oos_bars", "oos_first", "oos_last")},
         "frozen_top": [f"{t}-{p}" for t, p in res.frozen_top], "status_counts": res.counts(),
         "engine": METHOD_SOURCE, "research_question": RESEARCH_QUESTION,
-        "chance_test": {k: ch[k] for k in ("verdict", "status", "test_run", "real_top_score", "p_value", "percentile",
-                                           "shuffles", "requested_shuffles", "attempted_shuffles", "valid_shuffles",
-                                           "invalid_shuffles", "unattempted_shuffles", "block_bars", "seed",
-                                           "null_mean", "null_p95", "null_max")}})
+        "chance_test": chance_metadata})
     res.warnings.extend(f"Q-MAP data: {w}" for w in ctx.readiness_warnings)
     res.warnings.extend(f"Q-MAP dataset validation warning: {w}" for w in info.warnings)
     charts = make_charts(res, ctx.run_dir, ctx.stamp)
