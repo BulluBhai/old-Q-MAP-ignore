@@ -207,7 +207,9 @@ def test_v2_no_ranked_candidate_skips_chance_test_in_production_outputs(settings
 
     findings = next(res.run_dir.glob("MA_Affinity_V2_Findings_*.txt")).read_text(encoding="utf-8")
     assert "chance test was NOT RUN" in findings
-    assert "7 shuffles were requested, but zero were attempted" in findings
+    normalised_findings = " ".join(findings.split())
+    assert "7 shuffles were requested, but zero were attempted" in normalised_findings
+    assert "CHANCE TEST NOT RUN: no candidate qualified; 7 shuffles requested, 0 attempted, 0 valid, 0 invalid, 7 unattempted." in findings
     assert "VERDICT: NO RANKED CANDIDATE" in findings
     assert "STATUS: no_candidate" in findings
     assert "TEST RUN: no" in findings
@@ -247,3 +249,43 @@ def test_v2_no_ranked_candidate_skips_chance_test_in_production_outputs(settings
     assert "7/0/0/0/7" in pdf_text
     assert "no candidate was available; no chance-test shuffles were run" in pdf_text
     assert "Chance test was NOT RUN" in pdf_text
+
+
+def test_v2_incomplete_null_distribution_is_inconclusive_in_production_outputs(settings, db, dataset, monkeypatch):
+    import json
+    import math
+    from qmap.analytical_engine import MA_AFFINITY_V2
+    from qmap.analytical_engine import ma_affinity_v2_method as method
+
+    original = method._is_top_score
+    calls = {"n": 0}
+
+    def one_invalid_shuffle(open_, high, low, close, settings_, candidates, is_end, start=0):
+        calls["n"] += 1
+        top, label = original(open_, high, low, close, settings_, candidates, is_end, start)
+        return (float("nan"), "") if calls["n"] == 1 else (top, label)
+
+    monkeypatch.setattr(method, "_is_top_score", one_invalid_shuffle)
+    params = {**SMALL, "chance_shuffles": "3"}
+    result = run_analysis(settings, db, MA_AFFINITY_V2, [dataset], params)
+    assert result.ok, result.message
+    metadata = json.loads(result.metadata_path.read_text(encoding="utf-8"))
+    chance = metadata["analysis_details"]["chance_test"]
+    assert calls["n"] == 3
+    assert chance["status"] == "inconclusive"
+    assert chance["verdict"] == "INCONCLUSIVE - INCOMPLETE NULL DISTRIBUTION"
+    assert chance["requested_shuffles"] == chance["attempted_shuffles"] == 3
+    assert chance["valid_shuffles"] == 2 and chance["invalid_shuffles"] == 1
+    assert chance["unattempted_shuffles"] == 0 and chance["test_run"] is True
+    assert math.isnan(chance["p_value"])
+    assert all(math.isnan(row["chance_p"]) for row in result.metadata_path.parent and
+               [])  # Candidate p-values are checked from the actual output below.
+    import csv
+    with next(result.run_dir.glob("MA_Affinity_V2_Candidates_*.csv")).open(encoding="utf-8", newline="") as handle:
+        candidates_out = list(csv.DictReader(handle))
+    assert candidates_out and all(row["chance_status"] == "inconclusive" for row in candidates_out if row["rank"])
+    assert all(row["chance_verdict"] == chance["verdict"] for row in candidates_out if row["rank"])
+    assert all(row["chance_p"] in ("", "nan", "NaN") for row in candidates_out if row["rank"])
+    findings = next(result.run_dir.glob("MA_Affinity_V2_Findings_*.txt")).read_text(encoding="utf-8")
+    assert "CHANCE TEST INCONCLUSIVE:" in findings
+    assert "1 invalid" in findings and "no empirical p-value or positive verdict" in findings

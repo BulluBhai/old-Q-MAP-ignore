@@ -293,7 +293,8 @@ def test_null_shuffles_must_all_be_valid(null_tops, valid, invalid, status):
 
 def test_candidate_adjusted_p_is_suppressed_for_incomplete_null():
     assert np.isnan(V.chance_p_for(95.0, [90.0, np.nan, 80.0], 3))
-    assert V.chance_p_for(95.0, [90.0, 100.0, 80.0], 3) == pytest.approx(0.25)
+    # The approved plus-one formula is (1 + exceedances) / (N + 1): one exceedance gives 2 / 4.
+    assert V.chance_p_for(95.0, [90.0, 100.0, 80.0], 3) == pytest.approx(0.5)
 
 
 def test_no_candidate_does_not_hide_invalid_null_shuffle():
