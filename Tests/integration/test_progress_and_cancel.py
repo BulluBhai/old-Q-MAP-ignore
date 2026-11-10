@@ -209,6 +209,8 @@ def test_v2_no_ranked_candidate_skips_chance_test_in_production_outputs(settings
     assert "Chance test was NOT RUN" in findings
     assert "7 shuffles were requested, but zero were attempted" in findings
     assert "VERDICT: NO RANKED CANDIDATE" in findings
+    assert "STATUS: no_candidate" in findings
+    assert "TEST RUN: no" in findings
 
     with next(res.run_dir.glob("MA_Affinity_V2_Candidates_*.csv")).open(encoding="utf-8", newline="") as handle:
         candidate_rows = list(csv.DictReader(handle))
@@ -243,4 +245,5 @@ def test_v2_no_ranked_candidate_skips_chance_test_in_production_outputs(settings
     pdf_text = " ".join(page.extract_text() or "" for page in pdf.pages)
     assert "no_candidate" in pdf_text
     assert "7/0/0/0/7" in pdf_text
-    assert "no chance-test shuffles were run" in pdf_text
+    assert "no candidate was available; no chance-test shuffles were run" in pdf_text
+    assert "Chance test was NOT RUN" in pdf_text
