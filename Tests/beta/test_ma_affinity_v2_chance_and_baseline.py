@@ -345,3 +345,11 @@ def test_chance_summary_distinguishes_skipped_no_candidate_from_disabled():
     assert skipped["attempted_shuffles"] == skipped["valid_shuffles"] == skipped["invalid_shuffles"] == 0
     assert disabled["status"] == "not_run" and disabled["test_run"] is False
     assert disabled["requested_shuffles"] == 0
+
+
+def test_no_candidate_summary_marks_requested_shuffles_unattempted():
+    result = V.chance_summary(float("nan"), [], 7, 15, 1)
+    assert result["status"] == "no_candidate"
+    assert result["test_run"] is False
+    assert result["requested_shuffles"] == result["unattempted_shuffles"] == 7
+    assert result["attempted_shuffles"] == result["valid_shuffles"] == result["invalid_shuffles"] == 0
