@@ -181,6 +181,42 @@ def _num(v, fmt="{:.2f}"):
     return v1._num(v, fmt)
 
 
+def _chance_status_text(ch: dict) -> str:
+    """One source-derived explanation and count string shared by all V2 report formats."""
+    requested = int(ch.get("requested_shuffles", 0))
+    attempted = int(ch.get("attempted_shuffles", 0))
+    valid = int(ch.get("valid_shuffles", 0))
+    invalid = int(ch.get("invalid_shuffles", 0))
+    unattempted = int(ch.get("unattempted_shuffles", 0))
+    spaced = f"{requested} / {attempted} / {valid} / {invalid} / {unattempted}"
+    compact = f"{requested}/{attempted}/{valid}/{invalid}/{unattempted}"
+    status = ch.get("status", "unknown")
+    if status == "no_candidate":
+        return (
+            "NO RANKED CANDIDATE - CHANCE TEST SKIPPED. Status: no_candidate. "
+            "chance test was NOT RUN. Chance test was NOT RUN because no candidate qualified; "
+            "no candidate was available; no chance-test shuffles were run. "
+            f"{requested} shuffles were requested, but zero were attempted; zero were valid and zero were invalid. "
+            f"The {unattempted} shuffles are unattempted, not failed. "
+            f"Requested/attempted/valid/invalid/unattempted: {spaced} ({compact})."
+        )
+    if status == "inconclusive":
+        return (
+            "INCONCLUSIVE - INCOMPLETE NULL DISTRIBUTION. Status: inconclusive. "
+            f"Requested/attempted/valid/invalid/unattempted: {spaced} ({compact}). "
+            "No empirical p-value or positive chance-test conclusion is available."
+        )
+    if status == "not_run":
+        return (
+            "Chance test was NOT RUN because it was disabled. Status: not_run. "
+            f"Requested/attempted/valid/invalid/unattempted: {spaced} ({compact})."
+        )
+    return (
+        f"Chance test status: {status}; verdict: {ch.get('verdict', 'unknown')}. "
+        f"Requested/attempted/valid/invalid/unattempted: {spaced} ({compact})."
+    )
+
+
 def _chance_chart(res, folder: Path, stamp: str) -> Path | None:
     ch = res.chance
     tops = [float(x) for x in ch.get("null_top_scores", []) if np.isfinite(x)]
@@ -244,6 +280,7 @@ def write_excel(res, folder: Path, stamp: str, charts: dict) -> Path:
     ws.title = "Summary"
     rows = [("MA Affinity V2 research", ""), ("Instrument / dataset", res.label),
             ("Report date", dt.datetime.now().strftime(qcfg.DATETIME_FMT)), ("DISCLAIMER", qcfg.DISCLAIMER_TEXT),
+            ("CHANCE TEST STATUS AND COUNTS", _chance_status_text(ch)),
             ("", ""), ("EXECUTIVE INTERPRETATION", "Plain English; every number is from this run's results")]
     rows += executive_interpretation(res.label.split(", Run ")[0], res)
     rows += [("", ""), ("CHANCE TEST VERDICT", ch["verdict"]),
@@ -288,24 +325,23 @@ def write_excel(res, folder: Path, stamp: str, charts: dict) -> Path:
     ws.auto_filter.ref = f"A1:{get_column_letter(len(df.columns))}{len(df) + 1}"
 
     ws = wb.create_sheet("Chance_Test")
+    chance_summary = [
+        ("Status", ch.get("status", "unknown")),
+        ("Verdict", ch.get("verdict", "unknown")),
+        ("Test run", "yes" if ch.get("test_run") else "no"),
+        ("Requested / attempted / valid / invalid / unattempted",
+         f"{ch['requested_shuffles']} / {ch['attempted_shuffles']} / {ch['valid_shuffles']} / "
+         f"{ch['invalid_shuffles']} / {ch['unattempted_shuffles']}"),
+        ("Interpretation", _chance_status_text(ch)),
+    ]
+    _kv(ws, chance_summary)
     chance_rows = [{"Shuffle": i + 1, "#1 score": sc, "#1 candidate": lab}
                    for i, (sc, lab) in enumerate(zip(ch["null_top_scores"], ch.get("null_top_labels", [])))]
-    if not chance_rows:
-        chance_rows = [{"Status": ch.get("status"), "Test run": ch.get("test_run"),
-                        "Requested shuffles": ch.get("requested_shuffles"),
-                        "Attempted shuffles": ch.get("attempted_shuffles"),
-                        "Valid shuffles": ch.get("valid_shuffles"),
-                        "Invalid shuffles": ch.get("invalid_shuffles"),
-                        "Unattempted shuffles": ch.get("unattempted_shuffles"),
-                        "Explanation": (
-                            "No candidate qualified; chance test was not run."
-                            if ch.get("status") == "no_candidate" else
-                            "Chance test was disabled (Chance shuffles = 0); no shuffles were requested or run."
-                            if ch.get("status") == "not_run" else
-                            "No shuffle results were recorded; chance test is inconclusive."
-                            if ch.get("status") == "inconclusive" else
-                            "No shuffle results recorded.")}]
-    _write_df(ws, pd.DataFrame(chance_rows))
+    if chance_rows:
+        _write_df(ws, pd.DataFrame(chance_rows), start_row=len(chance_summary) + 2)
+    else:
+        _kv(ws, [("Shuffle results", "No null-distribution observations were recorded.")],
+            start=len(chance_summary) + 2)
 
     ws = wb.create_sheet("Interactions")
     if res.interactions.empty:
@@ -368,11 +404,7 @@ def write_pdf(res, folder: Path, stamp: str, charts: dict, heading: str) -> Path
            for head, text in executive_interpretation(res.label.split(", Run ")[0], res)]
     st += [PageBreak(), Paragraph("Chance test", h),
           Paragraph(f"<font color='{verdict_color}'><b>{escape(ch['verdict'])}</b></font>. "
-                    f"Status: {escape(str(ch.get('status', 'unknown')))}; test run: "
-                    f"{'yes' if ch.get('test_run') else 'no'}. Requested/attempted/valid/invalid/unattempted shuffles: "
-                    f"{ch['requested_shuffles']}/{ch['attempted_shuffles']}/{ch['valid_shuffles']}/"
-                    f"{ch['invalid_shuffles']}/{ch['unattempted_shuffles']}. "
-                    f"{'No candidate was available; no chance-test shuffles were run.' if ch.get('status') == 'no_candidate' else ''}"
+                    f"{escape(_chance_status_text(ch))} "
                     f"{'Chance p-value ' + _num(ch.get('p_value'), '{:.4f}') + '.' if np.isfinite(ch.get('p_value', np.nan)) else 'No empirical p-value is available.'}", body),
           Paragraph("Data and sample sizes", h),
           Paragraph(f"{di['n_bars']} bars ({escape(str(di['frequency']))}), {di['first']} to {di['last']}. In-sample: "
@@ -464,15 +496,9 @@ def executive_interpretation(dataset_label: str, res) -> list[tuple[str, str]]:
                 f"probability or a forecast. 'In-sample success %' is the share of qualifying in-sample outcomes in "
                 f"which price moved the expected way after {pk} bars: higher after touching the MA from above "
                 "(support), lower after touching it from below (resistance)."))
-    if ch.get("status") == "no_candidate":
-        chance_text = (f"No candidate qualified for ranking, so the chance test was NOT RUN. "
-                       f"{ch['requested_shuffles']} shuffles were requested, but zero were attempted; "
-                       f"zero were valid and zero were invalid. The {ch['requested_shuffles']} shuffles are "
-                       "unattempted, not failed. The chance-test verdict is CHANCE TEST SKIPPED; no empirical p-value is available.")
-    elif ch.get("status") == "not_run":
-        chance_text = ("The chance test was not run because it was disabled (Chance shuffles = 0); "
-                       "no shuffles were requested or run.")
-    elif ch["verdict"] in (STANDS_OUT, NOT_DISTINGUISHABLE):
+    if ch.get("status") in ("no_candidate", "not_run"):
+        chance_text = _chance_status_text(ch)
+    elif ch["verdict"] in (STANDS_OUT, NOT_DISTINGUISHABLE):    elif ch["verdict"] in (STANDS_OUT, NOT_DISTINGUISHABLE):
         finest = 1 / (ch["shuffles"] + 1)
         chance_text = (f"Verdict: {ch['verdict']}. On {ch['shuffles']} block-shuffled copies of the same in-sample "
                        f"prices (where any real link with a moving average is destroyed) the best score averaged "
@@ -486,9 +512,7 @@ def executive_interpretation(dataset_label: str, res) -> list[tuple[str, str]]:
         chance_text += (f" With {ch['shuffles']} shuffles the smallest possible chance p-value is {finest:.4f}, so "
                         "p-values are approximate at that resolution.")
     elif ch.get("status") == "inconclusive":
-        chance_text = (f"INCONCLUSIVE: {ch['invalid_shuffles']} of {ch['attempted_shuffles']} attempted shuffles "
-                       f"were invalid and {ch['unattempted_shuffles']} of {ch['requested_shuffles']} requested "
-                       f"shuffles were not completed. No empirical p-value or positive chance verdict is available.")
+        chance_text = _chance_status_text(ch)
     else:
         chance_text = f"{ch['verdict']}."
     out.append(("5. Comparison with chance", chance_text))
@@ -663,23 +687,20 @@ def execute(ctx: RunContext) -> list[Path]:
     outputs.append(v1._csv(ctx.output(f"MA_Affinity_V2_Candidates_{ctx.stamp}.csv"), res.results))
     outputs.append(v1._csv(ctx.output(f"MA_Affinity_V2_Interactions_{ctx.stamp}.csv"),
                            res.interactions.to_dict("records")))
-    outputs.append(v1._csv(ctx.output(f"MA_Affinity_V2_Chance_Shuffles_{ctx.stamp}.csv"),
-                           [{"shuffle": i + 1, "top_score": sc, "top_candidate": lab} for i, (sc, lab) in
-                            enumerate(zip(ch["null_top_scores"], ch.get("null_top_labels", [])))]
-                           or [{"shuffle": "", "top_score": "", "top_candidate": "",
-                                "status": ch.get("status"), "test_run": ch.get("test_run"),
-                                "requested_shuffles": ch.get("requested_shuffles"),
-                                "attempted_shuffles": ch.get("attempted_shuffles"),
-                                "valid_shuffles": ch.get("valid_shuffles"),
-                                "invalid_shuffles": ch.get("invalid_shuffles"),
-                                "unattempted_shuffles": ch.get("unattempted_shuffles"),
-                                "explanation": (
-                                    "No candidate qualified; chance test was not run."
-                                    if ch.get("status") == "no_candidate" else
-                                    "Chance test was disabled (Chance shuffles = 0); no shuffles were requested or run."
-                                    if ch.get("status") == "not_run" else
-                                    "Chance test is inconclusive; no complete null distribution is available."
-                                    if ch.get("status") == "inconclusive" else "")}]))
+    chance_csv_context = {
+        "status": ch.get("status"), "verdict": ch.get("verdict"), "test_run": ch.get("test_run"),
+        "requested_shuffles": ch.get("requested_shuffles"),
+        "attempted_shuffles": ch.get("attempted_shuffles"), "valid_shuffles": ch.get("valid_shuffles"),
+        "invalid_shuffles": ch.get("invalid_shuffles"), "unattempted_shuffles": ch.get("unattempted_shuffles"),
+        "interpretation": _chance_status_text(ch),
+    }
+    chance_csv_rows = [
+        {"shuffle": i + 1, "top_score": sc, "top_candidate": lab, **chance_csv_context}
+        for i, (sc, lab) in enumerate(zip(ch["null_top_scores"], ch.get("null_top_labels", [])))
+    ]
+    if not chance_csv_rows:
+        chance_csv_rows = [{"shuffle": "", "top_score": "", "top_candidate": "", **chance_csv_context}]
+    outputs.append(v1._csv(ctx.output(f"MA_Affinity_V2_Chance_Shuffles_{ctx.stamp}.csv"), chance_csv_rows))
     outputs.append(_findings(ctx, info, res))
     ctx.log(f"Frozen Top-{len(res.frozen_top)}: " + (", ".join(f"{t}-{p}" for t, p in res.frozen_top) or "none")
             + f". Chance test: {ch['verdict']}.")

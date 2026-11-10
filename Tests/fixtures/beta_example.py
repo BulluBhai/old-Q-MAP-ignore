@@ -58,7 +58,7 @@ if __name__ == "__main__":
 # Evidence was generated on this exact clean source commit; later corrective commits must not rewrite it.
 FROZEN_V1_BUILD_COMMIT = "6280c7304e50a871fb98db04ee16734319fa7f55"
 RELEASE_RC_BUILD_COMMIT = "301d4b009c421c0d7b9c39c00059977a2af59144"
-RELEASE_RC_SOURCE_FINGERPRINT = "d48ccf71bacdede002ec332bc4c4d0a56c089166bd2507c55e251a6c0d62df4"
+RELEASE_RC_SOURCE_FINGERPRINT = "d48ccf71bacdede002ec332bc4c4d0a56c089166bd2507c55e251a6c0d62df4f"
 FROZEN_V1_OUT = EVIDENCE / "Worked_Example_Output"
 RELEASE_V1_OUT = RELEASE_EVIDENCE / "Worked_Example_Output_V1"
 

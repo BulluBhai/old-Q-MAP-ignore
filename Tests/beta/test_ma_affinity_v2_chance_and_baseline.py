@@ -239,12 +239,37 @@ def test_v2_run_writes_its_tables_and_records_the_chance_test(settings, db, data
         assert sum(n.startswith(prefix) for n in names) == 1, prefix
     meta = json.loads(res.metadata_path.read_text(encoding="utf-8"))
     ch = meta["analysis_details"]["chance_test"]
-    assert ch["shuffles"] == 19 and ch["block_bars"] == 15 and ch["seed"] == 1
-    assert ch["verdict"] in (V.STANDS_OUT, V.NOT_DISTINGUISHABLE)
+    import math
+    assert ch["shuffles"] == ch["requested_shuffles"] == 19 and ch["block_bars"] == 15 and ch["seed"] == 1
+    assert ch["status"] == "inconclusive" and ch["test_run"] is True
+    assert ch["verdict"] == "INCONCLUSIVE - INCOMPLETE NULL DISTRIBUTION"
+    assert ch["attempted_shuffles"] + ch["unattempted_shuffles"] == ch["requested_shuffles"]
+    assert ch["valid_shuffles"] + ch["invalid_shuffles"] == ch["attempted_shuffles"]
+    assert ch["valid_shuffles"] < ch["requested_shuffles"]
+    assert math.isnan(ch["p_value"]) and math.isnan(ch["percentile"])
+
     shuffles = next(res.run_dir.glob("MA_Affinity_V2_Chance_Shuffles_*.csv"))
-    assert len(list(csv.DictReader(shuffles.open(encoding="utf-8")))) == 19
+    shuffle_rows = list(csv.DictReader(shuffles.open(encoding="utf-8")))
+    assert len(shuffle_rows) == ch["attempted_shuffles"] == 19
+    finite_scores = []
+    for row in shuffle_rows:
+        try:
+            score = float(row["top_score"])
+        except (TypeError, ValueError):
+            continue
+        if math.isfinite(score):
+            finite_scores.append(score)
+        assert row["status"] == "inconclusive"
+        assert row["verdict"] == ch["verdict"]
+    assert len(finite_scores) == ch["valid_shuffles"]
+
     cand = list(csv.DictReader(next(res.run_dir.glob("MA_Affinity_V2_Candidates_*.csv")).open(encoding="utf-8")))
-    assert {"chance_p", "is_baseline_sr", "is_edge_vs_baseline", "oos_baseline_sr"} <= set(cand[0])
+    assert {"chance_p", "chance_status", "chance_verdict", "chance_test_run",
+            "is_baseline_sr", "is_edge_vs_baseline", "oos_baseline_sr"} <= set(cand[0])
+    ranked = [row for row in cand if row.get("rank")]
+    assert ranked
+    assert all(row["chance_status"] == "inconclusive" and row["chance_verdict"] == ch["verdict"] for row in ranked)
+    assert all(row["chance_p"] in ("", "nan", "NaN") for row in ranked)
     findings = next(res.run_dir.glob("MA_Affinity_V2_Findings_*.txt")).read_text(encoding="utf-8")
     assert "VERDICT: " + ch["verdict"] in findings and "baseline" in findings
     import openpyxl

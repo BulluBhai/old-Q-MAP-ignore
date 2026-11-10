@@ -237,9 +237,11 @@ def test_v2_no_ranked_candidate_skips_chance_test_in_production_outputs(settings
     summary = list(workbook["Summary"].values)
     summary_text = " ".join(str(cell) for row in summary for cell in row if cell is not None)
     assert "no_candidate" in summary_text and "0 / 0 / 0 / 0 / 7" in summary_text
+    assert "NO RANKED CANDIDATE - CHANCE TEST SKIPPED" in summary_text
     chance_tab = list(workbook["Chance_Test"].values)
     chance_text = " ".join(str(cell) for row in chance_tab for cell in row if cell is not None)
     assert "no_candidate" in chance_text and "7" in chance_text and "not run" in chance_text.lower()
+    assert "NO RANKED CANDIDATE - CHANCE TEST SKIPPED" in chance_text
 
     # The PDF must not claim that the requested shuffles actually ran.
     from pypdf import PdfReader
@@ -287,3 +289,30 @@ def test_v2_incomplete_null_distribution_is_inconclusive_in_production_outputs(s
     findings = next(result.run_dir.glob("MA_Affinity_V2_Findings_*.txt")).read_text(encoding="utf-8")
     assert "CHANCE TEST INCONCLUSIVE:" in findings
     assert "1 invalid" in findings and "no empirical p-value or positive verdict" in findings
+
+    import openpyxl
+    workbook = openpyxl.load_workbook(next(result.run_dir.glob("MA_Affinity_V2_*.xlsx")), read_only=True)
+    summary_text = " ".join(str(cell) for row in workbook["Summary"].values for cell in row if cell is not None)
+    assert "inconclusive" in summary_text.lower()
+    assert "INCONCLUSIVE - INCOMPLETE NULL DISTRIBUTION" in summary_text
+    assert "3 / 3 / 2 / 1 / 0" in summary_text
+    chance_text = " ".join(str(cell) for row in workbook["Chance_Test"].values for cell in row if cell is not None)
+    assert "inconclusive" in chance_text.lower()
+    assert "INCONCLUSIVE - INCOMPLETE NULL DISTRIBUTION" in chance_text
+    assert "3 / 3 / 2 / 1 / 0" in chance_text
+
+    from pypdf import PdfReader
+    pdf = PdfReader(str(next(result.run_dir.glob("MA_Affinity_V2_Report_*.pdf"))))
+    pdf_text = " ".join(page.extract_text() or "" for page in pdf.pages)
+    assert "INCONCLUSIVE - INCOMPLETE NULL DISTRIBUTION" in pdf_text
+    assert "3/3/2/1/0" in pdf_text
+
+    with next(result.run_dir.glob("MA_Affinity_V2_Chance_Shuffles_*.csv")).open(
+            encoding="utf-8", newline="") as handle:
+        shuffle_rows = list(csv.DictReader(handle))
+    assert len(shuffle_rows) == 3
+    assert all(row["status"] == "inconclusive" for row in shuffle_rows)
+    assert all(row["verdict"] == chance["verdict"] for row in shuffle_rows)
+    assert all(row["requested_shuffles"] == "3" and row["valid_shuffles"] == "2"
+               and row["invalid_shuffles"] == "1" and row["unattempted_shuffles"] == "0"
+               for row in shuffle_rows)
