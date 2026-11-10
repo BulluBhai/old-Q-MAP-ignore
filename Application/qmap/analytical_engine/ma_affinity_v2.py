@@ -248,10 +248,15 @@ def write_excel(res, folder: Path, stamp: str, charts: dict) -> Path:
     rows += executive_interpretation(res.label.split(", Run ")[0], res)
     rows += [("", ""), ("CHANCE TEST VERDICT", ch["verdict"]),
             ("  real #1 in-sample score", _num(ch.get("real_top_score"))),
+            ("  chance test status", ch.get("status", "unknown")),
+            ("  shuffle test run", "yes" if ch.get("test_run") else "no"),
+            ("  requested / attempted / valid / invalid / unattempted",
+             f"{ch['requested_shuffles']} / {ch['attempted_shuffles']} / {ch['valid_shuffles']} / "
+             f"{ch['invalid_shuffles']} / {ch['unattempted_shuffles']}"),
             ("  chance p-value", _num(ch.get("p_value"), "{:.4f}")),
             ("  luck-only #1 scores: mean / 95th pct / max",
              f"{_num(ch.get('null_mean'))} / {_num(ch.get('null_p95'))} / {_num(ch.get('null_max'))}"),
-            ("  shuffles / block bars / seed", f"{ch['shuffles']} / {ch['block_bars']} / {ch['seed']}"), ("", ""),
+            ("  block bars / seed", f"{ch['block_bars']} / {ch['seed']}"), ("", ""),
             ("Bars analysed", di["n_bars"]), ("Data period", f"{di['first']} to {di['last']}"),
             ("In-sample", f"{di['is_bars']} bars ({di['is_first']} to {di['is_last']})"),
             ("Out-of-sample", f"{di['oos_bars']} bars ({di['oos_first']} to {di['oos_last']})"),
@@ -346,11 +351,13 @@ def write_pdf(res, folder: Path, stamp: str, charts: dict, heading: str) -> Path
     st += [Paragraph(f"<b>{escape(head)}.</b> {escape(text)}", body)
            for head, text in executive_interpretation(res.label.split(", Run ")[0], res)]
     st += [PageBreak(), Paragraph("Chance test", h),
-          Paragraph(f"<font color='{verdict_color}'><b>{escape(ch['verdict'])}</b></font>. Real #1 in-sample score "
-                    f"{_num(ch.get('real_top_score'))}; chance p-value {_num(ch.get('p_value'), '{:.4f}')}. On "
-                    f"{ch['shuffles']} block-shuffled copies of the in-sample prices ({ch['block_bars']}-bar blocks, "
-                    f"seed {ch['seed']}) the #1 score averaged {_num(ch.get('null_mean'))} (95th percentile "
-                    f"{_num(ch.get('null_p95'))}, highest {_num(ch.get('null_max'))}).", body),
+          Paragraph(f"<font color='{verdict_color}'><b>{escape(ch['verdict'])}</b></font>. "
+                    f"Status: {escape(str(ch.get('status', 'unknown')))}; test run: "
+                    f"{'yes' if ch.get('test_run') else 'no'}. Requested/attempted/valid/invalid/unattempted shuffles: "
+                    f"{ch['requested_shuffles']}/{ch['attempted_shuffles']}/{ch['valid_shuffles']}/"
+                    f"{ch['invalid_shuffles']}/{ch['unattempted_shuffles']}. "
+                    f"{'No candidate was available; no chance-test shuffles were run.' if ch.get('status') == 'no_candidate' else ''}"
+                    f"{'Chance p-value ' + _num(ch.get('p_value'), '{:.4f}') + '.' if np.isfinite(ch.get('p_value', np.nan)) else 'No empirical p-value is available.'}", body),
           Paragraph("Data and sample sizes", h),
           Paragraph(f"{di['n_bars']} bars ({escape(str(di['frequency']))}), {di['first']} to {di['last']}. In-sample: "
                     f"{di['is_bars']} bars ({di['is_first']} to {di['is_last']}). Out-of-sample: {di['oos_bars']} bars "
@@ -365,10 +372,12 @@ def write_pdf(res, folder: Path, stamp: str, charts: dict, heading: str) -> Path
     st += [Paragraph("- " + escape(t), small) for t in LIMITATIONS_V2]
     st.append(PageBreak())
     st.append(Paragraph(f"Frozen Top-{s.top_n} distinct findings (ranked on in-sample data only)", h))
-    hdr = ["#", "Rank", "MA", "Group", "IS aff.", "Chance p", "IS n", "IS succ %", "IS base %", "Edge pts", "OOS outc.",
+    hdr = ["#", "Rank", "MA", "Group", "IS aff.", "Chance p", "Chance status", "Chance verdict",
+           "IS n", "IS succ %", "IS base %", "Edge pts", "OOS outc.",
            "OOS succ %", "OOS base %", "Consistency"]
     data = [hdr] + [[r["finding"], r["rank"], r["ma_label"], r["group_size"], _num(r["is_affinity_score"]),
-                     _num(r["chance_p"], "{:.4f}"), r["is_n"],
+                     _num(r["chance_p"], "{:.4f}"), r.get("chance_status", "NOT_RUN"),
+                     r.get("chance_verdict", "NOT_RUN"), r["is_n"],
                      _num(r["is_overall_sr"]), _num(r["is_baseline_sr"]), _num(r["is_edge_vs_baseline"]),
                      _num(r.get("oos_n_outcomes"), "{:.0f}"), _num(r["oos_overall_sr"]), _num(r["oos_baseline_sr"]),
                      _num(r["is_oos_consistency_score"])] for r in res.frozen_top_results()]
@@ -439,7 +448,14 @@ def executive_interpretation(dataset_label: str, res) -> list[tuple[str, str]]:
                 f"probability or a forecast. 'In-sample success %' is the share of qualifying in-sample outcomes in "
                 f"which price moved the expected way after {pk} bars: higher after touching the MA from above "
                 "(support), lower after touching it from below (resistance)."))
-    if ch["verdict"] in (STANDS_OUT, NOT_DISTINGUISHABLE):
+    if ch.get("status") == "no_candidate":
+        chance_text = (f"No candidate qualified for ranking, so the chance test was NOT RUN. "
+                       f"{ch['requested_shuffles']} shuffles were requested, but zero were attempted; "
+                       f"zero were valid and zero were invalid. The {ch['requested_shuffles']} shuffles are "
+                       "unattempted, not failed. No empirical p-value or chance verdict is available.")
+    elif ch.get("status") == "not_run":
+        chance_text = "The chance test was disabled (Chance shuffles = 0); no shuffles were requested or run."
+    elif ch["verdict"] in (STANDS_OUT, NOT_DISTINGUISHABLE):
         finest = 1 / (ch["shuffles"] + 1)
         chance_text = (f"Verdict: {ch['verdict']}. On {ch['shuffles']} block-shuffled copies of the same in-sample "
                        f"prices (where any real link with a moving average is destroyed) the best score averaged "
@@ -452,8 +468,6 @@ def executive_interpretation(dataset_label: str, res) -> list[tuple[str, str]]:
                         "be treated as unproven.")
         chance_text += (f" With {ch['shuffles']} shuffles the smallest possible chance p-value is {finest:.4f}, so "
                         "p-values are approximate at that resolution.")
-    elif ch["verdict"] == NOT_RUN:
-        chance_text = "The chance test was not run (Chance shuffles = 0), so the scores cannot be judged against luck."
     elif ch.get("status") == "inconclusive":
         chance_text = (f"INCONCLUSIVE: {ch['invalid_shuffles']} of {ch['attempted_shuffles']} attempted shuffles "
                        f"were invalid and {ch['unattempted_shuffles']} of {ch['requested_shuffles']} requested "
@@ -520,7 +534,9 @@ def _findings(ctx: RunContext, info, res) -> Path:
         lines += [head, *textwrap.wrap(text, 110, initial_indent="  ", subsequent_indent="  "), ""]
     lines += ["DETAILED FINDINGS", "",
               "Research question", f"  {RESEARCH_QUESTION}", "",
-              "Chance test", f"  VERDICT: {ch['verdict']}"]
+              "Chance test", f"  STATUS: {ch.get('status', 'unknown')}",
+              f"  TEST RUN: {'yes' if ch.get('test_run') else 'no'}",
+              f"  VERDICT: {ch['verdict']}"]
     if ch["verdict"] in (STANDS_OUT, NOT_DISTINGUISHABLE):
         lines.append(f"  The real #1 in-sample score is {_num(ch['real_top_score'])}. On {ch['shuffles']} copies of the "
                      f"in-sample prices shuffled in blocks of {ch['block_bars']} bars (seed {ch['seed']}), the #1 score "
@@ -607,7 +623,7 @@ def execute(ctx: RunContext) -> list[Path]:
         "split": {k: res.data_info[k] for k in ("is_bars", "is_first", "is_last", "oos_bars", "oos_first", "oos_last")},
         "frozen_top": [f"{t}-{p}" for t, p in res.frozen_top], "status_counts": res.counts(),
         "engine": METHOD_SOURCE, "research_question": RESEARCH_QUESTION,
-        "chance_test": {k: ch[k] for k in ("verdict", "status", "real_top_score", "p_value", "percentile",
+        "chance_test": {k: ch[k] for k in ("verdict", "status", "test_run", "real_top_score", "p_value", "percentile",
                                            "shuffles", "requested_shuffles", "attempted_shuffles", "valid_shuffles",
                                            "invalid_shuffles", "unattempted_shuffles", "block_bars", "seed",
                                            "null_mean", "null_p95", "null_max")}})
@@ -628,7 +644,13 @@ def execute(ctx: RunContext) -> list[Path]:
     outputs.append(v1._csv(ctx.output(f"MA_Affinity_V2_Chance_Shuffles_{ctx.stamp}.csv"),
                            [{"shuffle": i + 1, "top_score": sc, "top_candidate": lab} for i, (sc, lab) in
                             enumerate(zip(ch["null_top_scores"], ch.get("null_top_labels", [])))]
-                           or [{"shuffle": "", "top_score": "", "top_candidate": ""}]))
+                           or [{"shuffle": "", "top_score": "", "top_candidate": "",
+                                "status": ch.get("status"), "test_run": ch.get("test_run"),
+                                "requested_shuffles": ch.get("requested_shuffles"),
+                                "attempted_shuffles": ch.get("attempted_shuffles"),
+                                "valid_shuffles": ch.get("valid_shuffles"),
+                                "invalid_shuffles": ch.get("invalid_shuffles"),
+                                "unattempted_shuffles": ch.get("unattempted_shuffles")}]))
     outputs.append(_findings(ctx, info, res))
     ctx.log(f"Frozen Top-{len(res.frozen_top)}: " + (", ".join(f"{t}-{p}" for t, p in res.frozen_top) or "none")
             + f". Chance test: {ch['verdict']}.")
