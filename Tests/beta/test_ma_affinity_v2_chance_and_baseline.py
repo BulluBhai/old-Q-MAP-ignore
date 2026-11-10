@@ -335,3 +335,13 @@ def test_missing_requested_shuffles_make_null_distribution_inconclusive():
     assert result["unattempted_shuffles"] == 1
     assert np.isnan(result["p_value"])
     assert result["verdict"] != V.STANDS_OUT
+
+
+def test_chance_summary_distinguishes_skipped_no_candidate_from_disabled():
+    skipped = V.chance_summary(float("nan"), [], 7, 15, 1)
+    disabled = V.chance_summary(float("nan"), [], 0, 15, 1)
+    assert skipped["status"] == "no_candidate" and skipped["test_run"] is False
+    assert skipped["requested_shuffles"] == skipped["unattempted_shuffles"] == 7
+    assert skipped["attempted_shuffles"] == skipped["valid_shuffles"] == skipped["invalid_shuffles"] == 0
+    assert disabled["status"] == "not_run" and disabled["test_run"] is False
+    assert disabled["requested_shuffles"] == 0
