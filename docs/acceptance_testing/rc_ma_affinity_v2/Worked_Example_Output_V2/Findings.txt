@@ -1,0 +1,89 @@
+MA Affinity V2 findings - NSE:BETADEMO Daily (dataset 2) - Run MAA2_20261110_113047
+
+EXECUTIVE INTERPRETATION (plain English; every number below is from this run's calculated results)
+
+1. Question investigated
+  For this instrument, which moving averages (type and period) has price historically interacted with most
+  reliably - coming within the proximity zone and then moving in the expected direction over the following
+  bars - and do the leaders chosen on the earlier (in-sample) part of the history keep that behaviour on the
+  later (out-of-sample) part? And is the best result stronger than the best result that chance alone produces
+  on the same prices? Instrument: NSE:BETADEMO Daily (dataset 2).
+
+2. Data and period
+  1,500 bars from 01-Jan-19 to 30-Sep-24 (bar size: Daily (Q-MAP registered dataset; not re-aggregated)). The
+  ranking used only the first 1050 bars (01-Jan-19 to 09-Jan-23, in-sample); the later 450 bars (10-Jan-23 to
+  30-Sep-24, out-of-sample) were kept aside to check the ranking afterwards.
+
+3. What the analysis found
+  Of 482 moving averages tested (480 with enough interactions to be ranked), the highest in-sample score was
+  EMA-37 with an affinity score of 66.13 out of 100: price came near it 44 time(s) in-sample and moved the
+  expected way 5 bars later in 63.64% of 44 usable outcome(s). The other Top-5 findings: EMA-248, SMA-38,
+  SMA-49, EMA-21.
+
+4. What the scores and percentages mean
+  The affinity score (0-100) combines four parts with fixed weights: how often price interacted with the MA,
+  how often it then moved the expected way, how large that move was relative to its variability, and how
+  steady the success rate was over time. It is a ranking score, not a probability or a forecast. 'In-sample
+  success %' is the share of qualifying in-sample outcomes in which price moved the expected way after 5 bars:
+  higher after touching the MA from above (support), lower after touching it from below (resistance).
+
+5. Comparison with chance
+  Verdict: NOT DISTINGUISHABLE FROM CHANCE. On 200 block-shuffled copies of the same in-sample prices (where
+  any real link with a moving average is destroyed) the best score averaged 72.59 and reached 87.36 at most;
+  the real best score was 66.13 (chance p-value 0.8657). Luck alone often produced a best score this high, so
+  the ranking may be chance and should be treated as unproven. With 200 shuffles the smallest possible chance
+  p-value is 0.0050, so p-values are approximate at that resolution.
+
+6. Comparison with the market's own movement (drift baseline)
+  Over the same in-sample bars, price was higher or lower 5 bars later anyway in 51.36% of cases (weighted to
+  EMA-37's own support and resistance outcomes). Its 63.64% success is therefore 12.27 percentage points above
+  that baseline. Out-of-sample its success rate was 68.00% over 25 outcome(s), against a baseline of 54.50%
+  (edge 13.50 points). The baseline is reported only; the score still compares with 50%, as in V1.
+
+7. Main limitations
+  The chance test uses one price history and one shuffle model (blocks of 15 bars), so it does not prove that
+  a result will persist; the out-of-sample check rests on 25 outcome(s); the chance threshold 0.05, the 15-bar
+  blocks, the strength rule, Group % and the ATR option are provisional beta defaults, not owner-approved
+  methodology; Directed IR and the score weights are pending owner review. The full list is under 'How to read
+  this' in the findings file and in the reports.
+
+8. What to investigate next
+  Do not rely on this ranking; try a longer history, another timeframe or other instruments; look at the
+  detailed tables (Excel Top_N and Rankings sheets, CSV files) for the evidence behind each number.
+
+DETAILED FINDINGS
+
+Research question
+  For this instrument, which moving averages (type and period) has price historically interacted with most reliably - coming within the proximity zone and then moving in the expected direction over the following bars - and do the leaders chosen on the earlier (in-sample) part of the history keep that behaviour on the later (out-of-sample) part? And is the best result stronger than the best result that chance alone produces on the same prices?
+
+Chance test
+  VERDICT: NOT DISTINGUISHABLE FROM CHANCE
+  The real #1 in-sample score is 66.13. On 200 copies of the in-sample prices shuffled in blocks of 15 bars (seed 1), the #1 score averaged 72.59, its 95th percentile was 83.02 and the highest was 87.36. Chance p-value 0.8657 (the share of shuffles that did at least as well, counting the real series).
+
+Data
+  1500 bars from 01-Jan-19 to 30-Sep-24. Ranking used the in-sample part only: 1050 bars (01-Jan-19 to 09-Jan-23). The out-of-sample check used the remaining 450 bars (10-Jan-23 to 30-Sep-24).
+
+Method: 482 candidates (SMA, EMA, periods 10-250); an interaction is a bar entering the zone within 3.0% of the MA; success is a move in the expected direction after 5 bars (support: up, resistance: down). Interaction strength rule: relative. Neighbouring periods grouped within 10%.
+
+Frozen Top-5 distinct findings (chosen on in-sample data only, then checked out-of-sample)
+  1. EMA-37 (group of 9: EMA-37, EMA-34, EMA-33, EMA-36, EMA-35, EMA-38, EMA-39, EMA-41, EMA-40), in-sample rank 1: affinity 66.13, chance p 0.8657; in-sample 63.64% success over 44 outcome(s) against a baseline of 51.36% (edge 12.27 pts); out-of-sample 68.00% success over 25 outcome(s) against a baseline of 54.50% (consistency 91.28, OK).
+  2. EMA-248 (group of 28: EMA-248, EMA-234, EMA-250, EMA-235, EMA-232, EMA-233, EMA-236, EMA-249, EMA-246, EMA-245, EMA-244, EMA-239, EMA-240, EMA-237, EMA-238, EMA-225, EMA-229, EMA-231, EMA-247, EMA-230, EMA-228, EMA-226, EMA-227, EMA-223, EMA-224, EMA-242, EMA-243, EMA-241), in-sample rank 3: affinity 65.91, chance p 0.8657; in-sample 68.42% success over 19 outcome(s) against a baseline of 51.98% (edge 16.44 pts); out-of-sample 50.00% success over 4 outcome(s) against a baseline of 60.22% (consistency -, INSUFFICIENT_OOS_EVIDENCE).
+  3. SMA-38 (group of 9: SMA-38, SMA-39, SMA-34, SMA-40, SMA-41, SMA-42, SMA-37, SMA-35, SMA-36), in-sample rank 4: affinity 65.24, chance p 0.9005; in-sample 61.70% success over 47 outcome(s) against a baseline of 51.67% (edge 10.03 pts); out-of-sample 57.14% success over 21 outcome(s) against a baseline of 53.41% (consistency 90.88, OK).
+  4. SMA-49 (group of 11: SMA-49, SMA-52, SMA-50, SMA-53, SMA-51, SMA-48, SMA-45, SMA-47, SMA-54, SMA-46, SMA-44), in-sample rank 5: affinity 65.10, chance p 0.9005; in-sample 66.67% success over 48 outcome(s) against a baseline of 51.47% (edge 15.20 pts); out-of-sample 46.67% success over 15 outcome(s) against a baseline of 53.41% (consistency 60.00, OK).
+  5. EMA-21 (group of 7: EMA-21, EMA-19, EMA-18, EMA-20, EMA-22, EMA-24, EMA-23), in-sample rank 9: affinity 64.81, chance p 0.9055; in-sample 60.98% success over 41 outcome(s) against a baseline of 51.25% (edge 9.72 pts); out-of-sample 65.22% success over 23 outcome(s) against a baseline of 54.89% (consistency 91.52, OK).
+
+How to read this
+  - A historical rank is a description of the past, not evidence that a moving average will work in future.
+  - The chance test compares the real #1 score with the #1 scores found on block-shuffled copies of the same in-sample prices. It allows for the many candidates tested, but it is still a test on one history: a result that stands out from chance on one instrument should be confirmed on others before it is relied on.
+  - The chance result is conditional on the shuffle model: blocks of bars keep each bar's shape, the overall move and short-term patterns within a block, but not longer trends or volatility regimes. Standing out from this simulated chance is not proof of a profitable or persistent trading edge.
+  - With N shuffles the smallest possible chance p-value is 1/(N+1) (0.0050 with 200), so chance p-values are approximate at that resolution; use more shuffles (for example 1000) for a finer value.
+  - The chance threshold (0.05), the 15-bar blocks, the relative strength rule (+/-20% median), Group % (10), the ATR option (14 bars, 1.0 x) and MA warm-up are PROVISIONAL beta defaults, documented and configurable; they are not owner-approved final methodology.
+  - The binomial p-values in the tables are NOT corrected for the many candidates tested; they are kept for reference only. Use the chance p-value to judge a finding.
+  - Success is scored against 50% (as in V1). The drift baseline (what price did anyway over the same bars) is reported alongside; a success rate close to its baseline mostly reflects the stock's own trend.
+  - Neighbouring MA periods are almost identical. V2 groups them (Group %), so each Top-N place is a distinct finding; MA types are not grouped with each other, so an EMA and an SMA of similar period can both appear.
+  - Forward windows longer than the primary window overlap each other, so those statistics are not independent observations.
+  - Forward Return (Directed IR) methodology is PENDING OWNER REVIEW. The V1 formula is kept unchanged.
+  - The official affinity weight scheme is still undecided. The four V1 weights are kept in their original proportions and normalised.
+  - Out-of-sample samples can be small. Where the OOS sample is below the minimum, consistency is reported as insufficient evidence.
+  - These results describe historical data only. They do not predict or guarantee future price behaviour or future performance of any reference. This is a research tool, not a trading signal or recommendation.
+  - Full tables: MA_Affinity_V2_Candidates, MA_Affinity_V2_Interactions and MA_Affinity_V2_Chance_Shuffles (CSV), the Excel workbook and the PDF.

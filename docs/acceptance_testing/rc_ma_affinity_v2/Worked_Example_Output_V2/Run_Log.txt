@@ -1,0 +1,24 @@
+2026-11-10T11:30:47 INFO    [MAA2_20261110_113047] qmap: Run MAA2_20261110_113047 started (module MAA2, area Research_Reports)
+2026-11-10T11:30:47 INFO    [MAA2_20261110_113047] qmap: MA Affinity V2 on NSE:BETADEMO Daily (dataset 2), Run MAA2_20261110_113047: 1500 bars, 01-Jan-19 to 30-Sep-24. Method: MA Affinity V2 (Q-MAP beta, provisional defaults, 10-Nov-26): QLOPB MA Affinity Scanner V2 calculations, unchanged (MA Affinity Scanner V2, BulluBhai/QLOPB commit 6cbadc7 (safeguards S-1..S-3); calculations unchanged), plus a block-shuffle chance test and a drift baseline.
+2026-11-10T11:30:47 INFO    [MAA2_20261110_113047] qmap: Data: 1500 bars, 01-Jan-19 to 30-Sep-24. IS 1050 bars (01-Jan-19 to 09-Jan-23), OOS 450 bars.
+2026-11-10T11:30:47 INFO    [MAA2_20261110_113047] qmap: Candidates: 482 (SMA, EMA, periods 10-250). Primary forward window 5 bars. Chance test: 200 shuffles of 15-bar blocks (seed 1). Zone: 3.0% of the MA. Strength rule: relative. Grouping: 10.0%.
+2026-11-10T11:30:47 INFO    [MAA2_20261110_113047] qmap: Phase 1/4: in-sample scoring of all candidates...
+2026-11-10T11:30:48 INFO    [MAA2_20261110_113047] qmap: Phase 2/4: ranking on in-sample scores only and freezing the Top-N...
+2026-11-10T11:30:48 INFO    [MAA2_20261110_113047] qmap: 480 of 482 candidates have enough in-sample interactions (min 10); 39 distinct finding(s) after grouping. Frozen Top-5: EMA-37, EMA-248, SMA-38, SMA-49, EMA-21
+2026-11-10T11:30:48 INFO    [MAA2_20261110_113047] qmap: Phase 3/4: chance test - 200 block-shuffled copies of the in-sample prices...
+2026-11-10T11:30:55 INFO    [MAA2_20261110_113047] qmap:   chance test: 20 of 200 shuffles done
+2026-11-10T11:31:02 INFO    [MAA2_20261110_113047] qmap:   chance test: 40 of 200 shuffles done
+2026-11-10T11:31:08 INFO    [MAA2_20261110_113047] qmap:   chance test: 60 of 200 shuffles done
+2026-11-10T11:31:14 INFO    [MAA2_20261110_113047] qmap:   chance test: 80 of 200 shuffles done
+2026-11-10T11:31:21 INFO    [MAA2_20261110_113047] qmap:   chance test: 100 of 200 shuffles done
+2026-11-10T11:31:30 INFO    [MAA2_20261110_113047] qmap:   chance test: 120 of 200 shuffles done
+2026-11-10T11:31:37 INFO    [MAA2_20261110_113047] qmap:   chance test: 140 of 200 shuffles done
+2026-11-10T11:31:44 INFO    [MAA2_20261110_113047] qmap:   chance test: 160 of 200 shuffles done
+2026-11-10T11:31:51 INFO    [MAA2_20261110_113047] qmap:   chance test: 180 of 200 shuffles done
+2026-11-10T11:31:58 INFO    [MAA2_20261110_113047] qmap:   chance test: 200 of 200 shuffles done
+2026-11-10T11:31:58 INFO    [MAA2_20261110_113047] qmap: Chance test: real #1 score 66.13; luck-only #1 scores average 72.59, 95th percentile 83.02; chance p-value 0.8657 -> NOT DISTINGUISHABLE FROM CHANCE.
+2026-11-10T11:31:58 INFO    [MAA2_20261110_113047] qmap: Phase 4/4: out-of-sample validation of 5 candidate(s) (scope: top_n). OOS never changes ranks.
+2026-11-10T11:31:58 INFO    [MAA2_20261110_113047] qmap: Research finished in 71.0s. 12649 interactions recorded.
+2026-11-10T11:31:58 INFO    [MAA2_20261110_113047] qmap: WARNING: Chance test: the #1 score (66.13) is NOT distinguishable from chance (chance p-value 0.8657; block-shuffled prices reached a #1 score at least this high in 173 of 200 shuffles). Treat the ranking as unproven.
+2026-11-10T11:32:04 INFO    [MAA2_20261110_113047] qmap: Frozen Top-5: EMA-37, EMA-248, SMA-38, SMA-49, EMA-21. Chance test: NOT DISTINGUISHABLE FROM CHANCE.
+2026-11-10T11:32:04 INFO    [MAA2_20261110_113047] qmap: Run MAA2_20261110_113047 finished with status completed
