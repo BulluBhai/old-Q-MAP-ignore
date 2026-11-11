@@ -78,7 +78,35 @@ def test_a_folder_that_cannot_be_created_is_explained(tmp_path, monkeypatch):
     monkeypatch.setattr(Path, "mkdir", refuse)
     res = prepare_standard_folders(tmp_path, code)
     assert not res.ok and "could not create the folder" in res.problem and "Access is denied" in res.problem
+    assert "safely removed" in res.problem
+    assert not (tmp_path / "Q-MAP_DATA").exists() and not (tmp_path / "Q-MAP_OUTPUT").exists()
 
 
 def test_the_standard_paths(tmp_path):
     assert standard_folders(tmp_path) == (tmp_path.resolve() / "Q-MAP_DATA", tmp_path.resolve() / "Q-MAP_OUTPUT")
+
+
+
+def test_failed_rollback_leaves_nonempty_new_folder_and_reports_partial_result(tmp_path, monkeypatch):
+    from pathlib import Path
+
+    code = tmp_path / "Q-MAP_APP"
+    code.mkdir()
+    data = tmp_path / "Q-MAP_DATA"
+    real = Path.mkdir
+
+    def fail_second_folder(self, *a, **k):
+        if self.name == "Q-MAP_OUTPUT":
+            # Simulate another process/user placing a file in the new folder before rollback.
+            (data / "keep.txt").write_text("keep this file")
+            raise PermissionError("Access is denied")
+        return real(self, *a, **k)
+
+    monkeypatch.setattr(Path, "mkdir", fail_second_folder)
+    res = prepare_standard_folders(tmp_path, code)
+
+    assert not res.ok
+    assert "could not be safely removed" in res.problem and "left in place" in res.problem
+    assert res.created == ["Q-MAP_DATA"]
+    assert (data / "keep.txt").read_text() == "keep this file"
+    assert not (tmp_path / "Q-MAP_OUTPUT").exists()
