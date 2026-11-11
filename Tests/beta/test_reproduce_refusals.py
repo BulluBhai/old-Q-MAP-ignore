@@ -145,13 +145,15 @@ def test_a_damaged_or_incomplete_record_is_refused_and_nothing_is_run(settings, 
     damage, needle = META_CASES[case]
     damage(earlier)
     before = _snapshot(settings, db, earlier)
-    _refused(settings, db, earlier.run_id, needle, before, earlier)
+    hash_checked = case not in {"unreadable (a folder)", "two metadata files", "no metadata file"}
+    expected = "does not match the SHA-256 checksum recorded" if hash_checked else needle
+    _refused(settings, db, earlier.run_id, expected, before, earlier)
 
 
 @pytest.mark.parametrize("case, sql, args, needle", [
     ("registry checksum of a result table invalid",
      "UPDATE run_outputs SET sha256 = 'x' WHERE run_id = ? AND relative_path LIKE ?", ("%MA_Affinity_Candidates_%",),
-     "has no valid checksum"),
+     "does not agree with its run manifest"),
     ("run folder recorded outside Q-MAP_OUTPUT", "UPDATE runs SET output_path = ? WHERE run_id = ?",
      ("../../outside",), "is not inside the Q-MAP_OUTPUT folder"),
     ("run not completed", "UPDATE runs SET status = 'failed' WHERE run_id = ?", (), "did not complete"),
@@ -204,3 +206,28 @@ def test_the_workbench_job_logs_the_traceback_of_a_defect(settings, db, earlier,
         result = ReproduceJob(settings, earlier.run_id).run()
     assert result.outcome == "failed" and result.message == "Unexpected problem (TypeError): a deliberate defect"
     assert any(r.exc_info and "Reproduction of" in r.getMessage() for r in caplog.records)
+
+
+@pytest.mark.parametrize("edit", [
+    lambda m: m.__setitem__("analysis_name", "tampered but valid JSON"),
+    lambda m: m["parameters"].__setitem__("ma_end", m["parameters"]["ma_end"] + 1),
+    lambda m: m["input_datasets"][0].__setitem__("dataset_id", m["input_datasets"][0]["dataset_id"] + 1000),
+])
+def test_valid_json_metadata_tampering_is_refused_before_a_new_run(settings, db, earlier, edit):
+    # The JSON remains readable and structurally plausible. Its original registered SHA-256 must still protect it.
+    metadata = json.loads(earlier.metadata_path.read_text(encoding="utf-8"))
+    edit(metadata)
+    earlier.metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
+    before = _snapshot(settings, db, earlier)
+    _refused(settings, db, earlier.run_id, "does not match the SHA-256 checksum recorded", before, earlier)
+
+
+def test_changed_registry_parameters_are_refused_before_a_new_run(settings, db, earlier):
+    row = db.one("SELECT params_json FROM runs WHERE run_id = ?", (earlier.run_id,))
+    params = json.loads(row["params_json"])
+    params["parameters"]["ma_end"] += 1
+    with db.transaction() as conn:
+        conn.execute("UPDATE runs SET params_json = ? WHERE run_id = ?",
+                     (json.dumps(params, sort_keys=True), earlier.run_id))
+    before = _snapshot(settings, db, earlier)
+    _refused(settings, db, earlier.run_id, "registry parameters", before, earlier)
