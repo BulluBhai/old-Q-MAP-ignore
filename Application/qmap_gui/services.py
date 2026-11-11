@@ -120,6 +120,99 @@ def create_folder(text: str, label: str, code_root: str | Path, other: str = "")
     return path
 
 
+STANDARD_FOLDER_NAMES = ("Q-MAP_DATA", "Q-MAP_OUTPUT")
+
+
+@dataclass
+class StandardFolders:
+    """The standard Q-MAP_DATA and Q-MAP_OUTPUT folders next to the program folder, and what preparing them did."""
+
+    data: Path
+    output: Path
+    created: list[str] = field(default_factory=list)  # names of the folders made just now (they were missing)
+    existing: list[str] = field(default_factory=list)  # names of the folders that were already there (used as is)
+    problem: str = ""  # plain-English explanation when preparation cannot be completed
+
+    @property
+    def ok(self) -> bool:
+        return not self.problem
+
+    def describe(self) -> str:
+        parts = []
+        if self.created:
+            parts.append("created " + " and ".join(self.created))
+        if self.existing:
+            parts.append("found " + " and ".join(self.existing) + " already there (used as they are; nothing in them "
+                         "was changed)")
+        return "; ".join(parts)
+
+
+def standard_folders(parent: str | Path) -> tuple[Path, Path]:
+    """Where the standard folders belong: side by side in the folder that holds the Q-MAP program folder."""
+    base = Path(parent).expanduser().resolve()
+    return base / STANDARD_FOLDER_NAMES[0], base / STANDARD_FOLDER_NAMES[1]
+
+
+def prepare_standard_folders(parent: str | Path, code_root: str | Path) -> StandardFolders:
+    """Prepare the two standard folders without changing any pre-existing folder or user data.
+
+    If a later creation fails, only a newly created empty folder from this attempt may be rolled back.
+    """
+    data, output = standard_folders(parent)
+    result = StandardFolders(data, output)
+    code = Path(code_root).resolve()
+    for label, path in zip(STANDARD_FOLDER_NAMES, (data, output)):
+        problem = location_rule_violation(label, path, code)
+        if problem:
+            result.problem = f"{problem[0]} {problem[1]}"
+            return result
+        if path.exists() and not path.is_dir():
+            result.problem = (f"{path} is a file, not a folder, so Q-MAP cannot use it as {label}. Nothing was "
+                              "changed. Choose your folders with Browse... below.")
+            return result
+    created_identity = {}
+    for label, path in zip(STANDARD_FOLDER_NAMES, (data, output)):
+        if path.is_dir():
+            result.existing.append(label)
+            continue
+        try:
+            path.mkdir()  # the parent folder must exist already: the program folder is in it
+        except OSError as exc:
+            # Roll back only folders this call created, and only with rmdir(): it succeeds for an empty folder and
+            # cannot remove user files. If anything has appeared inside, leave it in place and report the partial result.
+            retained = []
+            for created_label in reversed(result.created[:]):
+                created_path = data if created_label == "Q-MAP_DATA" else output
+                try:
+                    stat = created_path.lstat()
+                    if created_identity.get(created_label) != (stat.st_dev, stat.st_ino):
+                        retained.append(created_label)
+                        continue
+                    created_path.rmdir()
+                except OSError:
+                    retained.append(created_label)
+                else:
+                    result.created.remove(created_label)
+            if retained:
+                result.problem = (f"Q-MAP could not create the folder {path} ({exc}). The newly created folder(s) "
+                                  f"{', '.join(reversed(retained))} could not be safely removed and have been left "
+                                  "in place. No pre-existing folders or data were touched. You can choose or create "
+                                  "your folders with Browse... or Create folder below.")
+            else:
+                result.problem = (f"Q-MAP could not create the folder {path} ({exc}). Newly created empty folder(s) "
+                                  "were safely removed. No pre-existing folders or data were touched. You can choose "
+                                  "or create your folders with Browse... or Create folder below.")
+            return result
+        result.created.append(label)
+        try:
+            stat = path.lstat()
+            created_identity[label] = (stat.st_dev, stat.st_ino)
+        except OSError:
+            # Without a reliable identity, do not risk removing this path during rollback.
+            created_identity[label] = None
+    return result
+
+
 def build_core_settings(data_root: str, output_root: str, code_root: str | Path,
                         user_profiles_dir: str | Path | None = None) -> Settings:
     """The Foundation's own Settings, built with the Foundation's own safeguards."""

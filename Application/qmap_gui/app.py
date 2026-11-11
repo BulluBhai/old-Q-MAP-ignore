@@ -19,7 +19,8 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, simpledialog
 
-from .services import GuiError, build_core_settings, check_locations, create_folder
+from .services import (GuiError, build_core_settings, check_locations, create_folder, prepare_standard_folders,
+                       standard_folders)
 from .settings_store import GuiSettings, GuiSettingsStore, StoreError, default_settings_dir
 from .widgets import MUTED_COLOR, ScrollFrame
 
@@ -150,7 +151,8 @@ class QMapWindow(tk.Tk):
         """[(key, navigation label, frame)], Home first."""
         raise NotImplementedError
 
-    def __init__(self, code_root: str | Path, settings_dir: str | Path | None = None, dialogs: Dialogs | None = None):
+    def __init__(self, code_root: str | Path, settings_dir: str | Path | None = None, dialogs: Dialogs | None = None,
+                 standard_parent: str | Path | None = None):
         super().__init__()
         self._closing = False
         self._orig_stdout = None  # set only if this app ever redirects sys.stdout
@@ -167,6 +169,10 @@ class QMapWindow(tk.Tk):
         self.locations = check_locations("", "", self.code_root)
         self.core_settings = None
         self.core_problem = ""
+        # where the standard Q-MAP_DATA and Q-MAP_OUTPUT folders belong: next to the program folder (None = do not
+        # prepare them, e.g. in tests that choose their own folders)
+        self.standard_parent = Path(standard_parent).expanduser().resolve() if standard_parent else None
+        self.folder_note, self.folder_note_kind = "", "info"  # shown under the two folders (info | ok | error)
         self._location_listeners: list = []
         self.active_job = None
         self.tasks = BackgroundTasks(self)
@@ -193,7 +199,8 @@ class QMapWindow(tk.Tk):
         self.show("home")
         if self.store.load_warning:
             self.after(200, lambda: self.dialogs.warn("Q-MAP", self.store.load_warning))
-        self.apply_locations(remember=False)
+        prepared = self._prepare_standard_folders_at_start()
+        self.apply_locations(remember=prepared)
         self.protocol("WM_DELETE_WINDOW", self._on_closing)
 
     # ---- navigation -----------------------------------------------------------------------------
@@ -242,12 +249,65 @@ class QMapWindow(tk.Tk):
             callback()
         return self.core_settings is not None
 
+    def _prepare_standard_folders_at_start(self) -> bool:
+        """First start (no folder remembered yet): prepare and use the standard folders next to the program folder.
+        Folders already remembered are never replaced silently; when they differ from the standard ones the screen
+        says so and offers 'Use standard folders'. Returns True when the standard folders were put into use."""
+        if self.standard_parent is None:
+            return False
+        data_std, out_std = standard_folders(self.standard_parent)
+        remembered = (self.data_var.get().strip(), self.output_var.get().strip())
+        if all(remembered):
+            if (_same_path(remembered[0], data_std) and _same_path(remembered[1], out_std)):
+                self.folder_note, self.folder_note_kind = "Using the standard folders next to the Q-MAP program folder.", "ok"
+            else:
+                self.folder_note, self.folder_note_kind = (
+                    f"You are using the folders you chose earlier (remembered). The standard folders for this copy of "
+                    f"Q-MAP would be {data_std} and {out_std}. To use those instead, press 'Use standard folders'; "
+                    "your current folders and their contents are not changed.", "info")
+            return False
+        prep = prepare_standard_folders(self.standard_parent, self.code_root)
+        if not prep.ok:
+            self.folder_note, self.folder_note_kind = ("The standard folders could not be prepared automatically: "
+                                                       + prep.problem), "error"
+            return False
+        if not remembered[0]:
+            self.data_var.set(str(prep.data))
+        if not remembered[1]:
+            self.output_var.set(str(prep.output))
+        self.folder_note, self.folder_note_kind = (
+            f"Folders prepared automatically next to the Q-MAP program folder: {prep.describe()}.", "ok")
+        return True
+
+    def use_standard_folders(self) -> None:
+        """'Use standard folders': switch to the standard folders next to the program folder (after asking)."""
+        if self.standard_parent is None:
+            return
+        data_std, out_std = standard_folders(self.standard_parent)
+        if not self.dialogs.yes_no(
+                "Use standard folders",
+                f"Use these folders from now on?\n\nQ-MAP_DATA: {data_std}\nQ-MAP_OUTPUT: {out_std}\n\n"
+                "A missing folder is created empty. Your current folders and everything in them stay exactly as they "
+                "are; nothing is moved, copied or deleted. Data registered in your current folders are not visible "
+                "from the new ones."):
+            return
+        prep = prepare_standard_folders(self.standard_parent, self.code_root)
+        if not prep.ok:
+            self.dialogs.error("Q-MAP", prep.problem)
+            return
+        self.data_var.set(str(prep.data))
+        self.output_var.set(str(prep.output))
+        self.folder_note, self.folder_note_kind = (
+            f"Now using the standard folders next to the Q-MAP program folder ({prep.describe()}).", "ok")
+        self.apply_locations()
+
     def browse_location(self, which: str) -> None:
         var = self.data_var if which == "data" else self.output_var
         title = "Choose the Q-MAP_DATA folder" if which == "data" else "Choose the Q-MAP_OUTPUT folder"
         chosen = self.dialogs.ask_directory(title, var.get() or str(Path.home()))
         if chosen:
             var.set(str(Path(chosen)))
+            self.folder_note = ""  # a folder chosen by hand: the note about the standard folders no longer applies
             self.apply_locations()
 
     def create_location(self, which: str) -> None:
@@ -341,6 +401,13 @@ QMapApp = DatabaseManagerApp  # the first graphical version's name for what is n
 APPS = {DatabaseManagerApp.APP_KEY: DatabaseManagerApp, AnalyticalWorkbenchApp.APP_KEY: AnalyticalWorkbenchApp}
 
 
+def _same_path(text: str, path: Path) -> bool:
+    try:
+        return Path(text).expanduser().resolve() == path
+    except OSError:
+        return False
+
+
 def _enable_windows_dpi() -> None:
     if sys.platform.startswith("win"):
         try:
@@ -356,10 +423,13 @@ def main(code_root: str | Path, argv: list[str] | None = None, app_key: str = Da
     parser = argparse.ArgumentParser(prog=prog)
     parser.add_argument("--selftest", action="store_true", help="open the window, close it again and exit (for testing)")
     parser.add_argument("--settings-dir", help="where remembered choices are kept (default: your user profile)")
+    parser.add_argument("--standard-parent", help="where the standard Q-MAP_DATA and Q-MAP_OUTPUT folders are prepared "
+                                                  "(default: the folder that holds the Q-MAP program folder)")
     args = parser.parse_args(argv or [])
     _enable_windows_dpi()
     try:
-        app = APPS[app_key](code_root, settings_dir=args.settings_dir)
+        app = APPS[app_key](code_root, settings_dir=args.settings_dir,
+                            standard_parent=args.standard_parent or Path(code_root).resolve().parent)
     except StoreError as exc:
         root = tk.Tk()
         root.withdraw()

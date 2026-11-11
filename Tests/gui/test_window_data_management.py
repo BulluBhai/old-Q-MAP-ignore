@@ -337,6 +337,16 @@ def test_stop_after_this_file(dm, world, monkeypatch):
     dm.gui.wait(dm.finished_event.is_set)
     assert 1 <= len(rows(dm)) < 5 and dm.stage_var.get() == "Stopped (as you asked)"
     assert "Cancelled by you" in dm.log.get()
+    # a stopped load never looks finished (10-Nov-26 progress review): partial bar, amber 'stopped by you' message
+    assert float(dm.progress["value"]) < 100 and dm.final_label.cget("text").startswith("Load stopped by you after")
+
+
+def test_a_finished_load_ends_with_a_full_bar(dm, world):
+    dm.add_paths([world.good, world.bad])
+    choose_profile(dm, "csv_hdr_ddmmyy_idfromname")
+    dm.start_ingest()
+    dm.gui.wait(dm.finished_event.is_set)
+    assert float(dm.progress["value"]) == 100 and dm.stage_var.get() == "Finished"
 
 
 def test_the_screen_is_only_ever_updated_from_the_main_thread(dm, world, monkeypatch):

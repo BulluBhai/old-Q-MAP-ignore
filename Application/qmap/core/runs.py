@@ -28,6 +28,7 @@ from .build import build_label, current_build
 from ..storage.db import Database, utc_now_iso
 from ..storage.files import atomic_write_bytes, sha256_file
 from .config import Settings
+from .errors import RunCancelled
 from .logging_setup import attach_run_log, detach_run_log, get_logger
 
 MANIFEST_NAME = "run_manifest.json"
@@ -293,6 +294,9 @@ def run_context(settings: Settings, db: Database, module_code: str, *, area: str
     run = start_run(settings, db, module_code, area=area, params=params, module_name=module_name, now=now)
     try:
         yield run
+    except RunCancelled as exc:  # stopped on request: recorded as cancelled, not as a failure
+        finish_run(run, "cancelled", exc.message)
+        raise
     except BaseException as exc:
         finish_run(run, "failed", f"{type(exc).__name__}: {exc}")
         raise

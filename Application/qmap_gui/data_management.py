@@ -578,14 +578,21 @@ class DataManagementFrame(tk.Frame):
             self.stage_var.set("Stopped by a problem")
             self.final_label.configure(text=f"The run could not be completed: {summary.error}", fg=ERROR_COLOR)
         else:
-            cancelled = summary is not None and summary.cancelled
+            # a stopped check or load must never look like a finished one (10-Nov-26 progress review)
+            cancelled = (summary is not None and summary.cancelled) or (self._done < self._total)
             self.stage_var.set("Stopped (as you asked)" if cancelled else "Finished")
             bad = sum(v for k, v in self._counts.items() if k not in ("accepted", "reused", "waiting", "would_be_accepted"))
             what = "Check" if self.mode == "check" else "Load"
-            self.final_label.configure(
-                text=f"{what} finished: {self.counts_var.get()}." + (" Nothing was saved." if self.mode == "check" else
-                     (" Open the problem report for rejected files." if bad else " Everything was loaded.")),
-                fg=ERROR_COLOR if bad else OK_COLOR)
+            if cancelled:
+                self.final_label.configure(
+                    text=f"{what} stopped by you after {self._done} of {self._total} file(s): {self.counts_var.get()}. "
+                         + ("Nothing was saved." if self.mode == "check" else
+                            "Files already loaded are kept; the others were not loaded."), fg=WARN_COLOR)
+            else:
+                self.final_label.configure(
+                    text=f"{what} finished: {self.counts_var.get()}." + (" Nothing was saved." if self.mode == "check"
+                         else (" Open the problem report for rejected files." if bad else " Everything was loaded.")),
+                    fg=ERROR_COLOR if bad else OK_COLOR)
         if self.mode == "load" and summary is not None and summary.run_dir:
             self.run_folder_var.set(str(summary.run_dir))
         self.update_state()

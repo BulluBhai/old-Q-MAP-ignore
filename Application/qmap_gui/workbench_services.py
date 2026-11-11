@@ -7,6 +7,8 @@ prepare data. When data are missing it tells the user what to prepare in Databas
 from __future__ import annotations
 
 import logging
+import threading
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
@@ -127,6 +129,24 @@ def readiness_parts(res: AnalysisReadiness) -> list[tuple[str, str | None]]:
     return parts
 
 
+TICK_SECONDS = 0.2  # at most five progress updates a second reach the screen (a chance test makes ~100,000 steps)
+
+
+class _Ticker:
+    """Turns progress(done, total, text) calls from the worker into at most one 'tick' event per TICK_SECONDS (plus
+    the first and the last), so the queue to the screen never floods."""
+
+    def __init__(self, emit: Callable[[dict], None]):
+        self.emit = emit
+        self._last = 0.0
+
+    def __call__(self, done: int, total: int, text: str) -> None:
+        now = time.monotonic()
+        if done in (0, total) or now - self._last >= TICK_SECONDS:
+            self._last = now
+            self.emit({"type": "tick", "done": int(done), "total": int(total), "text": text})
+
+
 @dataclass
 class AnalysisJob:
     settings: Settings
@@ -134,6 +154,11 @@ class AnalysisJob:
     dataset_ids: list[int]
     params: dict
     emit: Callable[[dict], None] = field(default=lambda event: None)
+    cancel_event: threading.Event = field(default_factory=threading.Event)
+
+    def cancel(self) -> None:
+        """Ask the running analysis to stop at its next step (called from the screen or when the window closes)."""
+        self.cancel_event.set()
 
     def run(self) -> AnalysisRunResult:
         handler = _EmitHandler(self.emit)
@@ -144,7 +169,8 @@ class AnalysisJob:
             self.emit({"type": "stage", "text": "Checking readiness and starting the run"})
             db = open_database(self.settings.db_path)
             result = run_analysis(self.settings, db, ANALYSES[self.analysis_id], self.dataset_ids, self.params,
-                                  log=lambda m: self.emit({"type": "progress", "text": m}))
+                                  log=lambda m: self.emit({"type": "progress", "text": m}),
+                                  progress=_Ticker(self.emit), cancel=self.cancel_event.is_set)
         except Exception as exc:
             result = AnalysisRunResult("failed", f"Unexpected problem ({type(exc).__name__}): {exc}")
         finally:
@@ -161,6 +187,10 @@ class ReproduceJob:
     settings: Settings
     run_id: str
     emit: Callable[[dict], None] = field(default=lambda event: None)
+    cancel_event: threading.Event = field(default_factory=threading.Event)
+
+    def cancel(self) -> None:
+        self.cancel_event.set()
 
     def run(self) -> AnalysisRunResult:
         from qmap.analytical_engine.reproduce import reproduce_run
@@ -173,7 +203,8 @@ class ReproduceJob:
             self.emit({"type": "stage", "text": f"Reproducing run {self.run_id}"})
             db = open_database(self.settings.db_path)
             result = reproduce_run(self.settings, db, self.run_id,
-                                   log=lambda m: self.emit({"type": "progress", "text": m}))
+                                   log=lambda m: self.emit({"type": "progress", "text": m}),
+                                   progress=_Ticker(self.emit), cancel=self.cancel_event.is_set)
         except Exception as exc:  # a programming defect: one plain line on screen, the full traceback in the log
             logger.exception("Reproduction of %s failed unexpectedly", self.run_id)
             result = AnalysisRunResult("failed", f"Unexpected problem ({type(exc).__name__}): {exc}")

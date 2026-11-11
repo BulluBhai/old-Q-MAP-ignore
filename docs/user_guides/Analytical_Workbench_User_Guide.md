@@ -7,7 +7,9 @@ files. When data are missing, it tells you what to prepare in Database Manager.
 
 ## Home
 
-- **Your folders**: the same remembered folders as Database Manager.
+- **Your folders**: the same remembered folders as Database Manager. If neither application has been opened before,
+  the Workbench prepares the standard folders next to the program folder in the same way (see the Database Manager
+  guide, **Home**).
 - **Available now**: analyses that genuinely work: **MA Research: MA Affinity (QLOPB)** and **Dataset Summary**.
 - **Planned application windows** and **Planned research modules**: everything else is marked **COMING SOON**, with
   the reason. That includes Market Intelligence (MIQP), which is outside Q-MAP v0.1. Stage Analysis (Weinstein) is
@@ -156,6 +158,35 @@ The existence of a dataset does not make it ready. For example, an analysis that
 daily data, and a period with no data is refused.
 
 **Progress / Status** and **Live Log** show what is happening. The final line names the Run ID and the saved files.
+
+**Progress, ETA and Cancel** (added 10-Nov-26). While an MA Affinity analysis or a reproduction runs:
+
+- **Progress:** shows `<done> of <total> steps (<percent>%)` and the bar fills from left to right. One step is one
+  moving-average candidate scored once (in-sample, then out-of-sample). The last step is writing the reports and the
+  run record, so the bar is full only when everything is saved.
+- **ETA:** the estimated time left. It appears after the first few seconds (before that it shows `-`, rather than an
+  unreliable guess). It is an estimate from the speed so far.
+- **Stage:** what is being done now, for example `In-sample EMA-37`.
+- Dataset Summary does not report steps: while it runs, its bar moves back and forth.
+- **When a run ends**, **Stage:**, the bar and the coloured result line always agree:
+
+  | Outcome | Stage: | Bar | Result line |
+  |---|---|---|---|
+  | Completed | `Finished` | full | green, starts with `Completed. Run ...` (or `REPRODUCED ...` for a reproduction) |
+  | Cancelled by you | `Cancelled` | stays where it stopped; **Progress:** says `Cancelled at ... (not complete)` | amber, starts with `Cancelled.` |
+  | Failed | `Failed` | stays where it stopped | red, starts with `The analysis failed` |
+  | Refused (not ready) | `Not started` | empty | amber, says why nothing was run |
+
+- **Cancel** (in **3. Options - parameters**, next to **RUN ANALYSIS**) stops a run safely:
+  1. Click **Cancel** once. The button greys out and **Stage:** shows `Cancelling - the run stops after its current
+     step...`.
+  2. Wait a moment (normally a second or two). **Stage:** then shows `Cancelled` and the result line starts with
+     `Cancelled. Run <Run ID> stopped before it finished and is recorded as cancelled`.
+  3. Nothing is lost: your data and earlier runs are not touched. The cancelled run's folder holds only its log, no
+     results, and it is never offered as a result or for **Reproduce**. Run again whenever you like.
+  4. If the run was already writing its reports when you clicked, it finishes normally and says `Completed`.
+- **Closing the window during a run** also asks the run to stop, so Thonny or IDLE does not keep working in the
+  background. The run is then recorded as cancelled.
 
 ## What each run saves
 

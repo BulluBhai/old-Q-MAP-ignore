@@ -207,7 +207,6 @@ def test_the_workbench_job_logs_the_traceback_of_a_defect(settings, db, earlier,
     assert result.outcome == "failed" and result.message == "Unexpected problem (TypeError): a deliberate defect"
     assert any(r.exc_info and "Reproduction of" in r.getMessage() for r in caplog.records)
 
-
 @pytest.mark.parametrize("edit", [
     lambda m: m.__setitem__("analysis_name", "tampered but valid JSON"),
     lambda m: m["parameters"].__setitem__("ma_end", m["parameters"]["ma_end"] + 1),

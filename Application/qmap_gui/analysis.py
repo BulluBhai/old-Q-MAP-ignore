@@ -40,6 +40,9 @@ class AnalysisFrame(tk.Frame):
         self.last_readiness = None
         self._last_selection: tuple = ()
         self._t0: float | None = None
+        self.job = None  # the running AnalysisJob / ReproduceJob (for Cancel)
+        self._rate_t0: float | None = None  # when the first progress count arrived (for the ETA)
+        self._rate_d0 = 0
         self._build()
         app.add_location_listener(self.refresh)
         self.refresh()
@@ -123,8 +126,10 @@ class AnalysisFrame(tk.Frame):
         row.pack(fill="x", pady=(6, 2))
         self.check_button = tk.Button(row, text="Check readiness (nothing is saved)", command=self.check, padx=8, pady=4)
         self.run_button = tk.Button(row, text="RUN ANALYSIS", command=self.start_run, padx=14, pady=4, font=bold)
+        self.cancel_button = tk.Button(row, text="Cancel", command=self.cancel_run, padx=8, pady=4, state="disabled")
         self.check_button.pack(side="left", padx=4)
         self.run_button.pack(side="left", padx=4)
+        self.cancel_button.pack(side="left", padx=4)
         self.hint = tk.Label(box, text="", anchor="w", justify="left", wraplength=940)
         self.hint.pack(fill="x", pady=(4, 2))
         tk.Label(box, text="Readiness of the selected data:", anchor="w", fg=MUTED_COLOR).pack(fill="x")
@@ -135,20 +140,22 @@ class AnalysisFrame(tk.Frame):
         self.stage_var, self.started_var = tk.StringVar(self, value="Idle"), tk.StringVar(self, value="-")
         self.elapsed_var, self.datasets_var = tk.StringVar(self, value="-"), tk.StringVar(self, value="-")
         self.run_id_var = tk.StringVar(self, value="-")
+        self.count_var, self.eta_var = tk.StringVar(self, value="-"), tk.StringVar(self, value="-")
         for i, (label, var) in enumerate((("Stage:", self.stage_var), ("Datasets:", self.datasets_var),
                                           ("Started:", self.started_var), ("Elapsed:", self.elapsed_var),
+                                          ("Progress:", self.count_var), ("ETA:", self.eta_var),
                                           ("Run ID:", self.run_id_var))):
             r, c = divmod(i, 2)
             tk.Label(box, text=label, anchor="w", width=12).grid(row=r, column=c * 2, sticky="w")
             tk.Label(box, textvariable=var, anchor="w", width=52, justify="left").grid(row=r, column=c * 2 + 1, sticky="w")
         self.progress = ttk.Progressbar(box, mode="indeterminate")
-        self.progress.grid(row=3, column=0, columnspan=4, sticky="ew", pady=(6, 0))
+        self.progress.grid(row=4, column=0, columnspan=4, sticky="ew", pady=(6, 0))
         self.final_label = tk.Label(box, text="", anchor="w", justify="left", wraplength=940, font=bold)
-        self.final_label.grid(row=4, column=0, columnspan=4, sticky="w")
+        self.final_label.grid(row=5, column=0, columnspan=4, sticky="w")
         # the same action as section 2's button, next to the completion message: opens the completed run's own folder
         self.result_open_button = tk.Button(box, text="Open Output Folder", state="disabled",
                                             command=self.open_run_folder)
-        self.result_open_button.grid(row=5, column=0, columnspan=4, sticky="w", pady=(4, 0))
+        self.result_open_button.grid(row=6, column=0, columnspan=4, sticky="w", pady=(4, 0))
         box.columnconfigure(1, weight=1)
         box.columnconfigure(3, weight=1)
 
@@ -261,6 +268,8 @@ class AnalysisFrame(tk.Frame):
             b.configure(state="normal" if can else "disabled")
         self.reproduce_button.configure(state="normal" if not self.running and self.app.core_settings is not None
                                         else "disabled")
+        cancellable = self.running and self.job is not None and not self.job.cancel_event.is_set()
+        self.cancel_button.configure(state="normal" if cancellable else "disabled")
         if self.running:
             self.hint.configure(text="Working...", fg=MUTED_COLOR)
         elif self.app.core_settings is None:
@@ -299,13 +308,8 @@ class AnalysisFrame(tk.Frame):
             self.final_label.configure(text=f"Not started: {why} (see the readiness box).", fg=ERROR_COLOR)
             return
         job = ws.AnalysisJob(settings, c.analysis_id, ids, self.params())
-        self.running, self._t0 = True, time.monotonic()
-        self.started_var.set(fmt_clock(datetime.now()))
-        self.elapsed_var.set("0 s")
+        self._begin(job)
         self.datasets_var.set(str(len(ids)))
-        self.run_id_var.set("-")
-        self.final_label.configure(text="", fg="black")
-        self.progress.start(80)
         self.log.append(f"--- {c.name}: {len(ids)} dataset(s) ---")
         self._update_state()
 
@@ -324,12 +328,7 @@ class AnalysisFrame(tk.Frame):
                                        fg=WARN_COLOR)
             return
         job = ws.ReproduceJob(settings, run_id)
-        self.running, self._t0 = True, time.monotonic()
-        self.started_var.set(fmt_clock(datetime.now()))
-        self.elapsed_var.set("0 s")
-        self.run_id_var.set("-")
-        self.final_label.configure(text="", fg="black")
-        self.progress.start(80)
+        self._begin(job)
         self.log.append(f"--- Reproduce run {run_id} ---")
         self._update_state()
 
@@ -338,6 +337,29 @@ class AnalysisFrame(tk.Frame):
             job.run()
 
         self.app.tasks.start(work, self.on_job_event, self.on_task_error)
+
+    def _begin(self, job) -> None:
+        """Common start of a run or a reproduction: the job (for Cancel), clock, counters and the progress bar."""
+        self.job, self.app.active_job = job, job  # closing the window asks this job to stop (QMapApp._on_closing)
+        self.running, self._t0 = True, time.monotonic()
+        self._rate_t0, self._rate_d0 = None, 0
+        self.started_var.set(fmt_clock(datetime.now()))
+        self.elapsed_var.set("0 s")
+        self.count_var.set("-")
+        self.eta_var.set("-")
+        self.run_id_var.set("-")
+        self.final_label.configure(text="", fg="black")
+        self.progress.configure(mode="indeterminate", value=0)
+        self.progress.start(80)
+
+    def cancel_run(self) -> None:
+        """Ask the running job to stop at its next step; the run is then recorded as cancelled."""
+        if not self.running or self.job is None:
+            return
+        self.job.cancel()
+        self.stage_var.set("Cancelling - the run stops after its current step...")
+        self.log.append("Cancel requested: the run stops after its current step and is recorded as cancelled.")
+        self._update_state()
 
     # ---- events from the worker (always handled on the main thread) -----------------------------------
     def on_job_event(self, ev: dict) -> None:
@@ -350,8 +372,30 @@ class AnalysisFrame(tk.Frame):
                 self.stage_var.set(ev["text"][:90])
         elif kind == "stage":
             self.stage_var.set(ev["text"])
+        elif kind == "tick":
+            self._on_tick(ev)
         elif kind == "done":
             self._finish(ev["result"])
+
+    def _on_tick(self, ev: dict) -> None:
+        """A progress count from the analysis: determinate bar, 'done of total', ETA from the rate so far."""
+        done, total = ev["done"], max(ev["total"], 1)
+        if str(self.progress.cget("mode")) != "determinate":
+            self.progress.stop()
+            self.progress.configure(mode="determinate", maximum=total)
+        self.progress.configure(maximum=total, value=done)
+        self.count_var.set(f"{done:,} of {total:,} steps ({done / total * 100:.1f}%)")
+        if not (self.job is not None and self.job.cancel_event.is_set()):
+            self.stage_var.set(ev["text"][:90])
+        now = time.monotonic()
+        if self._rate_t0 is None:
+            self._rate_t0, self._rate_d0 = now, done
+            return
+        spent, made = now - self._rate_t0, done - self._rate_d0
+        if done >= total:
+            self.eta_var.set("0 s")
+        elif spent >= 3 and made > 0:
+            self.eta_var.set(fmt_duration((total - done) * spent / made))
 
     def on_task_error(self, text: str) -> None:
         if self._closing:
@@ -362,13 +406,16 @@ class AnalysisFrame(tk.Frame):
     def _finish(self, result) -> None:
         self.running = False
         self.last_result = result
+        if self.app.active_job is self.job:
+            self.app.active_job = None
+        self.job = None
         self.progress.stop()
-        self.stage_var.set("Finished")
+        self._show_end_state(result.outcome)
         if result.run_id:
             self.run_id_var.set(result.run_id)
         if result.ok and result.run_dir:  # only a COMPLETED run becomes "the last run"; its own recorded folder
             self._show_last_run(result.run_id, Path(result.run_dir))
-        color = {"completed": OK_COLOR, "blocked": WARN_COLOR}.get(result.outcome, ERROR_COLOR)
+        color = {"completed": OK_COLOR, "blocked": WARN_COLOR, "cancelled": WARN_COLOR}.get(result.outcome, ERROR_COLOR)
         text = result.message
         if result.ok:
             text = (f"Completed. Run {result.run_id}: {', '.join(p.name for p in result.outputs)} and "
@@ -383,6 +430,30 @@ class AnalysisFrame(tk.Frame):
                 self.reproduce_var.set(result.run_id)  # ready to be reproduced later
         self.final_label.configure(text=text, fg=color)
         self._update_state()
+
+    # what the Stage field says when a run ends, by outcome (the bar and the coloured message agree with it)
+    END_STAGES = {"completed": "Finished", "cancelled": "Cancelled", "failed": "Failed", "blocked": "Not started"}
+
+    def _show_end_state(self, outcome: str) -> None:
+        """Completed: the bar is full and the count says so. Cancelled or failed: the bar stays where the run stopped
+        (empty if no count had arrived), so it never looks like a completed run. Blocked: nothing ran, the bar is empty."""
+        determinate = str(self.progress.cget("mode")) == "determinate"
+        if outcome == "completed":
+            if not determinate:  # an analysis that reports no count: the finished run still shows a full bar
+                self.progress.configure(mode="determinate", maximum=1)
+                self.count_var.set("Complete")
+            self.progress.configure(value=self.progress.cget("maximum"))
+        elif outcome in ("cancelled", "failed") and determinate:
+            done = int(float(self.progress.cget("value")))
+            total = int(float(self.progress.cget("maximum")))
+            word = "Cancelled" if outcome == "cancelled" else "Stopped"
+            self.count_var.set(f"{word} at {done:,} of {total:,} steps (not complete)")
+        else:
+            self.progress.configure(mode="determinate", maximum=1, value=0)
+            if outcome in ("cancelled", "failed"):
+                self.count_var.set("Cancelled (not complete)" if outcome == "cancelled" else "Stopped (not complete)")
+        self.eta_var.set("-")
+        self.stage_var.set(self.END_STAGES.get(outcome, "Finished"))
 
     def _tick(self) -> None:
         if getattr(self, "_closing", False):

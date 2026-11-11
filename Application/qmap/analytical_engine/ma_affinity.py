@@ -261,8 +261,25 @@ def _csv(path: Path, rows: list[dict]) -> Path:
     return path
 
 
+def _v1_progress(ctx: RunContext, s):
+    """QLOPB reports in-sample and out-of-sample progress separately (each from 0); the Workbench shows one count:
+    every candidate in-sample, then the out-of-sample evaluations."""
+    n_is = s.n_candidates
+    n_oos = n_is if s.oos_scope == "all" else min(s.top_n, n_is)
+
+    def tick(done: int, total: int, text: str) -> None:
+        if text.startswith("OOS"):
+            done = n_is + (n_oos if text == "OOS complete" else done)
+        elif text == "IS scoring complete":
+            done = n_is
+        ctx.progress(min(done, n_is + n_oos), n_is + n_oos, text.replace("IS ", "In-sample ", 1)
+                     .replace("OOS ", "Out-of-sample ", 1))
+    return tick
+
+
 def execute(ctx: RunContext) -> list[Path]:
-    from qlopb.core.research_engine import run_ma_affinity
+    from qlopb.core.research_engine import RunCancelled as QlopbCancelled, run_ma_affinity
+    from ..core.errors import RunCancelled
     from qlopb.reports.chart_report import make_charts
     from qlopb.reports.excel_report import write_excel
     from qlopb.reports.pdf_report import write_pdf
@@ -274,7 +291,11 @@ def execute(ctx: RunContext) -> list[Path]:
     label = f"{dataset_label(info)}, Run {ctx.run_id}"
     ctx.log(f"MA Affinity on {label}: {len(frame)} bars, {fmt_date(frame.index[0].date())} to "
             f"{fmt_date(frame.index[-1].date())}. Method: {METHOD_SOURCE}.")
-    res = run_ma_affinity(frame, s, label=label, log=ctx.log, quality=QmapDataNote(ctx, info, frame))
+    try:  # progress and cancel only reach the screen; the calculation is QLOPB's, unchanged
+        res = run_ma_affinity(frame, s, label=label, log=ctx.log, quality=QmapDataNote(ctx, info, frame),
+                              progress=_v1_progress(ctx, s), cancel=ctx.cancel_requested)
+    except QlopbCancelled:
+        raise RunCancelled("Cancelled by the user.") from None
     for w in res.warnings:
         ctx.log(f"WARNING: {w}")
     # provenance: the bars the calculation actually used and the in-sample / out-of-sample split (Run_Metadata)

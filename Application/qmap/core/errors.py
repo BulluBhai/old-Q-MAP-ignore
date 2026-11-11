@@ -20,6 +20,12 @@ class QmapError(Exception):
         return text
 
 
+class RunCancelled(QmapError):
+    """The person asked a running job to stop. The run is closed with status 'cancelled' (not 'failed')."""
+
+    code = "E_CANCELLED"
+
+
 class ConfigError(QmapError):
     code = "E_CONFIG"
 

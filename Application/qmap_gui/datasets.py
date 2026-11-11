@@ -342,10 +342,18 @@ class DatasetsFrame(tk.Frame):
     def _finish(self, summary) -> None:
         self.running = False
         self.app.active_job = None
-        self.stage_var.set("Finished")
+        # the Stage field and the bar agree with the outcome: a full bar only when every item was attempted
+        cancelled = getattr(summary, "cancelled", False)
+        self.stage_var.set("Stopped by a problem" if summary.error else "Stopped (as you asked)" if cancelled else
+                           "Finished")
+        if not (summary.error or cancelled):
+            self.progress.configure(value=100)
         self.item_var.set("-")
         if summary.error:
             self.final_label.configure(text=f"Stopped: {summary.error}", fg=ERROR_COLOR)
+        elif cancelled:
+            self.final_label.configure(text=f"Stopped by you: {len(summary.done)} done, {len(summary.failed)} not done; "
+                                            "the remaining items were not started.", fg=WARN_COLOR)
         elif summary.failed:
             self.final_label.configure(text=f"{len(summary.done)} done, {len(summary.failed)} not done - see the log "
                                             "for the reason of each.", fg=WARN_COLOR)

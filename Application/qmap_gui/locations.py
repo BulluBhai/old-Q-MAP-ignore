@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import tkinter as tk
 
-from .widgets import ERROR_COLOR, OK_COLOR
+from .widgets import ERROR_COLOR, MUTED_COLOR, OK_COLOR
 
 
 class LocationsPanel(tk.Frame):
@@ -27,7 +27,12 @@ class LocationsPanel(tk.Frame):
             status.grid(row=r * 2 + 1, column=1, columnspan=3, sticky="w", padx=4, pady=(0, 4))
             self.rows[which] = {"entry": entry, "browse": browse, "create": create, "status": status}
         self.summary = tk.Label(self, text="", anchor="w", justify="left", wraplength=860)
-        self.summary.grid(row=4, column=0, columnspan=4, sticky="w")
+        self.summary.grid(row=4, column=0, columnspan=3, sticky="w")
+        self.standard_button = tk.Button(self, text="Use standard folders", command=app.use_standard_folders)
+        if app.standard_parent is not None:
+            self.standard_button.grid(row=4, column=3, padx=2, sticky="e")
+        self.note = tk.Label(self, text="", anchor="w", justify="left", wraplength=860)
+        self.note.grid(row=6, column=0, columnspan=4, sticky="w")
         if show_help:
             tk.Label(self, anchor="w", justify="left", fg="#667085", wraplength=860,
                      text="Keep these two folders separate and outside the Q-MAP program folder. Your choice is "
@@ -48,3 +53,5 @@ class LocationsPanel(tk.Frame):
             self.summary.configure(text="Both folders are ready and remembered.", fg=OK_COLOR)
         else:
             self.summary.configure(text=self.app.core_problem or state.summary, fg=ERROR_COLOR)
+        self.note.configure(text=self.app.folder_note,
+                            fg={"ok": OK_COLOR, "error": ERROR_COLOR}.get(self.app.folder_note_kind, MUTED_COLOR))

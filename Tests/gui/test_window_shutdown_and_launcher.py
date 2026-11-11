@@ -139,7 +139,8 @@ def test_closing_while_a_load_is_running_stops_it_after_the_current_file(gui, wo
 
 # ---- launcher ---------------------------------------------------------------------------------------------------
 def test_launcher_opens_the_window_and_closes_it_cleanly(gui, world):
-    done = subprocess.run([sys.executable, str(REPO / "Q-MAP.py"), "--selftest", "--settings-dir", str(world.settings)],
+    done = subprocess.run([sys.executable, str(REPO / "Q-MAP.py"), "--selftest", "--settings-dir", str(world.settings),
+                           "--standard-parent", str(world.settings.parent)],
                           capture_output=True, text=True, timeout=120, env=dict(os.environ), cwd=world.src)
     assert done.returncode == 0, done.stderr
     assert "SELFTEST OK" in done.stdout

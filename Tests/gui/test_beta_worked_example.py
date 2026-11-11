@@ -7,9 +7,13 @@ It does exactly what the owner's acceptance guide asks, with the synthetic file 
   3. check the run: Run ID, the in-sample/out-of-sample split, the findings file, Run_Metadata (dataset identity and
      checksum, parameters as entered, code build, provenance);
   4. Reproduce the run from its Run ID: a NEW run whose result tables are identical; the first run is untouched.
-The committed evidence in docs/acceptance_testing/beta_ma_affinity_09_Nov_26/Worked_Example_Output/ is this test's
-own output; the test checks that a fresh run gives the same result tables and the same findings (apart from the Run
-ID and the date in file names). Set QMAP_WRITE_BETA_EVIDENCE=1 to rewrite that folder from a fresh run."""
+Two committed copies of this test's own output are checked (10-Nov-26 restructure):
+- docs/acceptance_testing/beta_ma_affinity_09_Nov_26/Worked_Example_Output/ is the FROZEN evidence of the owner-tested
+  V1 beta (commit 2c81d3a, accepted A1-A7 on 10-Nov-26). It is never rewritten. A fresh run must still give the same
+  result tables and the same findings (apart from the Run ID and the date in file names): V1 parity.
+- the release-candidate evidence folder (B.RELEASE_EVIDENCE, when present on this branch) must come from a clean
+  checkout of exactly the program code under test. Set QMAP_WRITE_BETA_EVIDENCE=1 to (re)write THAT folder from a
+  fresh run; the frozen V1 folder is never written."""
 
 from __future__ import annotations
 
@@ -23,9 +27,12 @@ from datetime import datetime
 from qmap.storage.files import sha256_file
 
 from fixtures import beta_example as B
+from fixtures.beta_example import check_evidence_provenance as _check_evidence_provenance
+from fixtures.beta_example import check_frozen_v1_evidence as _check_frozen_v1_evidence
 from gui.test_two_applications import _select
 
-OUT = B.EVIDENCE / "Worked_Example_Output"
+OUT = B.EVIDENCE / "Worked_Example_Output"  # frozen: the owner-tested V1 beta evidence (never rewritten)
+RELEASE_OUT = B.RELEASE_EVIDENCE / "Worked_Example_Output_V1"  # the release candidate's own, for its exact commit
 
 
 def _strip(text: str, run_ids) -> str:
@@ -114,47 +121,38 @@ def test_the_worked_example_runs_end_to_end_and_matches_the_committed_evidence(g
                 "Run_Log.txt": (run.run_dir / "run_log.txt").read_text(encoding="utf-8")}
     tables = {"MA_Affinity_Candidates_.csv": next(run.run_dir.glob("MA_Affinity_Candidates_*.csv")).read_bytes()}
     interactions_sha = sha256_file(next(run.run_dir.glob("MA_Affinity_Interactions_*.csv")))  # 2.6 MB: hash only
+    # V1 parity: the frozen owner-tested evidence is what this run produced (result tables, findings, frozen Top-N)
+    _check_frozen_v1_evidence(json.loads((OUT / "Run_Metadata.json").read_text(encoding="utf-8")))
+    _compare(OUT, tables, details, d, findings, run.run_id, interactions_sha)
     if os.environ.get("QMAP_WRITE_BETA_EVIDENCE") == "1":
-        if OUT.exists():
-            shutil.rmtree(OUT)
-        OUT.mkdir(parents=True)
+        assert RELEASE_OUT.resolve() != OUT.resolve()  # the frozen V1 evidence is never rewritten
+        if RELEASE_OUT.exists():
+            shutil.rmtree(RELEASE_OUT)
+        RELEASE_OUT.mkdir(parents=True)
         for name, text in produced.items():
-            (OUT / name).write_text(text, encoding="utf-8", newline="")
+            (RELEASE_OUT / name).write_text(text, encoding="utf-8", newline="")
         for name, data in tables.items():
-            (OUT / name.replace("_.csv", ".csv")).write_bytes(data)
+            (RELEASE_OUT / name.replace("_.csv", ".csv")).write_bytes(data)
         return
-    # the committed evidence is what this run produced: identical result tables, identical findings and frozen Top-N
+    if RELEASE_OUT.exists():  # the release candidate's evidence: the same results, from exactly this program code
+        _check_evidence_provenance(json.loads((RELEASE_OUT / "Run_Metadata.json").read_text(encoding="utf-8")))
+        _compare(RELEASE_OUT, tables, details, d, findings, run.run_id, interactions_sha)
+
+
+def _compare(folder, tables, details, d, findings, run_id, interactions_sha) -> None:
+    """The committed evidence in `folder` is what this run produced: identical result tables, identical findings and
+    frozen Top-N, the same dataset, and a REPRODUCED report naming the same interactions table."""
     for name, data in tables.items():
-        assert (OUT / name.replace("_.csv", ".csv")).read_bytes() == data, name
-    committed_meta = json.loads((OUT / "Run_Metadata.json").read_text(encoding="utf-8"))
-    _check_evidence_provenance(committed_meta)
+        assert (folder / name.replace("_.csv", ".csv")).read_bytes() == data, (folder.name, name)
+    committed_meta = json.loads((folder / "Run_Metadata.json").read_text(encoding="utf-8"))
     assert committed_meta["analysis_details"] == {**details, "engine": committed_meta["analysis_details"]["engine"]}
     # the registered file's checksum changes with each registration (it records when it was made), so the dataset is
     # compared by what it holds: the same source file (checked above), rows and date range
     for k in ("instrument", "timeframe", "row_count", "date_from", "date_to"):
         assert committed_meta["input_datasets"][0][k] == d[k], k
     old_ids = [committed_meta["run_id"]]
-    assert _strip((OUT / "Findings.txt").read_text(encoding="utf-8"), old_ids) == _strip(findings, [run.run_id])
-    rows = list(csv.reader((OUT / "Reproducibility_Report.csv").open(encoding="utf-8")))
+    assert _strip((folder / "Findings.txt").read_text(encoding="utf-8"), old_ids) == _strip(findings, [run_id])
+    rows = list(csv.reader((folder / "Reproducibility_Report.csv").open(encoding="utf-8")))
     assert rows[-1][-1].startswith("REPRODUCED")
     # the committed report records the interactions table's checksum; a fresh run gives the same table
     assert any(r[0].startswith("Result table MA_Affinity_Interactions_") and r[1].endswith(interactions_sha) for r in rows)
-
-
-def _check_evidence_provenance(meta: dict) -> None:
-    """The committed evidence must come from a CLEAN checkout of exactly the program code under test: no uncommitted
-    program change when it was made (git_modified False, a real commit recorded), and the same source fingerprint as
-    the code running this test (SHA-256 over every program file; line endings do not matter). Any later change to the
-    program code fails this until the evidence is regenerated (QMAP_WRITE_BETA_EVIDENCE=1 from a clean checkout)."""
-    from qmap.core.build import current_build
-
-    build = meta["build"]
-    assert build["git_modified"] is False, "the evidence was generated from a working tree with uncommitted changes"
-    assert re.fullmatch(r"[0-9a-f]{40}", build["git_commit"] or ""), "the evidence does not name its source commit"
-    assert build["source_fingerprint"] == current_build()["source_fingerprint"], (
-        "the program code changed since the evidence was generated; regenerate it from a clean checkout")
-
-
-def test_the_committed_evidence_names_a_clean_build_of_this_code():
-    """Runs without a window: the provenance condition on its own (also checked inside the worked example)."""
-    _check_evidence_provenance(json.loads((OUT / "Run_Metadata.json").read_text(encoding="utf-8")))
