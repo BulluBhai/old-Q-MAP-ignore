@@ -60,6 +60,18 @@ not affect any result. If removal is approved later, do it in its own PR: delete
 placeholders together with their QLOPB tests, and replace the identity lock by a
 recorded method version.
 
+## 4A. Statistical interpretation and invalid null distributions
+
+The legacy binomial baseline p-values are exploratory diagnostics, not definitive inferential evidence. The usual binomial
+interpretation relies on independent observations. Market observations can be dependent and forward windows overlap;
+these features can make nominal p-values too small and overstate the strength of evidence. The calculations are
+deliberately preserved and must not be treated as proof of statistical significance or a trading edge.
+
+The block-shuffle chance test requires a complete null distribution. Every requested shuffle must produce a finite
+maximum score. If any shuffle is invalid, the overall chance result is marked **INCONCLUSIVE**, requested, valid and
+invalid counts are recorded, and no empirical p-value or positive verdict is emitted. Candidate-adjusted p-values follow
+the same completeness rule. Shuffle count, block length, seed, threshold and scoring method are unchanged.
+
 ## 5. Decisions needed from the Project Owner
 
 1. **Chance-test defaults**: confirm or change 200 shuffles, 15-bar blocks, seed 1 and the 0.05 threshold.

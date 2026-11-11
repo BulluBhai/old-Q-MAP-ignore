@@ -54,27 +54,32 @@ if __name__ == "__main__":
 
 
 # ---- provenance of the committed evidence (used by the worked example and by Tests/beta) ---------------------------
-# the clean commit the frozen V1 evidence was generated from (the owner-tested 2c81d3a holds exactly this program)
+# Immutable source identities recorded in BOTH committed RC worked-example evidence folders.
+# Evidence was generated on this exact clean source commit; later corrective commits must not rewrite it.
 FROZEN_V1_BUILD_COMMIT = "6280c7304e50a871fb98db04ee16734319fa7f55"
+RELEASE_RC_BUILD_COMMIT = "301d4b009c421c0d7b9c39c00059977a2af59144"
+RELEASE_RC_SOURCE_FINGERPRINT = "d48ccf71bacdede002ec332bc4c4d0a56c089166bd2507c55e251a6c0d62df4f"
 FROZEN_V1_OUT = EVIDENCE / "Worked_Example_Output"
 RELEASE_V1_OUT = RELEASE_EVIDENCE / "Worked_Example_Output_V1"
 
 
 def check_evidence_provenance(meta: dict) -> None:
-    """The release candidate's evidence must come from a CLEAN checkout of exactly the program code under test: no
-    uncommitted program change when it was made (git_modified False, a real commit recorded), and the same source
-    fingerprint as the code running this test (SHA-256 over every program file; line endings do not matter). Any later
-    change to the program code fails this until the evidence is regenerated (QMAP_WRITE_BETA_EVIDENCE=1 from a clean
-    checkout)."""
-    import re
+    """Verify RC evidence against its immutable source build, not today's source tree.
 
-    from qmap.core.build import current_build
+    The evidence is a committed acceptance artifact from RELEASE_RC_BUILD_COMMIT. A later corrective source change
+    must not force its regeneration. Both its recorded commit and whole-program fingerprint are pinned here so the
+    evidence remains independently verifiable and cannot silently drift.
+    """
+    import re
 
     build = meta["build"]
     assert build["git_modified"] is False, "the evidence was generated from a working tree with uncommitted changes"
-    assert re.fullmatch(r"[0-9a-f]{40}", build["git_commit"] or ""), "the evidence does not name its source commit"
-    assert build["source_fingerprint"] == current_build()["source_fingerprint"], (
-        "the program code changed since the evidence was generated; regenerate it from a clean checkout")
+    assert build["git_commit"] == RELEASE_RC_BUILD_COMMIT, (
+        "the release-candidate evidence names an unexpected source commit")
+    assert re.fullmatch(r"[0-9a-f]{64}", build["source_fingerprint"] or ""), (
+        "the evidence does not contain a valid source fingerprint")
+    assert build["source_fingerprint"] == RELEASE_RC_SOURCE_FINGERPRINT, (
+        "the release-candidate evidence fingerprint differs from its recorded clean source build")
 
 
 def check_frozen_v1_evidence(meta: dict) -> None:

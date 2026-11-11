@@ -348,3 +348,12 @@ Not independently reviewed.
 | D7-11 | **MA warm-up (V2 only)**: with a Start date, MAs, regime MA and ATR also use the dataset's earlier bars; interactions, outcomes, baseline and the IS/OOS split use the chosen period only; the chance test keeps the warm-up bars real; readiness reports the warm-up (PASS), too few earlier bars (NOTE) and conflicting observations in them (FAIL); `ma_warmup = none` = V1 behaviour. V1 unchanged | Implemented, tested. **Default `earlier` provisional** |
 | D7-12 | **Executive interpretation** (eight plain-English answers) at the top of the V2 findings file, Excel Summary and PDF; every number is taken from the calculated results; it states the shuffle model's assumptions, the p-value resolution and that standing out from chance is not proof of an edge. Detailed outputs unchanged. The format is not locked (owner A8 direction) | Implemented, tested |
 | D7-13 | Method observations reviewed (method review note, section 3): EMA/RMA SMA seed, previous-close side label and the stability chunks are documented conventions, unchanged; Directed IR and the weights remain open owner items, unchanged | Documented; **Directed IR and weights: owner decision pending** |
+
+
+## Corrective review: PR #24/#25 integrity fixes (10-Nov-26)
+
+| Ref | Correction | Status |
+|---|---|---|
+| D7-C1 | V2 chance assessment requires a finite maximum score for every requested shuffle. Incomplete null distributions report requested/valid/invalid counts and are inconclusive; overall and candidate-adjusted p-values are suppressed. Chance parameters and scoring methodology remain unchanged | Implemented in corrective PR; independent review pending |
+| D7-C2 | Legacy binomial baseline p-values are labelled exploratory because dependent observations and overlapping forward windows undermine the independent-observation interpretation. Calculations remain unchanged | Documented in corrective PR; independent review pending |
+| D7-C3 | Successful 100% progress is emitted only after run_context finalisation (manifest, output hashes, registry updates and lock release) succeeds. Failure and cancellation do not emit success completion | Implemented in corrective PR; regression tests added |

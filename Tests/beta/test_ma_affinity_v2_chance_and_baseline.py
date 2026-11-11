@@ -133,14 +133,20 @@ def test_block_shuffle_keeps_bar_shapes_endpoints_and_blocks():
 def test_chance_summary_follows_the_documented_formula():
     tops = [50.0, 55.0, 60.0, 65.0, 70.0, 75.0, 80.0, 85.0, 90.0, np.nan]
     ch = V.chance_summary(80.0, tops, 10, 15, 1)
-    assert ch["p_value"] == round((1 + 3) / 11, 4) and ch["percentile"] == 70.0  # the empty shuffle counts below
-    assert ch["verdict"] == V.NOT_DISTINGUISHABLE and ch["null_max"] == 90.0
+    assert ch["requested_shuffles"] == ch["attempted_shuffles"] == 10
+    assert ch["valid_shuffles"] == 9 and ch["invalid_shuffles"] == 1
+    assert np.isnan(ch["p_value"]) and np.isnan(ch["percentile"])
+    assert ch["status"] == "inconclusive" and ch["verdict"] != V.STANDS_OUT
+    assert ch["null_max"] == 90.0
     many = [50.0] * 199
-    assert V.chance_summary(80.0, many, 199, 15, 1)["p_value"] == 0.005
-    assert V.chance_summary(80.0, many, 199, 15, 1)["verdict"] == V.STANDS_OUT
+    complete = V.chance_summary(80.0, many, 199, 15, 1)
+    assert complete["p_value"] == 0.005
+    assert complete["verdict"] == V.STANDS_OUT
     assert V.chance_summary(80.0, [], 0, 15, 1)["verdict"] == V.NOT_RUN
-    assert V.chance_summary(np.nan, many, 199, 15, 1)["verdict"].startswith("NO RANKED CANDIDATE")
-    assert V.chance_p_for(60.0, tops, 10) == round((1 + 7) / 11, 4)
+    no_candidate = V.chance_summary(np.nan, many, 199, 15, 1)
+    assert no_candidate["verdict"].startswith("NO RANKED CANDIDATE")
+    assert no_candidate["status"] == "no_candidate"
+    assert np.isnan(V.chance_p_for(60.0, tops, 10))
 
 
 def test_a_planted_ma_bounce_stands_out_and_a_random_walk_does_not():
@@ -233,12 +239,37 @@ def test_v2_run_writes_its_tables_and_records_the_chance_test(settings, db, data
         assert sum(n.startswith(prefix) for n in names) == 1, prefix
     meta = json.loads(res.metadata_path.read_text(encoding="utf-8"))
     ch = meta["analysis_details"]["chance_test"]
-    assert ch["shuffles"] == 19 and ch["block_bars"] == 15 and ch["seed"] == 1
-    assert ch["verdict"] in (V.STANDS_OUT, V.NOT_DISTINGUISHABLE)
+    import math
+    assert ch["shuffles"] == ch["requested_shuffles"] == 19 and ch["block_bars"] == 15 and ch["seed"] == 1
+    assert ch["status"] == "inconclusive" and ch["test_run"] is True
+    assert ch["verdict"] == "INCONCLUSIVE - INCOMPLETE NULL DISTRIBUTION"
+    assert ch["attempted_shuffles"] + ch["unattempted_shuffles"] == ch["requested_shuffles"]
+    assert ch["valid_shuffles"] + ch["invalid_shuffles"] == ch["attempted_shuffles"]
+    assert ch["valid_shuffles"] < ch["requested_shuffles"]
+    assert math.isnan(ch["p_value"]) and math.isnan(ch["percentile"])
+
     shuffles = next(res.run_dir.glob("MA_Affinity_V2_Chance_Shuffles_*.csv"))
-    assert len(list(csv.DictReader(shuffles.open(encoding="utf-8")))) == 19
+    shuffle_rows = list(csv.DictReader(shuffles.open(encoding="utf-8")))
+    assert len(shuffle_rows) == ch["attempted_shuffles"] == 19
+    finite_scores = []
+    for row in shuffle_rows:
+        try:
+            score = float(row["top_score"])
+        except (TypeError, ValueError):
+            continue
+        if math.isfinite(score):
+            finite_scores.append(score)
+        assert row["status"] == "inconclusive"
+        assert row["verdict"] == ch["verdict"]
+    assert len(finite_scores) == ch["valid_shuffles"]
+
     cand = list(csv.DictReader(next(res.run_dir.glob("MA_Affinity_V2_Candidates_*.csv")).open(encoding="utf-8")))
-    assert {"chance_p", "is_baseline_sr", "is_edge_vs_baseline", "oos_baseline_sr"} <= set(cand[0])
+    assert {"chance_p", "chance_status", "chance_verdict", "chance_test_run",
+            "is_baseline_sr", "is_edge_vs_baseline", "oos_baseline_sr"} <= set(cand[0])
+    ranked = [row for row in cand if row.get("rank")]
+    assert ranked
+    assert all(row["chance_status"] == "inconclusive" and row["chance_verdict"] == ch["verdict"] for row in ranked)
+    assert all(row["chance_p"] in ("", "nan", "NaN") for row in ranked)
     findings = next(res.run_dir.glob("MA_Affinity_V2_Findings_*.txt")).read_text(encoding="utf-8")
     assert "VERDICT: " + ch["verdict"] in findings and "baseline" in findings
     import openpyxl
@@ -263,3 +294,88 @@ def test_v2_run_reproduces_identically(settings, db, dataset):
     first = run_analysis(settings, db, MA_AFFINITY_V2, [dataset], SMALL)
     again = reproduce_run(settings, db, first.run_id)
     assert again.ok and again.reproduction["identical"], again.message
+
+
+@pytest.mark.parametrize("null_tops, valid, invalid, status", [
+    ([1.0, 2.0, 3.0], 3, 0, "complete"),
+    ([1.0, np.nan, 3.0], 2, 1, "inconclusive"),
+    ([np.nan, np.inf, -np.inf], 0, 3, "inconclusive"),
+])
+def test_null_shuffles_must_all_be_valid(null_tops, valid, invalid, status):
+    result = V.chance_summary(2.5, null_tops, 3, 15, 1)
+    assert result["requested_shuffles"] == result["shuffles"] == 3
+    assert result["attempted_shuffles"] == 3
+    assert result["unattempted_shuffles"] == 0
+    assert result["valid_shuffles"] == valid
+    assert result["invalid_shuffles"] == invalid
+    assert result["status"] == status
+    if status == "complete":
+        assert result["p_value"] == pytest.approx(0.5)
+        assert result["verdict"] == V.NOT_DISTINGUISHABLE
+    else:
+        assert np.isnan(result["p_value"]) and result["verdict"] != V.STANDS_OUT
+
+
+def test_candidate_adjusted_p_is_suppressed_for_incomplete_null():
+    assert np.isnan(V.chance_p_for(95.0, [90.0, np.nan, 80.0], 3))
+    # The approved plus-one formula is (1 + exceedances) / (N + 1): one exceedance gives 2 / 4.
+    assert V.chance_p_for(95.0, [90.0, 100.0, 80.0], 3) == pytest.approx(0.5)
+
+
+def test_no_candidate_does_not_hide_invalid_null_shuffle():
+    result = V.chance_summary(float("nan"), [np.nan, 1.0], 2, 15, 1)
+    assert result["status"] == "inconclusive"
+    assert result["valid_shuffles"] == 1 and result["invalid_shuffles"] == 1
+    assert np.isnan(result["p_value"]) and result["verdict"] != V.STANDS_OUT
+
+
+def test_null_shuffle_results_remain_deterministic_for_fixed_seed():
+    df = random_walk(n=300, seed=44)
+    settings = V.MAAffinityV2Settings(ma_types=("SMA",), ma_start=5, ma_end=12, min_interactions=2,
+                                      fwd_windows=(2,), chance_shuffles=5, chance_block_bars=15, chance_seed=17)
+    first, second = V.run_ma_affinity_v2(df, settings), V.run_ma_affinity_v2(df, settings)
+    assert first.chance == second.chance
+    assert first.chance["requested_shuffles"] == first.chance["valid_shuffles"] + first.chance["invalid_shuffles"]
+
+
+
+def test_no_ranked_candidate_is_not_misreported_as_failed_shuffles():
+    result = V.chance_summary(float("nan"), [], 200, 15, 1)
+    assert result["status"] == "no_candidate"
+    assert result["requested_shuffles"] == 200
+    assert result["attempted_shuffles"] == 0
+    assert result["valid_shuffles"] == 0
+    assert result["invalid_shuffles"] == 0
+    assert result["unattempted_shuffles"] == 200
+    assert np.isnan(result["p_value"])
+    assert result["verdict"] != V.STANDS_OUT
+
+
+def test_missing_requested_shuffles_make_null_distribution_inconclusive():
+    result = V.chance_summary(90.0, [88.0, 89.0], 3, 15, 1)
+    assert result["status"] == "inconclusive"
+    assert result["requested_shuffles"] == 3
+    assert result["attempted_shuffles"] == 2
+    assert result["valid_shuffles"] == 2
+    assert result["invalid_shuffles"] == 0
+    assert result["unattempted_shuffles"] == 1
+    assert np.isnan(result["p_value"])
+    assert result["verdict"] != V.STANDS_OUT
+
+
+def test_chance_summary_distinguishes_skipped_no_candidate_from_disabled():
+    skipped = V.chance_summary(float("nan"), [], 7, 15, 1)
+    disabled = V.chance_summary(float("nan"), [], 0, 15, 1)
+    assert skipped["status"] == "no_candidate" and skipped["test_run"] is False
+    assert skipped["requested_shuffles"] == skipped["unattempted_shuffles"] == 7
+    assert skipped["attempted_shuffles"] == skipped["valid_shuffles"] == skipped["invalid_shuffles"] == 0
+    assert disabled["status"] == "not_run" and disabled["test_run"] is False
+    assert disabled["requested_shuffles"] == 0
+
+
+def test_no_candidate_summary_marks_requested_shuffles_unattempted():
+    result = V.chance_summary(float("nan"), [], 7, 15, 1)
+    assert result["status"] == "no_candidate"
+    assert result["test_run"] is False
+    assert result["requested_shuffles"] == result["unattempted_shuffles"] == 7
+    assert result["attempted_shuffles"] == result["valid_shuffles"] == result["invalid_shuffles"] == 0

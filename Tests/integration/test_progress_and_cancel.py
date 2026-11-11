@@ -130,3 +130,189 @@ def test_v2_progress_counts_every_shuffle_and_ends_at_the_total(settings, db, da
     dones = [d for d, _, _ in seen]
     assert dones == sorted(dones) and [d for d in dones if d == total] == [total]
     assert any(m.startswith("Chance test: shuffle 7 of 7") for _, _, m in seen)
+
+
+def test_progress_completion_follows_successful_run_finalisation(settings, db, dataset, monkeypatch):
+    import qmap.core.runs as runs
+    actual_finish = runs.finish_run
+    events = []
+    state = {"finished": False}
+
+    def observed_finish(run, status="completed", error=None):
+        path = actual_finish(run, status, error)
+        state["finished"] = run.finished
+        return path
+
+    monkeypatch.setattr(runs, "finish_run", observed_finish)
+
+    def progress(done, total, message):
+        if done == total:
+            events.append((message, state["finished"]))
+
+    result = run_analysis(settings, db, MA_AFFINITY, [dataset], SMALL, progress=progress)
+    assert result.ok, result.message
+    assert events == [("Reports and run record written", True)]
+    assert _status(db, result.run_id)["status"] == "completed"
+
+
+def test_finalisation_failure_never_emits_success_completion(settings, db, dataset, monkeypatch):
+    import qmap.core.runs as runs
+    actual_finalise = runs._finish
+
+    def fail_finalise(run, status, error):
+        if status == "completed":
+            raise OSError("simulated output-hashing/finalisation failure")
+        return actual_finalise(run, status, error)
+
+    # Exercise the real finish_run wrapper, including its liveness-lock release in finally.
+    monkeypatch.setattr(runs, "_finish", fail_finalise)
+    events = []
+    result = run_analysis(settings, db, MA_AFFINITY, [dataset], SMALL,
+                          progress=lambda done, total, message: events.append((done, total, message)))
+    assert result.outcome == "failed"
+    assert not any(done == total for done, total, _ in events)
+
+
+def test_cancelled_run_never_emits_success_completion(settings, db, dataset):
+    events = []
+    result = run_analysis(settings, db, MA_AFFINITY, [dataset], SMALL, cancel=lambda: True,
+                          progress=lambda done, total, message: events.append((done, total, message)))
+    assert result.outcome == "cancelled"
+    assert not any(done == total for done, total, _ in events)
+
+
+def test_v2_no_ranked_candidate_skips_chance_test_in_production_outputs(settings, db, dataset):
+    import csv
+    import json
+    import math
+    import openpyxl
+    from qmap.analytical_engine import MA_AFFINITY_V2
+
+    # Force the real engine's candidate-ranking phase to reject every MA candidate.
+    params = {**SMALL, "min_interactions": "9999", "chance_shuffles": "7"}
+    res = run_analysis(settings, db, MA_AFFINITY_V2, [dataset], params)
+    assert res.ok, res.message
+
+    metadata = json.loads(res.metadata_path.read_text(encoding="utf-8"))
+    chance = metadata["analysis_details"]["chance_test"]
+    assert chance["status"] == "no_candidate"
+    assert chance["test_run"] is False
+    assert chance["verdict"] == "NO RANKED CANDIDATE - CHANCE TEST SKIPPED"
+    assert chance["requested_shuffles"] == 7
+    assert chance["attempted_shuffles"] == 0
+    assert chance["valid_shuffles"] == 0
+    assert chance["invalid_shuffles"] == 0
+    assert chance["unattempted_shuffles"] == 7
+    assert math.isnan(chance["p_value"]) if isinstance(chance["p_value"], float) else chance["p_value"] is None
+
+    findings = next(res.run_dir.glob("MA_Affinity_V2_Findings_*.txt")).read_text(encoding="utf-8")
+    assert "chance test was NOT RUN" in findings
+    normalised_findings = " ".join(findings.split())
+    assert "7 shuffles were requested, but zero were attempted" in normalised_findings
+    assert "CHANCE TEST NOT RUN: no candidate qualified; 7 shuffles requested, 0 attempted, 0 valid, 0 invalid, 7 unattempted." in findings
+    assert "VERDICT: NO RANKED CANDIDATE" in findings
+    assert "STATUS: no_candidate" in findings
+    assert "TEST RUN: no" in findings
+
+    with next(res.run_dir.glob("MA_Affinity_V2_Candidates_*.csv")).open(encoding="utf-8", newline="") as handle:
+        candidate_rows = list(csv.DictReader(handle))
+    assert candidate_rows
+    assert all(row["chance_status"] == "no_candidate" for row in candidate_rows)
+    assert all(row["chance_verdict"] == "NO RANKED CANDIDATE - CHANCE TEST SKIPPED" for row in candidate_rows)
+    assert all(row["chance_test_run"] in ("False", "false", "0") for row in candidate_rows)
+    assert all(row["chance_p"] in ("", "nan", "NaN") for row in candidate_rows)
+
+    with next(res.run_dir.glob("MA_Affinity_V2_Chance_Shuffles_*.csv")).open(encoding="utf-8", newline="") as handle:
+        shuffle_rows = list(csv.DictReader(handle))
+    assert len(shuffle_rows) == 1
+    assert shuffle_rows[0]["status"] == "no_candidate"
+    assert shuffle_rows[0]["test_run"] in ("False", "false", "0")
+    assert shuffle_rows[0]["requested_shuffles"] == "7"
+    assert shuffle_rows[0]["attempted_shuffles"] == "0"
+    assert shuffle_rows[0]["valid_shuffles"] == "0"
+    assert shuffle_rows[0]["invalid_shuffles"] == "0"
+    assert shuffle_rows[0]["unattempted_shuffles"] == "7"
+
+    workbook = openpyxl.load_workbook(next(res.run_dir.glob("MA_Affinity_V2_*.xlsx")), read_only=True)
+    summary = list(workbook["Summary"].values)
+    summary_text = " ".join(str(cell) for row in summary for cell in row if cell is not None)
+    assert "no_candidate" in summary_text and "0 / 0 / 0 / 0 / 7" in summary_text
+    assert "NO RANKED CANDIDATE - CHANCE TEST SKIPPED" in summary_text
+    chance_tab = list(workbook["Chance_Test"].values)
+    chance_text = " ".join(str(cell) for row in chance_tab for cell in row if cell is not None)
+    assert "no_candidate" in chance_text and "7" in chance_text and "not run" in chance_text.lower()
+    assert "NO RANKED CANDIDATE - CHANCE TEST SKIPPED" in chance_text
+
+    # The PDF must not claim that the requested shuffles actually ran.
+    from pypdf import PdfReader
+    pdf = PdfReader(str(next(res.run_dir.glob("MA_Affinity_V2_Report_*.pdf"))))
+    pdf_text = " ".join(page.extract_text() or "" for page in pdf.pages)
+    assert "no_candidate" in pdf_text
+    assert "7/0/0/0/7" in pdf_text
+    assert "no candidate was available; no chance-test shuffles were run" in pdf_text
+    assert "Chance test was NOT RUN" in pdf_text
+
+
+def test_v2_incomplete_null_distribution_is_inconclusive_in_production_outputs(settings, db, dataset, monkeypatch):
+    import json
+    import math
+    from qmap.analytical_engine import MA_AFFINITY_V2
+    from qmap.analytical_engine import ma_affinity_v2_method as method
+
+    original = method._is_top_score
+    calls = {"n": 0}
+
+    def one_invalid_shuffle(open_, high, low, close, settings_, candidates, is_end, start=0):
+        calls["n"] += 1
+        top, label = original(open_, high, low, close, settings_, candidates, is_end, start)
+        return (float("nan"), "") if calls["n"] == 1 else (top, label)
+
+    monkeypatch.setattr(method, "_is_top_score", one_invalid_shuffle)
+    params = {**SMALL, "chance_shuffles": "3"}
+    result = run_analysis(settings, db, MA_AFFINITY_V2, [dataset], params)
+    assert result.ok, result.message
+    metadata = json.loads(result.metadata_path.read_text(encoding="utf-8"))
+    chance = metadata["analysis_details"]["chance_test"]
+    assert calls["n"] == 3
+    assert chance["status"] == "inconclusive"
+    assert chance["verdict"] == "INCONCLUSIVE - INCOMPLETE NULL DISTRIBUTION"
+    assert chance["requested_shuffles"] == chance["attempted_shuffles"] == 3
+    assert chance["valid_shuffles"] == 2 and chance["invalid_shuffles"] == 1
+    assert chance["unattempted_shuffles"] == 0 and chance["test_run"] is True
+    assert math.isnan(chance["p_value"])
+    import csv
+    with next(result.run_dir.glob("MA_Affinity_V2_Candidates_*.csv")).open(encoding="utf-8", newline="") as handle:
+        candidates_out = list(csv.DictReader(handle))
+    assert candidates_out and all(row["chance_status"] == "inconclusive" for row in candidates_out if row["rank"])
+    assert all(row["chance_verdict"] == chance["verdict"] for row in candidates_out if row["rank"])
+    assert all(row["chance_p"] in ("", "nan", "NaN") for row in candidates_out if row["rank"])
+    findings = next(result.run_dir.glob("MA_Affinity_V2_Findings_*.txt")).read_text(encoding="utf-8")
+    assert "CHANCE TEST INCONCLUSIVE:" in findings
+    assert "1 invalid" in findings and "no empirical p-value or positive verdict" in findings
+
+    import openpyxl
+    workbook = openpyxl.load_workbook(next(result.run_dir.glob("MA_Affinity_V2_*.xlsx")), read_only=True)
+    summary_text = " ".join(str(cell) for row in workbook["Summary"].values for cell in row if cell is not None)
+    assert "inconclusive" in summary_text.lower()
+    assert "INCONCLUSIVE - INCOMPLETE NULL DISTRIBUTION" in summary_text
+    assert "3 / 3 / 2 / 1 / 0" in summary_text
+    chance_text = " ".join(str(cell) for row in workbook["Chance_Test"].values for cell in row if cell is not None)
+    assert "inconclusive" in chance_text.lower()
+    assert "INCONCLUSIVE - INCOMPLETE NULL DISTRIBUTION" in chance_text
+    assert "3 / 3 / 2 / 1 / 0" in chance_text
+
+    from pypdf import PdfReader
+    pdf = PdfReader(str(next(result.run_dir.glob("MA_Affinity_V2_Report_*.pdf"))))
+    pdf_text = " ".join(page.extract_text() or "" for page in pdf.pages)
+    assert "INCONCLUSIVE - INCOMPLETE NULL DISTRIBUTION" in pdf_text
+    assert "3/3/2/1/0" in pdf_text
+
+    with next(result.run_dir.glob("MA_Affinity_V2_Chance_Shuffles_*.csv")).open(
+            encoding="utf-8", newline="") as handle:
+        shuffle_rows = list(csv.DictReader(handle))
+    assert len(shuffle_rows) == 3
+    assert all(row["status"] == "inconclusive" for row in shuffle_rows)
+    assert all(row["verdict"] == chance["verdict"] for row in shuffle_rows)
+    assert all(row["requested_shuffles"] == "3" and row["valid_shuffles"] == "2"
+               and row["invalid_shuffles"] == "1" and row["unattempted_shuffles"] == "0"
+               for row in shuffle_rows)

@@ -181,10 +181,47 @@ def _num(v, fmt="{:.2f}"):
     return v1._num(v, fmt)
 
 
+def _chance_status_text(ch: dict) -> str:
+    """One source-derived explanation and count string shared by all V2 report formats."""
+    requested = int(ch.get("requested_shuffles", 0))
+    attempted = int(ch.get("attempted_shuffles", 0))
+    valid = int(ch.get("valid_shuffles", 0))
+    invalid = int(ch.get("invalid_shuffles", 0))
+    unattempted = int(ch.get("unattempted_shuffles", 0))
+    spaced = f"{requested} / {attempted} / {valid} / {invalid} / {unattempted}"
+    compact = f"{requested}/{attempted}/{valid}/{invalid}/{unattempted}"
+    status = ch.get("status", "unknown")
+    if status == "no_candidate":
+        return (
+            "NO RANKED CANDIDATE - CHANCE TEST SKIPPED. Status: no_candidate. "
+            "chance test was NOT RUN. Chance test was NOT RUN because no candidate qualified; "
+            "no candidate was available; no chance-test shuffles were run. "
+            f"{requested} shuffles were requested, but zero were attempted; zero were valid and zero were invalid. "
+            f"The {unattempted} shuffles are unattempted, not failed. "
+            f"Requested/attempted/valid/invalid/unattempted: {spaced} ({compact})."
+        )
+    if status == "inconclusive":
+        return (
+            "INCONCLUSIVE - INCOMPLETE NULL DISTRIBUTION. Status: inconclusive. "
+            f"Requested/attempted/valid/invalid/unattempted: {spaced} ({compact}). "
+            "No empirical p-value or positive chance-test conclusion is available."
+        )
+    if status == "not_run":
+        return (
+            "The chance test was not run because it was disabled (Chance shuffles = 0); "
+            "no shuffles were requested or run. Status: not_run. "
+            f"Requested/attempted/valid/invalid/unattempted: {spaced} ({compact})."
+        )
+    return (
+        f"Chance test status: {status}; verdict: {ch.get('verdict', 'unknown')}. "
+        f"Requested/attempted/valid/invalid/unattempted: {spaced} ({compact})."
+    )
+
+
 def _chance_chart(res, folder: Path, stamp: str) -> Path | None:
     ch = res.chance
-    tops = [x for x in ch.get("null_top_scores", []) if not np.isnan(x)]
-    if not tops or np.isnan(ch.get("real_top_score", np.nan)):
+    tops = [float(x) for x in ch.get("null_top_scores", []) if np.isfinite(x)]
+    if not tops or not np.isfinite(ch.get("real_top_score", np.nan)):
         return None
     import matplotlib
     matplotlib.use("Agg")
@@ -192,11 +229,13 @@ def _chance_chart(res, folder: Path, stamp: str) -> Path | None:
 
     fig, ax = plt.subplots(figsize=(10, 4.5))
     ax.hist(tops, bins=min(30, max(5, len(tops) // 5)), color="#9fb6cd", edgecolor="white",
-            label=f"#1 score on each of {ch['shuffles']} shuffled series")
+            label=f"#1 score on {ch['valid_shuffles']} valid of {ch['requested_shuffles']} requested shuffles")
     ax.axvline(ch["real_top_score"], color="#c0392b", lw=2, label=f"real #1 score {ch['real_top_score']:.2f}")
     ax.set_xlabel("Best (#1) in-sample affinity score")
     ax.set_ylabel("Shuffles")
-    ax.set_title(f"{res.label}\nChance test: {ch['verdict']} (chance p-value {ch['p_value']:.4f})", fontsize=10)
+    p_label = (f"p-value {ch['p_value']:.4f}" if np.isfinite(ch.get("p_value", np.nan))
+               else "no empirical p-value (incomplete or not applicable)")
+    ax.set_title(f"{res.label}\nChance test: {ch['verdict']} ({p_label})", fontsize=10)
     ax.legend(fontsize=8)
     fig.text(0.5, 0.005, "Historical description only - not a prediction or trading signal.", ha="center", fontsize=7,
              color="#555555")
@@ -208,9 +247,12 @@ def _chance_chart(res, folder: Path, stamp: str) -> Path | None:
 
 _V2_COLUMNS = (("Finding", "finding"), ("Group leader", "group_leader"), ("Group members", "group_members"),
                ("Strength reference", "is_strength_reference"),
-               ("Chance p (adjusted)", "chance_p"), ("IS baseline %", "is_baseline_sr"),
-               ("IS edge vs baseline (pts)", "is_edge_vs_baseline"), ("IS p vs baseline", "is_p_vs_baseline"),
-               ("OOS baseline %", "oos_baseline_sr"), ("OOS edge vs baseline (pts)", "oos_edge_vs_baseline"))
+               ("Chance p (adjusted)", "chance_p"), ("Chance status", "chance_status"),
+               ("Chance verdict", "chance_verdict"), ("IS baseline %", "is_baseline_sr"),
+               ("IS edge vs baseline (pts)", "is_edge_vs_baseline"),
+               ("IS exploratory p vs baseline", "is_p_vs_baseline"), ("OOS baseline %", "oos_baseline_sr"),
+               ("OOS edge vs baseline (pts)", "oos_edge_vs_baseline"),
+               ("OOS exploratory p vs baseline", "oos_p_vs_baseline"))
 
 
 def _results_frame(res):
@@ -239,14 +281,24 @@ def write_excel(res, folder: Path, stamp: str, charts: dict) -> Path:
     ws.title = "Summary"
     rows = [("MA Affinity V2 research", ""), ("Instrument / dataset", res.label),
             ("Report date", dt.datetime.now().strftime(qcfg.DATETIME_FMT)), ("DISCLAIMER", qcfg.DISCLAIMER_TEXT),
-            ("", ""), ("EXECUTIVE INTERPRETATION", "Plain English; every number is from this run's results")]
+            ("CHANCE TEST STATUS AND COUNTS", _chance_status_text(ch))]
+    if ch.get("status") == "no_candidate":
+        rows.append(("  attempted / valid / invalid / test-run / unattempted",
+                     f"{ch['attempted_shuffles']} / {ch['valid_shuffles']} / {ch['invalid_shuffles']} / "
+                     f"{int(bool(ch['test_run']))} / {ch['unattempted_shuffles']}"))
+    rows += [("", ""), ("EXECUTIVE INTERPRETATION", "Plain English; every number is from this run's results")]
     rows += executive_interpretation(res.label.split(", Run ")[0], res)
     rows += [("", ""), ("CHANCE TEST VERDICT", ch["verdict"]),
             ("  real #1 in-sample score", _num(ch.get("real_top_score"))),
+            ("  chance test status", ch.get("status", "unknown")),
+            ("  shuffle test run", "yes" if ch.get("test_run") else "no"),
+            ("  requested / attempted / valid / invalid / unattempted",
+             f"{ch['requested_shuffles']} / {ch['attempted_shuffles']} / {ch['valid_shuffles']} / "
+             f"{ch['invalid_shuffles']} / {ch['unattempted_shuffles']}"),
             ("  chance p-value", _num(ch.get("p_value"), "{:.4f}")),
             ("  luck-only #1 scores: mean / 95th pct / max",
              f"{_num(ch.get('null_mean'))} / {_num(ch.get('null_p95'))} / {_num(ch.get('null_max'))}"),
-            ("  shuffles / block bars / seed", f"{ch['shuffles']} / {ch['block_bars']} / {ch['seed']}"), ("", ""),
+            ("  block bars / seed", f"{ch['block_bars']} / {ch['seed']}"), ("", ""),
             ("Bars analysed", di["n_bars"]), ("Data period", f"{di['first']} to {di['last']}"),
             ("In-sample", f"{di['is_bars']} bars ({di['is_first']} to {di['is_last']})"),
             ("Out-of-sample", f"{di['oos_bars']} bars ({di['oos_first']} to {di['oos_last']})"),
@@ -278,8 +330,23 @@ def write_excel(res, folder: Path, stamp: str, charts: dict) -> Path:
     ws.auto_filter.ref = f"A1:{get_column_letter(len(df.columns))}{len(df) + 1}"
 
     ws = wb.create_sheet("Chance_Test")
-    _write_df(ws, pd.DataFrame({"Shuffle": range(1, len(ch["null_top_scores"]) + 1),
-                                "#1 score": ch["null_top_scores"], "#1 candidate": ch.get("null_top_labels", [])}))
+    chance_summary = [
+        ("Status", ch.get("status", "unknown")),
+        ("Verdict", ch.get("verdict", "unknown")),
+        ("Test run", "yes" if ch.get("test_run") else "no"),
+        ("Requested / attempted / valid / invalid / unattempted",
+         f"{ch['requested_shuffles']} / {ch['attempted_shuffles']} / {ch['valid_shuffles']} / "
+         f"{ch['invalid_shuffles']} / {ch['unattempted_shuffles']}"),
+        ("Interpretation", _chance_status_text(ch)),
+    ]
+    _kv(ws, chance_summary)
+    chance_rows = [{"Shuffle": i + 1, "#1 score": sc, "#1 candidate": lab}
+                   for i, (sc, lab) in enumerate(zip(ch["null_top_scores"], ch.get("null_top_labels", [])))]
+    if chance_rows:
+        _write_df(ws, pd.DataFrame(chance_rows), start_row=len(chance_summary) + 2)
+    else:
+        _kv(ws, [("Shuffle results", "No null-distribution observations were recorded.")],
+            start=len(chance_summary) + 2)
 
     ws = wb.create_sheet("Interactions")
     if res.interactions.empty:
@@ -341,11 +408,9 @@ def write_pdf(res, folder: Path, stamp: str, charts: dict, heading: str) -> Path
     st += [Paragraph(f"<b>{escape(head)}.</b> {escape(text)}", body)
            for head, text in executive_interpretation(res.label.split(", Run ")[0], res)]
     st += [PageBreak(), Paragraph("Chance test", h),
-          Paragraph(f"<font color='{verdict_color}'><b>{escape(ch['verdict'])}</b></font>. Real #1 in-sample score "
-                    f"{_num(ch.get('real_top_score'))}; chance p-value {_num(ch.get('p_value'), '{:.4f}')}. On "
-                    f"{ch['shuffles']} block-shuffled copies of the in-sample prices ({ch['block_bars']}-bar blocks, "
-                    f"seed {ch['seed']}) the #1 score averaged {_num(ch.get('null_mean'))} (95th percentile "
-                    f"{_num(ch.get('null_p95'))}, highest {_num(ch.get('null_max'))}).", body),
+          Paragraph(f"<font color='{verdict_color}'><b>{escape(ch['verdict'])}</b></font>. "
+                    f"{escape(_chance_status_text(ch))} "
+                    f"{'Chance p-value ' + _num(ch.get('p_value'), '{:.4f}') + '.' if np.isfinite(ch.get('p_value', np.nan)) else 'No empirical p-value is available.'}", body),
           Paragraph("Data and sample sizes", h),
           Paragraph(f"{di['n_bars']} bars ({escape(str(di['frequency']))}), {di['first']} to {di['last']}. In-sample: "
                     f"{di['is_bars']} bars ({di['is_first']} to {di['is_last']}). Out-of-sample: {di['oos_bars']} bars "
@@ -360,10 +425,12 @@ def write_pdf(res, folder: Path, stamp: str, charts: dict, heading: str) -> Path
     st += [Paragraph("- " + escape(t), small) for t in LIMITATIONS_V2]
     st.append(PageBreak())
     st.append(Paragraph(f"Frozen Top-{s.top_n} distinct findings (ranked on in-sample data only)", h))
-    hdr = ["#", "Rank", "MA", "Group", "IS aff.", "Chance p", "IS n", "IS succ %", "IS base %", "Edge pts", "OOS outc.",
+    hdr = ["#", "Rank", "MA", "Group", "IS aff.", "Chance p", "Chance status", "Chance verdict",
+           "Chance test run", "IS n", "IS succ %", "IS base %", "Edge pts", "OOS outc.",
            "OOS succ %", "OOS base %", "Consistency"]
     data = [hdr] + [[r["finding"], r["rank"], r["ma_label"], r["group_size"], _num(r["is_affinity_score"]),
-                     _num(r["chance_p"], "{:.4f}"), r["is_n"],
+                     _num(r["chance_p"], "{:.4f}"), r.get("chance_status", "NOT_RUN"),
+                     r.get("chance_verdict", "NOT_RUN"), "yes" if r.get("chance_test_run") else "no", r["is_n"],
                      _num(r["is_overall_sr"]), _num(r["is_baseline_sr"]), _num(r["is_edge_vs_baseline"]),
                      _num(r.get("oos_n_outcomes"), "{:.0f}"), _num(r["oos_overall_sr"]), _num(r["oos_baseline_sr"]),
                      _num(r["is_oos_consistency_score"])] for r in res.frozen_top_results()]
@@ -434,7 +501,9 @@ def executive_interpretation(dataset_label: str, res) -> list[tuple[str, str]]:
                 f"probability or a forecast. 'In-sample success %' is the share of qualifying in-sample outcomes in "
                 f"which price moved the expected way after {pk} bars: higher after touching the MA from above "
                 "(support), lower after touching it from below (resistance)."))
-    if ch["verdict"] in (STANDS_OUT, NOT_DISTINGUISHABLE):
+    if ch.get("status") in ("no_candidate", "not_run"):
+        chance_text = _chance_status_text(ch)
+    elif ch["verdict"] in (STANDS_OUT, NOT_DISTINGUISHABLE):
         finest = 1 / (ch["shuffles"] + 1)
         chance_text = (f"Verdict: {ch['verdict']}. On {ch['shuffles']} block-shuffled copies of the same in-sample "
                        f"prices (where any real link with a moving average is destroyed) the best score averaged "
@@ -447,8 +516,8 @@ def executive_interpretation(dataset_label: str, res) -> list[tuple[str, str]]:
                         "be treated as unproven.")
         chance_text += (f" With {ch['shuffles']} shuffles the smallest possible chance p-value is {finest:.4f}, so "
                         "p-values are approximate at that resolution.")
-    elif ch["verdict"] == NOT_RUN:
-        chance_text = "The chance test was not run (Chance shuffles = 0), so the scores cannot be judged against luck."
+    elif ch.get("status") == "inconclusive":
+        chance_text = _chance_status_text(ch)
     else:
         chance_text = f"{ch['verdict']}."
     out.append(("5. Comparison with chance", chance_text))
@@ -507,13 +576,30 @@ def _findings(ctx: RunContext, info, res) -> Path:
         lines += [head, *textwrap.wrap(text, 110, initial_indent="  ", subsequent_indent="  "), ""]
     lines += ["DETAILED FINDINGS", "",
               "Research question", f"  {RESEARCH_QUESTION}", "",
-              "Chance test", f"  VERDICT: {ch['verdict']}"]
+              "Chance test"]
+    if ch.get("status") != "complete":
+        lines += [f"  STATUS: {ch.get('status', 'unknown')}",
+                  f"  TEST RUN: {'yes' if ch.get('test_run') else 'no'}"]
+    lines.append(f"  VERDICT: {ch['verdict']}")
     if ch["verdict"] in (STANDS_OUT, NOT_DISTINGUISHABLE):
         lines.append(f"  The real #1 in-sample score is {_num(ch['real_top_score'])}. On {ch['shuffles']} copies of the "
                      f"in-sample prices shuffled in blocks of {ch['block_bars']} bars (seed {ch['seed']}), the #1 score "
                      f"averaged {_num(ch['null_mean'])}, its 95th percentile was {_num(ch['null_p95'])} and the "
                      f"highest was {_num(ch['null_max'])}. Chance p-value {_num(ch['p_value'], '{:.4f}')} (the share "
                      "of shuffles that did at least as well, counting the real series).")
+    if ch.get("status") == "no_candidate":
+        lines.append(f"  CHANCE TEST NOT RUN: no candidate qualified; {ch['requested_shuffles']} shuffles "
+                     f"requested, 0 attempted, 0 valid, 0 invalid, {ch['unattempted_shuffles']} unattempted.")
+    elif ch.get("status") == "not_run":
+        lines.append("  CHANCE TEST NOT RUN: disabled (0 shuffles requested, 0 attempted).")
+    elif ch.get("status") == "inconclusive":
+        lines.append(f"  CHANCE TEST INCONCLUSIVE: {ch['valid_shuffles']} valid, {ch['invalid_shuffles']} invalid, "
+                     f"{ch['unattempted_shuffles']} unattempted out of {ch['requested_shuffles']} requested; "
+                     "no empirical p-value or positive verdict.")
+    if ch.get("status") != "complete":
+        lines.append(f"  Requested/attempted/valid/invalid/unattempted shuffles: "
+                     f"{ch['requested_shuffles']}/{ch['attempted_shuffles']}/{ch['valid_shuffles']}/"
+                     f"{ch['invalid_shuffles']}/{ch['unattempted_shuffles']}")
     lines += ["", "Data", f"  {di['n_bars']} bars from {di['first']} to {di['last']}. Ranking used the in-sample part "
               f"only: {di['is_bars']} bars ({di['is_first']} to {di['is_last']}). The out-of-sample check used the "
               f"remaining {di['oos_bars']} bars ({di['oos_first']} to {di['oos_last']}).", "",
@@ -542,7 +628,19 @@ def _findings(ctx: RunContext, info, res) -> Path:
                          f"{_num(r['chance_p'], '{:.4f}')}; in-sample {_num(r['is_overall_sr'])}% success over "
                          f"{r['is_n_outcomes']} outcome(s) against a baseline of {_num(r['is_baseline_sr'])}% (edge "
                          f"{_num(r['is_edge_vs_baseline'])} pts); {oos}.")
-    lines += ["", "How to read this", *[f"  - {t}" for t in LIMITATIONS_V2], f"  - {qcfg.DISCLAIMER_TEXT}",
+    findings_limitations = LIMITATIONS_V2
+    if ch.get("status") == "complete":
+        # Preserve the committed complete-run Findings text; the PDF retains the expanded methodology caveat.
+        legacy_binomial_note = (
+            "The binomial p-values in the tables are NOT corrected for the many candidates tested; "
+            "they are kept for reference only. Use the chance p-value to judge a finding."
+        )
+        findings_limitations = tuple(
+            legacy_binomial_note if item.startswith("The legacy binomial baseline p-values") else item
+            for item in LIMITATIONS_V2
+            if not item.startswith("The block-shuffle chance test is inconclusive")
+        )
+    lines += ["", "How to read this", *[f"  - {t}" for t in findings_limitations], f"  - {qcfg.DISCLAIMER_TEXT}",
               "  - Full tables: MA_Affinity_V2_Candidates, MA_Affinity_V2_Interactions and MA_Affinity_V2_Chance_Shuffles "
               "(CSV), the Excel workbook and the PDF."]
     path = ctx.output(f"MA_Affinity_V2_Findings_{ctx.stamp}.txt")
@@ -583,6 +681,13 @@ def execute(ctx: RunContext) -> list[Path]:
     for w in res.warnings:
         ctx.log(f"WARNING: {w}")
     ch = res.chance
+    chance_metadata = {k: ch[k] for k in (
+        "verdict", "real_top_score", "p_value", "percentile", "shuffles", "block_bars", "seed",
+        "null_mean", "null_p95", "null_max")}
+    if ch.get("status") != "complete":
+        chance_metadata.update({k: ch[k] for k in (
+            "status", "test_run", "requested_shuffles", "attempted_shuffles", "valid_shuffles",
+            "invalid_shuffles", "unattempted_shuffles")})
     ctx.details.update({
         "bars_used": {"count": int(len(frame)), "first": frame.index[0].date().isoformat(),
                       "last": frame.index[-1].date().isoformat()},
@@ -591,8 +696,7 @@ def execute(ctx: RunContext) -> list[Path]:
         "split": {k: res.data_info[k] for k in ("is_bars", "is_first", "is_last", "oos_bars", "oos_first", "oos_last")},
         "frozen_top": [f"{t}-{p}" for t, p in res.frozen_top], "status_counts": res.counts(),
         "engine": METHOD_SOURCE, "research_question": RESEARCH_QUESTION,
-        "chance_test": {k: ch[k] for k in ("verdict", "real_top_score", "p_value", "percentile", "shuffles",
-                                           "block_bars", "seed", "null_mean", "null_p95", "null_max")}})
+        "chance_test": chance_metadata})
     res.warnings.extend(f"Q-MAP data: {w}" for w in ctx.readiness_warnings)
     res.warnings.extend(f"Q-MAP dataset validation warning: {w}" for w in info.warnings)
     charts = make_charts(res, ctx.run_dir, ctx.stamp)
@@ -604,13 +708,36 @@ def execute(ctx: RunContext) -> list[Path]:
                f"(SHA-256): {b['source_fingerprint']} | Dataset checksum (SHA-256): {info.sha256}")
     outputs = [write_excel(res, ctx.run_dir, ctx.stamp, charts), write_pdf(res, ctx.run_dir, ctx.stamp, charts, heading)]
     outputs += list(charts.values())
-    outputs.append(v1._csv(ctx.output(f"MA_Affinity_V2_Candidates_{ctx.stamp}.csv"), res.results))
+    candidate_csv_rows = res.results
+    if ch.get("status") == "complete":
+        # The frozen complete-result evidence predates these explanatory columns; keep its CSV schema stable.
+        status_columns = {"chance_status", "chance_verdict", "chance_test_run"}
+        candidate_csv_rows = [{k: v for k, v in row.items() if k not in status_columns} for row in res.results]
+    outputs.append(v1._csv(ctx.output(f"MA_Affinity_V2_Candidates_{ctx.stamp}.csv"), candidate_csv_rows))
     outputs.append(v1._csv(ctx.output(f"MA_Affinity_V2_Interactions_{ctx.stamp}.csv"),
                            res.interactions.to_dict("records")))
-    outputs.append(v1._csv(ctx.output(f"MA_Affinity_V2_Chance_Shuffles_{ctx.stamp}.csv"),
-                           [{"shuffle": i + 1, "top_score": sc, "top_candidate": lab} for i, (sc, lab) in
-                            enumerate(zip(ch["null_top_scores"], ch.get("null_top_labels", [])))]
-                           or [{"shuffle": "", "top_score": "", "top_candidate": ""}]))
+    if ch.get("status") == "complete":
+        # Preserve the committed complete-null CSV schema and evidence bytes.
+        chance_csv_rows = [
+            {"shuffle": i + 1, "top_score": sc, "top_candidate": lab}
+            for i, (sc, lab) in enumerate(zip(ch["null_top_scores"], ch.get("null_top_labels", [])))
+        ]
+    else:
+        # In non-complete states, carry the common status and audit counts on every recorded row.
+        chance_csv_context = {
+            "status": ch.get("status"), "verdict": ch.get("verdict"), "test_run": ch.get("test_run"),
+            "requested_shuffles": ch.get("requested_shuffles"),
+            "attempted_shuffles": ch.get("attempted_shuffles"), "valid_shuffles": ch.get("valid_shuffles"),
+            "invalid_shuffles": ch.get("invalid_shuffles"), "unattempted_shuffles": ch.get("unattempted_shuffles"),
+            "interpretation": _chance_status_text(ch),
+        }
+        chance_csv_rows = [
+            {"shuffle": i + 1, "top_score": sc, "top_candidate": lab, **chance_csv_context}
+            for i, (sc, lab) in enumerate(zip(ch["null_top_scores"], ch.get("null_top_labels", [])))
+        ]
+        if not chance_csv_rows:
+            chance_csv_rows = [{"shuffle": "", "top_score": "", "top_candidate": "", **chance_csv_context}]
+    outputs.append(v1._csv(ctx.output(f"MA_Affinity_V2_Chance_Shuffles_{ctx.stamp}.csv"), chance_csv_rows))
     outputs.append(_findings(ctx, info, res))
     ctx.log(f"Frozen Top-{len(res.frozen_top)}: " + (", ".join(f"{t}-{p}" for t, p in res.frozen_top) or "none")
             + f". Chance test: {ch['verdict']}.")
@@ -627,8 +754,9 @@ SPEC = AnalysisSpec(
     run_prefix="MAA2",
     requirement=DataRequirement(timeframes=TIMEFRAMES, min_rows=qcfg.MIN_ROWS_REQUIRED, allow_mixed=False),
     execute=execute, parameters=PARAMETERS, min_datasets=1, max_datasets=1,
-    kind_note="exploratory historical research - not a trading signal; judge results by the chance test, not by the "
-              "uncorrected p-values; Directed IR and the weight scheme are pending owner review",
+    kind_note="exploratory historical research - not a trading signal; baseline p-values are exploratory diagnostics, "
+              "not definitive inferential evidence; judge results by the chance test; Directed IR and the weight scheme "
+              "are pending owner review",
     check_params=check_params, dataset_checks=dataset_checks, method_source=METHOD_SOURCE,
     result_tables=("MA_Affinity_V2_Candidates_", "MA_Affinity_V2_Interactions_", "MA_Affinity_V2_Chance_Shuffles_"),
 )

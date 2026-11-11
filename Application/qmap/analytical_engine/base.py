@@ -330,9 +330,6 @@ def run_analysis(settings: Settings, db: Database, spec: AnalysisSpec, dataset_i
                 meta["reproduction"] = reproduction
             meta_path = run.dir / f"Run_Metadata_{stamp}.json"
             atomic_write_bytes(meta_path, json.dumps(meta, indent=2, default=str, sort_keys=True).encode("utf-8"))
-            if progress is not None:
-                final = reported["total"] + 1
-                progress(final, final, "Reports and run record written")
     except RunCancelled:
         say(f"Run {run_id} cancelled by the user; it is recorded as cancelled.")
         return AnalysisRunResult("cancelled", f"Cancelled. Run {run_id} stopped before it finished and is recorded as "
@@ -342,6 +339,10 @@ def run_analysis(settings: Settings, db: Database, spec: AnalysisSpec, dataset_i
         say(f"FAILED: {type(exc).__name__}: {exc}")
         return AnalysisRunResult("failed", f"The analysis failed ({type(exc).__name__}: {exc}). The run is recorded as "
                                  "failed; see its log.", run_id, run_dir, readiness=readiness)
+    # run_context exited successfully: manifest, output hashes, registry updates and lock release are complete.
+    if progress is not None:
+        final = reported["total"] + 1
+        progress(final, final, "Reports and run record written")
     say(f"Run {run_id} completed: {len(outputs)} output file(s).")
     return AnalysisRunResult("completed", f"Completed. Results are in {run_dir}", run_id, run_dir, outputs, meta_path,
                              readiness, reproduction)

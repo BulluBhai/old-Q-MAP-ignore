@@ -179,8 +179,16 @@ def test_the_executive_interpretation_uses_the_calculated_numbers(make, shuffles
         assert "not proof of a profitable or lasting edge" in text and A._num(ch["p_value"], "{:.4f}") in text
     elif ch["verdict"] == V.NOT_DISTINGUISHABLE:
         assert "treated as unproven" in text and "do not rely on this ranking" in text.lower()
+    elif ch.get("status") == "not_run":
+        assert "chance test was not run because it was disabled" in text
+        assert "Chance shuffles above 0" in text
+        assert "no shuffles were requested or run" in text
+        assert np.isnan(ch["p_value"])
+        assert not ch["test_run"]
     else:
-        assert "chance test was not run" in text and "Chance shuffles above 0" in text
+        assert "inconclusive" in text.lower()
+        assert "no empirical p-value" in text.lower()
+        assert np.isnan(ch["p_value"])
     if shuffles:
         assert f"{1 / (shuffles + 1):.4f}" in text  # the p-value resolution is stated
 

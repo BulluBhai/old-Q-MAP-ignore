@@ -1,8 +1,8 @@
 # Q-MAP MA Affinity V2 release candidate acceptance tracker (R1 to R10)
 
 Guide: `Q-MAP_MA_Affinity_V2_RC_Acceptance_Guide_10_Nov_26_113344.md` (same folder). Program: commit
-`e230de3fe15df345ed28b0385b217b1cd47d830e`. To be filled in by the Project Owner; nothing below has been tested by the
-owner yet. Evidence folder: `D:\Q-MAP_V01\RC_Test\Evidence`.
+`596b5d2e343c8ef16904c940a9a91f7078e8ba64`. To be filled in by the Project Owner; nothing below has been tested by the
+owner yet. Automated CI is reported separately on [PR #26](https://github.com/BulluBhai/Q-MAP/pull/26); it does not count as any R1-R10 result. Evidence folder: `D:\Q-MAP_V01\RC_Test\Evidence`.
 
 ## 1. Test details
 
@@ -10,7 +10,7 @@ owner yet. Evidence folder: `D:\Q-MAP_V01\RC_Test\Evidence`.
 |---|---|
 | Date (dd-mmm-yy) | |
 | Python version (IDLE first line) | |
-| Commit to test (filled in; must match the downloaded folder name) | `e230de3fe15df345ed28b0385b217b1cd47d830e` |
+| Commit to test (filled in; must match the downloaded folder name) | `596b5d2e343c8ef16904c940a9a91f7078e8ba64` |
 | Downloaded folder name ends with that commit (yes / no) | |
 | Test folder used (`RC_Test`, or the new name from step 2.1.2) | |
 | R1 case seen (A = remembered folders kept, B = prepared automatically) | |
