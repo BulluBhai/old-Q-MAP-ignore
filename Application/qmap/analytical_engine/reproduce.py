@@ -65,7 +65,7 @@ def _plain_name(name) -> bool:
 
 def _safe_relative_path(name) -> bool:
     return (isinstance(name, str) and bool(name) and not name.startswith("/")
-            and "\\\\" not in name and ":" not in name
+            and chr(92) not in name and ":" not in name
             and all(part not in ("", ".", "..") for part in name.split("/")))
 
 
