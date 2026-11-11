@@ -62,6 +62,104 @@ def _plain_name(name) -> bool:
     return isinstance(name, str) and name not in ("", ".", "..") and not any(c in name for c in "/\\:")
 
 
+def _safe_relative_path(name) -> bool:
+    return (isinstance(name, str) and bool(name) and not name.startswith("/")
+            and "\\\\" not in name and ":" not in name
+            and all(part not in ("", ".", "..") for part in name.split("/")))
+
+
+def _verify_registered_provenance(db: Database, run_id: str, folder: Path, run_row) -> tuple[dict, dict]:
+    """Verify the metadata and manifest against the checksums already recorded when the run was closed.
+
+    No registry migration is needed: finish_run records a SHA-256 for every run output, including Run_Metadata and
+    run_manifest.json. Older records without those anchors are refused as unverifiable rather than rewritten.
+    """
+    output_path = str(run_row["output_path"]).strip("/")
+    prefix = output_path + "/"
+    rows = db.query(
+        "SELECT relative_path, kind, sha256, size_bytes FROM run_outputs WHERE run_id = ? ORDER BY relative_path",
+        (run_id,),
+    )
+    registered = {}
+    for item in rows:
+        stored_path = item["relative_path"]
+        if not isinstance(stored_path, str) or not stored_path.startswith(prefix):
+            raise ReproduceError(f"The output registry of run {run_id} contains a path outside its recorded run folder.")
+        relative = stored_path[len(prefix):]
+        if not _safe_relative_path(relative) or relative in registered:
+            raise ReproduceError(f"The output registry of run {run_id} contains an invalid or duplicate file path.")
+        registered[relative] = item
+
+    metadata_files = sorted(folder.glob("Run_Metadata_*.json"))
+    if not metadata_files:
+        raise ReproduceError(f"Run {run_id} has no Run_Metadata file in {folder}; it is not an analysis run, or its "
+                             "folder was moved.")
+    if len(metadata_files) > 1:
+        raise ReproduceError(f"Run {run_id} has {len(metadata_files)} Run_Metadata files in {folder}; a run has exactly one, so "
+                             "Q-MAP cannot tell which is the record.")
+    metadata_path = metadata_files[0]
+    metadata_record = registered.get(metadata_path.name)
+    if (metadata_record is None or metadata_record["kind"] != "json"
+            or not isinstance(metadata_record["sha256"], str)
+            or not _SHA256.fullmatch(metadata_record["sha256"])):
+        raise ReproduceError(f"The registry has no valid SHA-256 checksum for the Run_Metadata file of run {run_id}.")
+    try:
+        metadata_hash = sha256_file(metadata_path)
+    except OSError as exc:
+        raise ReproduceError(f"The Run_Metadata file of run {run_id} cannot be read ({exc.strerror or exc}).") from None
+    if metadata_hash != metadata_record["sha256"]:
+        raise ReproduceError(f"The Run_Metadata file of run {run_id} does not match the SHA-256 checksum recorded "
+                             "in the registry; it may have been changed after the run.")
+
+    manifest_path = folder / "run_manifest.json"
+    manifest_record = registered.get("run_manifest.json")
+    if (manifest_record is None or not isinstance(manifest_record["sha256"], str)
+            or not _SHA256.fullmatch(manifest_record["sha256"])):
+        raise ReproduceError(f"The registry has no valid SHA-256 checksum for run {run_id}'s run_manifest.json.")
+    try:
+        manifest_hash = sha256_file(manifest_path)
+    except OSError as exc:
+        raise ReproduceError(f"The run manifest of run {run_id} cannot be read ({exc.strerror or exc}).") from None
+    if manifest_hash != manifest_record["sha256"]:
+        raise ReproduceError(f"The run manifest of run {run_id} does not match its SHA-256 checksum recorded in the "
+                             "registry; the historical record cannot be trusted.")
+
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, ValueError) as exc:
+        raise ReproduceError(f"The run manifest of run {run_id} is damaged or cannot be read ({exc}).") from None
+    if not isinstance(manifest, dict) or manifest.get("run_id") != run_id or manifest.get("status") != "completed":
+        raise ReproduceError(f"The run manifest of run {run_id} is incomplete or inconsistent with the registry.")
+
+    manifest_outputs = manifest.get("outputs")
+    if not isinstance(manifest_outputs, list):
+        raise ReproduceError(f"The run manifest of run {run_id} has no valid output records.")
+    expected = {}
+    for entry in manifest_outputs:
+        if not isinstance(entry, dict):
+            raise ReproduceError(f"The run manifest of run {run_id} contains an invalid output record.")
+        relative = entry.get("relative_path")
+        if (not _safe_relative_path(relative) or relative == "run_manifest.json"
+                or relative in expected or not isinstance(entry.get("sha256"), str)
+                or not _SHA256.fullmatch(entry["sha256"])
+                or not isinstance(entry.get("size_bytes"), int) or isinstance(entry.get("size_bytes"), bool)
+                or entry["size_bytes"] < 0 or not isinstance(entry.get("kind"), str)):
+            raise ReproduceError(f"The run manifest of run {run_id} contains an incomplete or duplicate output record.")
+        expected[relative] = entry
+
+    registered_outputs = {name: item for name, item in registered.items() if name != "run_manifest.json"}
+    if set(expected) != set(registered_outputs):
+        raise ReproduceError(f"The output records in the registry of run {run_id} do not agree with its run manifest.")
+    for relative, entry in expected.items():
+        item = registered_outputs[relative]
+        if (item["sha256"] != entry["sha256"] or item["kind"] != entry["kind"]
+                or item["size_bytes"] != entry["size_bytes"]):
+            raise ReproduceError(f"The output registry record for {relative} in run {run_id} does not agree with its "
+                                 "run manifest.")
+    return manifest, registered
+
+
+
 def _read_metadata(run_id: str, folder: Path) -> dict:
     """The earlier run's Run_Metadata as a dict, or a ReproduceError saying plainly what is wrong with it."""
     metas = sorted(folder.glob("Run_Metadata_*.json"))
@@ -124,13 +222,95 @@ def _validated(run_id: str, meta: dict, spec) -> None:
         raise bad("build", "is not a build record")
 
 
+def _reconcile_metadata_with_registry(run_id: str, meta: dict, spec, run_row, manifest: dict,
+                                      db: Database, registered_outputs: dict) -> None:
+    """Cross-check every reproduction input against the run row, run_inputs, datasets and frozen manifest."""
+    try:
+        run_parameters = json.loads(run_row["params_json"])
+    except (TypeError, ValueError) as exc:
+        raise ReproduceError(f"The registry parameters for run {run_id} are not valid JSON ({exc}).") from None
+    if not isinstance(run_parameters, dict):
+        raise ReproduceError(f"The registry parameters for run {run_id} are not a valid run record.")
+    if manifest.get("parameters") != run_parameters:
+        raise ReproduceError(f"The registry parameters for run {run_id} do not match its run manifest.")
+    if (run_parameters.get("analysis_id") != meta.get("analysis_id")
+            or run_parameters.get("analysis_version") != meta.get("analysis_version")):
+        raise ReproduceError(f"The Run_Metadata analysis identity for run {run_id} does not match the registry.")
+    if meta.get("parameters") != run_parameters.get("parameters"):
+        raise ReproduceError(f"The Run_Metadata parameters for run {run_id} do not match the registry.")
+
+    # Re-parse the exact text entered by the user. This prevents a changed raw_parameters field from silently
+    # reproducing a different effective set of parameters, even when the normalized parameters field is untouched.
+    from datetime import date
+    from .base import _parse_param
+    raw = meta.get("raw_parameters")
+    if not isinstance(raw, dict):
+        raise ReproduceError(f"The Run_Metadata raw parameters for run {run_id} are inconsistent.")
+    effective = {}
+    for parameter in spec.parameters:
+        value, problem = _parse_param(parameter, raw.get(parameter.key))
+        if problem:
+            raise ReproduceError(f"The Run_Metadata raw parameter '{parameter.key}' for run {run_id} is invalid: "
+                                 f"{problem}")
+        effective[parameter.key] = value
+    if spec.check_params is not None:
+        effective, problems = spec.check_params(dict(effective))
+        if problems:
+            raise ReproduceError(f"The Run_Metadata parameters for run {run_id} do not reproduce their recorded "
+                                 f"values: {' '.join(problems)}")
+    effective = {key: (value.isoformat() if isinstance(value, date) else value)
+                 for key, value in effective.items()}
+    if effective != meta.get("parameters"):
+        raise ReproduceError(f"The Run_Metadata raw parameters for run {run_id} do not match its recorded parameters.")
+
+    datasets = meta.get("input_datasets")
+    ids = [item["dataset_id"] for item in datasets]
+    if len(ids) != len(set(ids)):
+        raise ReproduceError(f"The Run_Metadata of run {run_id} contains duplicate dataset references.")
+    if run_parameters.get("dataset_ids") != ids:
+        raise ReproduceError(f"The Run_Metadata dataset references for run {run_id} do not match the registry.")
+    registered_inputs = [item["dataset_id"] for item in db.query(
+        "SELECT dataset_id FROM run_inputs WHERE run_id = ? ORDER BY dataset_id", (run_id,))]
+    if sorted(ids) != registered_inputs:
+        raise ReproduceError(f"The Run_Metadata dataset references for run {run_id} do not match run_inputs in the registry.")
+
+    manifest_inputs = manifest.get("input_datasets")
+    if not isinstance(manifest_inputs, list):
+        raise ReproduceError(f"The run manifest of run {run_id} has no valid input dataset records.")
+    manifest_by_id = {}
+    for item in manifest_inputs:
+        if not isinstance(item, dict) or not isinstance(item.get("dataset_id"), int):
+            raise ReproduceError(f"The run manifest of run {run_id} contains an invalid input dataset record.")
+        if item["dataset_id"] in manifest_by_id:
+            raise ReproduceError(f"The run manifest of run {run_id} contains duplicate input dataset records.")
+        manifest_by_id[item["dataset_id"]] = item.get("sha256")
+    if set(manifest_by_id) != set(ids):
+        raise ReproduceError(f"The run manifest dataset references for run {run_id} do not match Run_Metadata.")
+
+    for item in datasets:
+        dataset_id = item["dataset_id"]
+        current = db.one("SELECT dataset_id, sha256 FROM datasets WHERE dataset_id = ?", (dataset_id,))
+        if current is None or current["sha256"] != item["sha256"]:
+            raise ReproduceError(f"Dataset {dataset_id} used by run {run_id} does not match its registry record.")
+        if manifest_by_id.get(dataset_id) != item["sha256"]:
+            raise ReproduceError(f"Dataset {dataset_id} in the run manifest of run {run_id} does not match Run_Metadata.")
+
+    output_names = meta.get("outputs")
+    if not isinstance(output_names, list) or len(output_names) != len(set(output_names)):
+        raise ReproduceError(f"The Run_Metadata output records for run {run_id} are invalid or duplicated.")
+    available_names = {name.rsplit("/", 1)[-1] for name in registered_outputs}
+    if any(name not in available_names for name in output_names):
+        raise ReproduceError(f"The Run_Metadata output records for run {run_id} do not match the registry.")
+
+
+
 def load_earlier_run(settings: Settings, db: Database, run_id: str, analyses: dict) -> EarlierRun:
     """Everything a reproduction needs from the earlier run, checked before anything runs. Any expected problem with
     the record, the folders or the files is a ReproduceError (a plain refusal); nothing is written or changed here."""
     run_id = (run_id or "").strip()
     if not run_id:
         raise ReproduceError("No Run ID was given.")
-    row = db.one("SELECT run_id, status, output_path FROM runs WHERE run_id = ?", (run_id,))
+    row = db.one("SELECT run_id, status, output_path, params_json, module_code FROM runs WHERE run_id = ?", (run_id,))
     if row is None:
         raise ReproduceError(f"There is no run '{run_id}' in this Q-MAP registry.")
     if row["status"] != "completed" or not row["output_path"]:
@@ -142,6 +322,7 @@ def load_earlier_run(settings: Settings, db: Database, run_id: str, analyses: di
                              "Q-MAP_OUTPUT folder, so it is not used.")
     if not folder.is_dir():
         raise ReproduceError(f"The folder of run {run_id} ({folder}) is missing; it was moved or deleted.")
+    manifest, registered_outputs = _verify_registered_provenance(db, run_id, folder, row)
     meta = _read_metadata(run_id, folder)
     # checked before they are used: a damaged record can hold any JSON value here (a list or an object would make the
     # analysis lookup fail, and JSON true would compare equal to version 1)
@@ -162,6 +343,7 @@ def load_earlier_run(settings: Settings, db: Database, run_id: str, analyses: di
         raise ReproduceError(f"Run {run_id} was made before runs recorded the parameters exactly as entered "
                              "(09-Nov-26), so it cannot be repeated exactly. Runs made from now on can.")
     _validated(run_id, meta, spec)
+    _reconcile_metadata_with_registry(run_id, meta, spec, row, manifest, db, registered_outputs)
     for d in meta["input_datasets"]:
         info = db.one("SELECT dataset_id, relative_path FROM datasets WHERE dataset_id = ?", (d["dataset_id"],))
         if info is None:
