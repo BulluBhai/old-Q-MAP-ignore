@@ -62,9 +62,10 @@ def _plain_name(name) -> bool:
     return isinstance(name, str) and name not in ("", ".", "..") and not any(c in name for c in "/\\:")
 
 
+
 def _safe_relative_path(name) -> bool:
     return (isinstance(name, str) and bool(name) and not name.startswith("/")
-            and "\\\\" not in name and ":" not in name
+            and chr(92) not in name and ":" not in name
             and all(part not in ("", ".", "..") for part in name.split("/")))
 
 
@@ -159,7 +160,6 @@ def _verify_registered_provenance(db: Database, run_id: str, folder: Path, run_r
     return manifest, registered
 
 
-
 def _read_metadata(run_id: str, folder: Path) -> dict:
     """The earlier run's Run_Metadata as a dict, or a ReproduceError saying plainly what is wrong with it."""
     metas = sorted(folder.glob("Run_Metadata_*.json"))
@@ -220,6 +220,7 @@ def _validated(run_id: str, meta: dict, spec) -> None:
         raise bad("outputs", "is missing or names something other than plain file names")
     if "build" in meta and not isinstance(meta["build"], dict):
         raise bad("build", "is not a build record")
+
 
 
 def _reconcile_metadata_with_registry(run_id: str, meta: dict, spec, run_row, manifest: dict,
@@ -303,7 +304,6 @@ def _reconcile_metadata_with_registry(run_id: str, meta: dict, spec, run_row, ma
         raise ReproduceError(f"The Run_Metadata output records for run {run_id} do not match the registry.")
 
 
-
 def load_earlier_run(settings: Settings, db: Database, run_id: str, analyses: dict) -> EarlierRun:
     """Everything a reproduction needs from the earlier run, checked before anything runs. Any expected problem with
     the record, the folders or the files is a ReproduceError (a plain refusal); nothing is written or changed here."""
@@ -343,6 +343,7 @@ def load_earlier_run(settings: Settings, db: Database, run_id: str, analyses: di
         raise ReproduceError(f"Run {run_id} was made before runs recorded the parameters exactly as entered "
                              "(09-Nov-26), so it cannot be repeated exactly. Runs made from now on can.")
     _validated(run_id, meta, spec)
+
     _reconcile_metadata_with_registry(run_id, meta, spec, row, manifest, db, registered_outputs)
     for d in meta["input_datasets"]:
         info = db.one("SELECT dataset_id, relative_path FROM datasets WHERE dataset_id = ?", (d["dataset_id"],))
@@ -385,7 +386,7 @@ def load_earlier_run(settings: Settings, db: Database, run_id: str, analyses: di
     return EarlierRun(run_id, folder, meta, tables)
 
 
-def reproduce_run(settings: Settings, db: Database, run_id: str, *, log=None, progress=None, cancel=None):
+def reproduce_run(settings: Settings, db: Database, run_id: str, *, log=None):
     """Run the earlier run again as a new run and compare. Returns the AnalysisRunResult of the new run; its
     `reproduction` (also in Run_Metadata) says whether every result table is identical."""
     from . import ANALYSES
@@ -401,8 +402,7 @@ def reproduce_run(settings: Settings, db: Database, run_id: str, *, log=None, pr
     say(f"Reproducing run {earlier.run_id} ({spec.name}) with its recorded datasets and parameters...")
     raw = {k: v for k, v in meta["raw_parameters"].items() if v is not None}
     ids = [d["dataset_id"] for d in meta["input_datasets"]]
-    return run_analysis(settings, db, spec, ids, raw, log=log, reproduce_of={"earlier": earlier}, progress=progress,
-                        cancel=cancel)
+    return run_analysis(settings, db, spec, ids, raw, log=log, reproduce_of={"earlier": earlier})
 
 
 def compare_and_report(ctx, spec, reproduce_of: dict, outputs: list[Path]) -> tuple[Path, dict]:
@@ -414,14 +414,6 @@ def compare_and_report(ctx, spec, reproduce_of: dict, outputs: list[Path]) -> tu
     same_build = build_now.get("source_fingerprint") == build_then.get("source_fingerprint")
     rows.append(("Code build", build_then.get("source_fingerprint", "(not recorded)"),
                  build_now.get("source_fingerprint"), "same" if same_build else "DIFFERENT"))
-    libs_then, libs_now = build_then.get("libraries"), build_now.get("libraries")
-    same_libs = libs_then == libs_now if libs_then is not None else None
-
-    def _libs(d):
-        return "(not recorded - run made before 10-Nov-26)" if d is None else ", ".join(
-            f"{k} {v}" for k, v in sorted(d.items()))
-    rows.append(("Python and library versions", _libs(libs_then), _libs(libs_now),
-                 "not recorded" if same_libs is None else "same" if same_libs else "DIFFERENT"))
     for d in meta["input_datasets"]:
         rows.append((f"Dataset {d['dataset_id']} ({d.get('instrument')}) checksum", d["sha256"], d["sha256"],
                      "same (checked before the run)"))
@@ -437,8 +429,7 @@ def compare_and_report(ctx, spec, reproduce_of: dict, outputs: list[Path]) -> tu
                      f"{new.name if new else '-'} sha256 {sha_now}", "IDENTICAL" if same else "DIFFERENT"))
     verdict = ("REPRODUCED: every result table is identical to run " + earlier.run_id if identical else
                "NOT REPRODUCED: at least one result table differs from run " + earlier.run_id +
-               ("" if same_build else " (the code build is different, see the first row)") +
-               (" (Python or library versions differ, see the second row)" if same_libs is False else ""))
+               ("" if same_build else " (the code build is different, see the first row)"))
     path = ctx.output(f"Reproducibility_Report_{ctx.stamp}.csv")
     with open(path, "w", newline="", encoding="utf-8") as fh:
         w = csv.writer(fh)
@@ -446,5 +437,4 @@ def compare_and_report(ctx, spec, reproduce_of: dict, outputs: list[Path]) -> tu
         w.writerows(rows)
         w.writerow(("Verdict", "", "", verdict))
     ctx.log(verdict)
-    return path, {"of_run_id": earlier.run_id, "identical": identical, "same_build": same_build,
-                  "same_libraries": same_libs, "verdict": verdict}
+    return path, {"of_run_id": earlier.run_id, "identical": identical, "same_build": same_build, "verdict": verdict}

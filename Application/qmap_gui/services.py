@@ -154,8 +154,10 @@ def standard_folders(parent: str | Path) -> tuple[Path, Path]:
 
 
 def prepare_standard_folders(parent: str | Path, code_root: str | Path) -> StandardFolders:
-    """Make sure the two standard folders exist next to the program folder. Creates a missing folder (empty); an
-    existing folder is used exactly as it is: nothing is ever deleted, moved, renamed, merged or overwritten."""
+    """Prepare the two standard folders without changing any pre-existing folder or user data.
+
+    If a later creation fails, only a newly created empty folder from this attempt may be rolled back.
+    """
     data, output = standard_folders(parent)
     result = StandardFolders(data, output)
     code = Path(code_root).resolve()
@@ -168,12 +170,13 @@ def prepare_standard_folders(parent: str | Path, code_root: str | Path) -> Stand
             result.problem = (f"{path} is a file, not a folder, so Q-MAP cannot use it as {label}. Nothing was "
                               "changed. Choose your folders with Browse... below.")
             return result
+    created_identity = {}
     for label, path in zip(STANDARD_FOLDER_NAMES, (data, output)):
         if path.is_dir():
             result.existing.append(label)
             continue
         try:
-            path.mkdir(exist_ok=True)  # the parent folder must exist already: the program folder is in it
+            path.mkdir()  # the parent folder must exist already: the program folder is in it
         except FileExistsError:
             # Another process may have created this folder after the pre-check. Use it only if it is a directory;
             # it is not ours to remove if a later step fails.
@@ -190,6 +193,10 @@ def prepare_standard_folders(parent: str | Path, code_root: str | Path) -> Stand
             for created_label in reversed(result.created[:]):
                 created_path = data if created_label == "Q-MAP_DATA" else output
                 try:
+                    stat = created_path.lstat()
+                    if created_identity.get(created_label) != (stat.st_dev, stat.st_ino):
+                        retained.append(created_label)
+                        continue
                     created_path.rmdir()
                 except OSError:
                     retained.append(created_label)
@@ -206,6 +213,12 @@ def prepare_standard_folders(parent: str | Path, code_root: str | Path) -> Stand
                                   "or create your folders with Browse... or Create folder below.")
             return result
         result.created.append(label)
+        try:
+            stat = path.lstat()
+            created_identity[label] = (stat.st_dev, stat.st_ino)
+        except OSError:
+            # Without a reliable identity, do not risk removing this path during rollback.
+            created_identity[label] = None
     return result
 
 
