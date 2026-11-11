@@ -131,7 +131,7 @@ class StandardFolders:
     output: Path
     created: list[str] = field(default_factory=list)  # names of the folders made just now (they were missing)
     existing: list[str] = field(default_factory=list)  # names of the folders that were already there (used as is)
-    problem: str = ""  # plain English, when they could not be prepared (nothing was changed then)
+    problem: str = ""  # plain-English explanation when preparation cannot be completed
 
     @property
     def ok(self) -> bool:
@@ -174,9 +174,36 @@ def prepare_standard_folders(parent: str | Path, code_root: str | Path) -> Stand
             continue
         try:
             path.mkdir(exist_ok=True)  # the parent folder must exist already: the program folder is in it
+        except FileExistsError:
+            # Another process may have created this folder after the pre-check. Use it only if it is a directory;
+            # it is not ours to remove if a later step fails.
+            if path.is_dir():
+                result.existing.append(label)
+                continue
+            result.problem = (f"Q-MAP could not create the folder {path}: a file appeared at that location. "
+                              "No pre-existing folders or data were changed.")
+            return result
         except OSError as exc:
-            result.problem = (f"Q-MAP could not create the folder {path} ({exc}). Nothing else was changed. You can "
-                              "choose or create your folders with Browse... or Create folder below.")
+            # Roll back only folders this call created, and only with rmdir(): it succeeds for an empty folder and
+            # cannot remove user files. If anything has appeared inside, leave it in place and report the partial result.
+            retained = []
+            for created_label in reversed(result.created[:]):
+                created_path = data if created_label == "Q-MAP_DATA" else output
+                try:
+                    created_path.rmdir()
+                except OSError:
+                    retained.append(created_label)
+                else:
+                    result.created.remove(created_label)
+            if retained:
+                result.problem = (f"Q-MAP could not create the folder {path} ({exc}). The newly created folder(s) "
+                                  f"{', '.join(reversed(retained))} could not be safely removed and have been left "
+                                  "in place. No pre-existing folders or data were touched. You can choose or create "
+                                  "your folders with Browse... or Create folder below.")
+            else:
+                result.problem = (f"Q-MAP could not create the folder {path} ({exc}). Newly created empty folder(s) "
+                                  "were safely removed. No pre-existing folders or data were touched. You can choose "
+                                  "or create your folders with Browse... or Create folder below.")
             return result
         result.created.append(label)
     return result
