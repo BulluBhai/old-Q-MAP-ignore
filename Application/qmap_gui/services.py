@@ -177,15 +177,6 @@ def prepare_standard_folders(parent: str | Path, code_root: str | Path) -> Stand
             continue
         try:
             path.mkdir()  # the parent folder must exist already: the program folder is in it
-        except FileExistsError:
-            # Another process may have created this folder after the pre-check. Use it only if it is a directory;
-            # it is not ours to remove if a later step fails.
-            if path.is_dir():
-                result.existing.append(label)
-                continue
-            result.problem = (f"Q-MAP could not create the folder {path}: a file appeared at that location. "
-                              "No pre-existing folders or data were changed.")
-            return result
         except OSError as exc:
             # Roll back only folders this call created, and only with rmdir(): it succeeds for an empty folder and
             # cannot remove user files. If anything has appeared inside, leave it in place and report the partial result.
