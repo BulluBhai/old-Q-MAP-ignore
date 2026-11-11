@@ -110,3 +110,29 @@ def test_failed_rollback_leaves_nonempty_new_folder_and_reports_partial_result(t
     assert res.created == ["Q-MAP_DATA"]
     assert (data / "keep.txt").read_text() == "keep this file"
     assert not (tmp_path / "Q-MAP_OUTPUT").exists()
+
+
+
+def test_failure_never_removes_or_changes_preexisting_user_folder(tmp_path, monkeypatch):
+    from pathlib import Path
+
+    code = tmp_path / "Q-MAP_APP"
+    code.mkdir()
+    data = tmp_path / "Q-MAP_DATA"
+    data.mkdir()
+    original = data / "keep.txt"
+    original.write_text("existing user data")
+    real = Path.mkdir
+
+    def fail_output(self, *a, **k):
+        if self.name == "Q-MAP_OUTPUT":
+            raise PermissionError("Access is denied")
+        return real(self, *a, **k)
+
+    monkeypatch.setattr(Path, "mkdir", fail_output)
+    res = prepare_standard_folders(tmp_path, code)
+
+    assert not res.ok and "safely removed" in res.problem
+    assert res.existing == ["Q-MAP_DATA"] and res.created == []
+    assert original.read_text() == "existing user data"
+    assert data.is_dir() and not (tmp_path / "Q-MAP_OUTPUT").exists()
