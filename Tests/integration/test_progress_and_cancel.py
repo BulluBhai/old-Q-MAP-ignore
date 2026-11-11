@@ -100,3 +100,33 @@ def test_the_job_throttles_progress_events(monkeypatch):
     assert not job.cancel_event.is_set()
     job.cancel()
     assert job.cancel_event.is_set()
+
+
+# ---- MA Affinity V2 (merge package patch 0003, V2 part) ------------------------------------------------------------
+def test_v2_cancel_stops_the_run_and_records_it(settings, db, dataset):
+    from qmap.analytical_engine import MA_AFFINITY_V2
+
+    calls = {"n": 0}
+
+    def cancel():
+        calls["n"] += 1
+        return calls["n"] > 60  # inside the chance test
+
+    res = run_analysis(settings, db, MA_AFFINITY_V2, [dataset], {**SMALL, "chance_shuffles": "50"}, cancel=cancel)
+    assert res.outcome == "cancelled" and _status(db, res.run_id)["status"] == "cancelled"
+    assert not [p for p in res.run_dir.iterdir() if p.suffix in (".csv", ".xlsx", ".pdf", ".png")]
+
+
+def test_v2_progress_counts_every_shuffle_and_ends_at_the_total(settings, db, dataset):
+    from qmap.analytical_engine import MA_AFFINITY_V2
+
+    seen = []
+    res = run_analysis(settings, db, MA_AFFINITY_V2, [dataset], {**SMALL, "chance_shuffles": "7"},
+                       progress=lambda d, t, m: seen.append((d, t, m)))
+    assert res.ok, res.message
+    (total,) = {t for _, t, _ in seen}
+    n = 36
+    assert total == n + 7 * n + 5 + 1  # in-sample, 7 full re-scans, out-of-sample Top-5, reports and record
+    dones = [d for d, _, _ in seen]
+    assert dones == sorted(dones) and [d for d in dones if d == total] == [total]
+    assert any(m.startswith("Chance test: shuffle 7 of 7") for _, _, m in seen)

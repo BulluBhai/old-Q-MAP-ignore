@@ -94,8 +94,9 @@ MODULES: tuple[ModuleInfo, ...] = (
                "in-sample and checked out-of-sample.",
                READY,
                "Working now: QLOPB MA Affinity Scanner V2 (calculations unchanged) on daily, weekly or monthly datasets, "
-               "with Excel, PDF and chart reports. Pending owner review: Directed IR and the weight scheme. Not built "
-               "yet: pivots, CPR and other references.",
+               "with Excel, PDF and chart reports, and MA Affinity V2 (the same calculations plus a chance test and a "
+               "drift baseline). Pending owner review: Directed IR and the weight scheme. Not built yet: pivots, CPR "
+               "and other references.",
                "Available now", ANALYTICAL_WORKBENCH, "analysis"),
     ModuleInfo("cpr_pivot", "CPR and Pivot Research", "Central Pivot Range and pivot-level behaviour.",
                COMING_SOON, "Roadmap Stage 6.", _R),

@@ -106,3 +106,23 @@ def test_closing_the_window_asks_a_running_analysis_to_stop(gui, world):
     for t in list(app.tasks.threads):
         t.join(120)
     assert not any(t.is_alive() for t in app.tasks.threads)
+
+
+def test_v2_shows_its_options_counts_progress_and_can_be_cancelled(gui, world):
+    app, screen = _v1_screen(gui, world)
+    screen.analysis_combo.current(next(k for k, c in enumerate(screen.choices) if c.analysis_id == "ma_affinity_v2"))
+    screen.on_analysis_selected()
+    for key, default in (("chance_shuffles", "200"), ("chance_block", "15"), ("chance_seed", "1"),
+                         ("strength_rule", "relative"), ("group_pct", "10"), ("zone_mode", "percent"),
+                         ("ma_warmup", "earlier")):
+        assert screen.param_vars[key].get() == default, key
+    screen.refresh()
+    screen.param_vars["ma_types"].set("SMA,EMA,WMA,HMA,RMA")
+    screen.param_vars["chance_shuffles"].set("2000")  # long enough to watch and cancel
+    _select(screen, next(iter(screen.rows.values())))
+    screen.start_run()
+    gui.wait(lambda: "Chance test: shuffle" in screen.stage_var.get(), timeout=180, app=app)
+    assert " of " in screen.count_var.get() and not _full(screen)
+    screen.cancel_button.invoke()
+    gui.wait(lambda: not screen.running, timeout=120, app=app)
+    assert screen.last_result.outcome == "cancelled" and screen.stage_var.get() == "Cancelled" and not _full(screen)
