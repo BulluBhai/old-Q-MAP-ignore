@@ -1,0 +1,28 @@
+MA Affinity findings - NSE:BETADEMO Daily (dataset 2) - Run MAAF_20261109_164413
+
+Research question
+  For this instrument, which moving averages (type and period) has price historically interacted with most reliably - coming within the proximity zone and then moving in the expected direction over the following bars - and do the leaders chosen on the earlier (in-sample) part of the history keep that behaviour on the later (out-of-sample) part?
+
+Data
+  1500 bars from 01-Jan-19 to 30-Sep-24. Ranking used the in-sample part only: 1050 bars (01-Jan-19 to 09-Jan-23). The out-of-sample check used the remaining 450 bars (10-Jan-23 to 30-Sep-24).
+
+Method (unchanged QLOPB MA Affinity V2): 482 candidates (SMA, EMA, periods 10-250); an interaction is a bar entering the zone within 3.0% of the MA; success is a move in the expected direction after 5 bars (support: up, resistance: down).
+
+Frozen Top-5 (chosen on in-sample data only, then checked out-of-sample)
+  1. EMA-37: affinity 66.13; in-sample 63.64% success over 44 outcome(s) (p 0.0481, not corrected); out-of-sample 68.00% success over 25 outcome(s) (consistency 91.28, OK).
+  2. EMA-34: affinity 65.92; in-sample 63.41% success over 41 outcome(s) (p 0.0586, not corrected); out-of-sample 59.26% success over 27 outcome(s) (consistency 91.70, OK).
+  3. SMA-38: affinity 65.24; in-sample 61.70% success over 47 outcome(s) (p 0.0719, not corrected); out-of-sample 57.14% success over 21 outcome(s) (consistency 90.88, OK).
+  4. SMA-49: affinity 65.10; in-sample 66.67% success over 48 outcome(s) (p 0.0147, not corrected); out-of-sample 46.67% success over 15 outcome(s) (consistency 60.00, OK).
+  5. SMA-39: affinity 65.09; in-sample 61.70% success over 47 outcome(s) (p 0.0719, not corrected); out-of-sample 55.00% success over 20 outcome(s) (consistency 86.60, OK).
+
+How to read this
+  - A historical rank is a description of the past, not evidence that a moving average will work in future.
+  - Many candidates (periods and MA types) are tested and the best are shown, so some will look good by chance. p-values are NOT corrected for this (multiple comparisons) and must not be read as proof.
+  - Neighbouring MA periods are almost identical, so the Top-N list may show one finding several times.
+  - Forward windows longer than the primary window overlap each other, so those statistics are not independent observations.
+  - Success is defined by the sign of the forward return (price higher after Support, lower after Resistance). It is not compared with the market's general drift.
+  - Forward Return (Directed IR) methodology is PENDING OWNER REVIEW. The V2 formula is kept unchanged and is documented in the README.
+  - The official affinity weight scheme is still undecided. The four V2 weights are kept in their original proportions and normalised.
+  - Out-of-sample samples can be small. Where the OOS sample is below the minimum, consistency is reported as insufficient evidence.
+  - These results describe historical data only. They do not predict or guarantee future price behaviour or future performance of any reference. This is a research tool, not a trading signal or recommendation.
+  - Full tables: MA_Affinity_Candidates and MA_Affinity_Interactions (CSV), the Excel workbook and the PDF.
